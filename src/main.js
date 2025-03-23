@@ -24,10 +24,11 @@ document.querySelector('#app').innerHTML = `
 setupCounter(document.querySelector('#counter'))
 
 // ページごとのJSファイルをインポート
+// ここで修正：editor.jsからnamed exportをインポートする場合は中括弧を使用
 import showLogin from './views/login.js';
 import showSelectAR from './views/select-ar.js';
 import showProjects from './views/projects.js';
-import showEditor from './views/editor.js';
+import { showEditor } from './views/editor.js';  // デフォルトエクスポートでない場合
 import showQRCode from './views/qr-code.js';
 
 // ルートに対応する表示関数のマップ
@@ -53,4 +54,3 @@ function render() {
 // イベントリスナー
 window.addEventListener('hashchange', render);
 window.addEventListener('load', render);
-
