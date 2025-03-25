@@ -1,16 +1,19 @@
 // src/views/editor.js
 import { initARViewer } from '../components/arViewer.js';
+import { showMarkerUpload } from '../views/marker-upload.js'; // 通常のimportに変更
+
 
 export function showEditor(container) {
   // URLパラメータからARタイプを取得
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
   const arType = urlParams.get('type') || 'unknown';
-  
+  const isMarkerMode = arType === 'marker';
+
   // ARタイプに応じたタイトルとヘルプテキストを設定
   let title = 'AR エディター';
   let helpText = 'ARモデルをカスタマイズできます。';
-  
-  switch(arType) {
+
+  switch (arType) {
     case 'marker':
       title = 'マーカー型AR エディター';
       helpText = 'マーカー画像の上に表示される3Dモデルを設定します。';
@@ -32,24 +35,6 @@ export function showEditor(container) {
       helpText = '顔に重ねて表示するARエフェクトを設定します。';
       break;
   }
-
-  // マーカー型ARの場合の追加HTML
-  const markerSection = arType === 'marker' ? `
-    <div class="panel-section">
-      <h3>マーカー画像</h3>
-      <div class="marker-preview-container">
-        <img id="marker-image" src="" alt="マーカー画像">
-        <button id="change-marker" class="btn-secondary">画像を変更</button>
-      </div>
-    </div>
-  ` : '';
-
-  // マーカープレースホルダー
-  const markerPlaceholder = arType === 'marker' ? `
-    <div class="marker-placeholder-container">
-      <div class="marker-placeholder"></div>
-    </div>
-  ` : '';
 
   container.innerHTML = `
     <div class="editor-container">
@@ -76,9 +61,9 @@ export function showEditor(container) {
       </div>
       
       <div class="editor-content">
-        <div class="editor-layout">
-          <!-- 左側：設定パネル -->
-          <div class="settings-panel">
+        <div class="editor-grid-layout">
+          <!-- 左側：素材アップロードパネル -->
+          <div class="upload-panel">
             <div class="panel-section">
               <h3>3Dモデル</h3>
               <div class="upload-area" id="model-upload-area">
@@ -97,11 +82,35 @@ export function showEditor(container) {
               </div>
             </div>
             
-            <!-- マーカー型ARの場合のみ表示 -->
-            ${markerSection}
-            
+            <!-- マーカー型ARの場合のみ表示するマーカーサムネイル -->
+            ${isMarkerMode ? `
+            <div class="panel-section">
+              <h3>マーカー画像（サムネイル）</h3>
+              <div class="marker-thumbnail-container">
+                <img id="marker-thumbnail" alt="マーカー画像">
+                <button id="change-marker" class="btn-secondary">画像を変更</button>
+              </div>
+            </div>` : ''}
+
+            <div class="panel-section">
+              <h3>ファイル一覧</h3>
+              <div class="file-list">
+                <p class="empty-text">まだファイルがありません</p>
+                <!-- 今後、ここにファイル一覧が表示されます -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- 中央：3Dビューア -->
+          <div class="viewer-panel">
+            <div id="ar-viewer"></div>
+          </div>
+          
+          <!-- 右側：モデル調整パネル -->
+          <div class="controls-panel">
             <div class="panel-section">
               <h3>モデル調整</h3>
+              <!-- スケールスライダー -->
               <div class="control-group">
                 <label for="scale-slider">スケール:</label>
                 <div class="slider-with-value">
@@ -110,6 +119,7 @@ export function showEditor(container) {
                 </div>
               </div>
               
+              <!-- 回転スライダー -->
               <div class="control-group">
                 <label for="rotation-slider">回転 (Y軸):</label>
                 <div class="slider-with-value">
@@ -118,6 +128,7 @@ export function showEditor(container) {
                 </div>
               </div>
               
+              <!-- 位置調整 -->
               <div class="control-group">
                 <label>位置:</label>
                 <div class="position-controls">
@@ -139,53 +150,72 @@ export function showEditor(container) {
                 </div>
               </div>
             </div>
-          </div>
-          
-          <!-- 右側：3Dビューア -->
-          <div class="viewer-panel">
-            <!-- マーカー型ARの場合、マーカーを中心に表示 -->
-            ${markerPlaceholder}
-            <div id="ar-viewer"></div>
+            
+            <!-- ARオプション設定 -->
+            <div class="panel-section">
+              <h3>AR設定</h3>
+              <div class="control-group">
+                <label for="ar-scale">ARスケール倍率:</label>
+                <div class="slider-with-value">
+                  <input type="range" id="ar-scale" min="0.5" max="3" step="0.1" value="1">
+                  <span id="ar-scale-value">1.0</span>
+                </div>
+              </div>
+              
+              <!-- マーカー型ARの場合のみ表示 -->
+              ${isMarkerMode ? `
+              <div class="control-group">
+                <label for="marker-detection">マーカー検出:</label>
+                <select id="marker-detection" class="form-select">
+                  <option value="fast">高速（精度低）</option>
+                  <option value="normal" selected>標準</option>
+                  <option value="accurate">高精度（速度低）</option>
+                </select>
+              </div>` : ''}
+            </div>
           </div>
         </div>
       </div>
     </div>
   `;
 
-  // 以下は変更なし
-  // マーカー型ARの場合、アップロードした画像を表示
-  if (arType === 'marker') {
-    // LocalStorageからマーカー画像を取得（仮実装。実際にはAPIからの取得に置き換え）
-    const markerImageUrl = localStorage.getItem('markerImageUrl');
-    if (markerImageUrl) {
-      const markerImage = document.getElementById('marker-image');
-      markerImage.src = markerImageUrl;
-    } else {
-      // サンプル画像を表示（実際の実装では適切に処理）
-      document.getElementById('marker-image').src = '/assets/sample-marker.jpg';
+  // マーカー型ARの場合、アップロードした画像をサムネイルとして表示
+    if (isMarkerMode) {
+    const markerThumbnail = document.getElementById('marker-thumbnail');
+    if (markerThumbnail) { // markerThumbnailが存在することを確認
+      const markerImageUrl = localStorage.getItem('markerImageUrl');
+      if (markerImageUrl) {
+        markerThumbnail.src = markerImageUrl;
+      } else {
+        // サンプル画像を表示
+        markerThumbnail.src = '/assets/sample-marker.jpg'; // sample-marker.jpgの存在を確認！
+      }
+     }
     }
-  }
 
-  // ARビューアーを初期化
-  const viewerInstance = initARViewer('ar-viewer');
-  
+  // ARビューアーを初期化（マーカーモードの場合はマーカーモードを有効化）
+  const viewerInstance = initARViewer('ar-viewer', {
+    markerMode: isMarkerMode,
+    showGrid: true
+  });
+
   // GLBモデルアップロード機能
   const modelFileInput = document.getElementById('model-file-input');
   const uploadButton = document.getElementById('upload-model');
   const uploadArea = document.getElementById('model-upload-area');
-  
+
   if (uploadButton && modelFileInput) {
     uploadButton.addEventListener('click', () => {
       modelFileInput.click();
     });
-    
+
     modelFileInput.addEventListener('change', (event) => {
       if (event.target.files.length > 0) {
         const file = event.target.files[0];
         if (file.name.endsWith('.glb')) {
           // ファイルをオブジェクトURLに変換
           const objectUrl = URL.createObjectURL(file);
-          
+
           // アップロードエリアの表示を更新
           uploadArea.innerHTML = `
             <div class="model-preview">
@@ -196,12 +226,12 @@ export function showEditor(container) {
               <button id="change-model" class="btn-secondary">変更</button>
             </div>
           `;
-          
+
           // モデル変更ボタンの処理
           document.getElementById('change-model').addEventListener('click', () => {
             modelFileInput.click();
           });
-          
+
           // ARビューアーにモデルをロード
           viewerInstance.controls.loadNewModel(objectUrl);
         } else {
@@ -209,29 +239,29 @@ export function showEditor(container) {
         }
       }
     });
-    
+
     // ドラッグ&ドロップ機能
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
       uploadArea.addEventListener(eventName, preventDefaults, false);
     });
-    
+
     function preventDefaults(e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
+
     ['dragenter', 'dragover'].forEach(eventName => {
       uploadArea.addEventListener(eventName, () => {
         uploadArea.classList.add('highlight');
       });
     });
-    
+
     ['dragleave', 'drop'].forEach(eventName => {
       uploadArea.addEventListener(eventName, () => {
         uploadArea.classList.remove('highlight');
       });
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
       const file = e.dataTransfer.files[0];
       if (file && file.name.endsWith('.glb')) {
@@ -243,7 +273,17 @@ export function showEditor(container) {
       }
     });
   }
-  
+
+  // マーカー画像変更処理（マーカー型ARの場合）
+  if (isMarkerMode) {
+    const changeMarkerButton = document.getElementById('change-marker');
+    if (changeMarkerButton) {
+      changeMarkerButton.addEventListener('click', () => {
+          showMarkerUpload(); // マーカーアップロードモジュール
+      });
+    }
+  }
+
   // イベントリスナー設定
   const backButton = document.getElementById('back-to-projects');
   if (backButton) {
@@ -251,7 +291,7 @@ export function showEditor(container) {
       window.location.hash = '#/projects';
     });
   }
-  
+
   const saveButton = document.getElementById('save-button');
   if (saveButton) {
     saveButton.addEventListener('click', () => {
@@ -260,7 +300,7 @@ export function showEditor(container) {
       alert('プロジェクトが保存されました');
     });
   }
-  
+
   const shareButton = document.getElementById('share-button');
   if (shareButton) {
     shareButton.addEventListener('click', () => {
@@ -268,14 +308,14 @@ export function showEditor(container) {
       window.location.hash = '#/qr-code';
     });
   }
-  
+
   const previewButton = document.getElementById('preview-button');
   if (previewButton) {
     previewButton.addEventListener('click', () => {
       alert('ARプレビュー画面が開きます（実装予定）');
     });
   }
-  
+
   // スライダーの値を表示に反映
   const scaleSlider = document.getElementById('scale-slider');
   const scaleValue = document.getElementById('scale-value');
@@ -286,7 +326,7 @@ export function showEditor(container) {
       viewerInstance.controls.setScale(parseFloat(value));
     });
   }
-  
+
   const rotationSlider = document.getElementById('rotation-slider');
   const rotationValue = document.getElementById('rotation-value');
   if (rotationSlider && rotationValue && viewerInstance.controls) {
@@ -295,7 +335,7 @@ export function showEditor(container) {
       viewerInstance.controls.setRotationY(parseInt(rotationSlider.value));
     });
   }
-  
+
   // 位置スライダーの処理
   const positionXSlider = document.getElementById('position-x');
   const positionYSlider = document.getElementById('position-y');
@@ -303,42 +343,35 @@ export function showEditor(container) {
   const positionXValue = document.getElementById('position-x-value');
   const positionYValue = document.getElementById('position-y-value');
   const positionZValue = document.getElementById('position-z-value');
-  
+
   function updatePosition() {
     const x = parseFloat(positionXSlider.value);
     const y = parseFloat(positionYSlider.value);
     const z = parseFloat(positionZSlider.value);
-    
+
     viewerInstance.controls.setPosition(x, y, z);
-    
+
     positionXValue.textContent = x.toFixed(1);
     positionYValue.textContent = y.toFixed(1);
     positionZValue.textContent = z.toFixed(1);
   }
-  
-  if (positionXSlider && viewerInstance.controls) {
-    positionXSlider.addEventListener('input', updatePosition);
+
+  if (positionXSlider) positionXSlider.addEventListener('input', updatePosition);
+  if (positionYSlider) positionYSlider.addEventListener('input', updatePosition);
+  if (positionZSlider) positionZSlider.addEventListener('input', updatePosition);
+
+  // AR設定スライダー
+  const arScaleSlider = document.getElementById('ar-scale');
+  const arScaleValue = document.getElementById('ar-scale-value');
+  if (arScaleSlider && arScaleValue) {
+    arScaleSlider.addEventListener('input', () => {
+      const value = parseFloat(arScaleSlider.value).toFixed(1);
+      arScaleValue.textContent = value;
+      // ここではプレビュー用のAR設定値を保存
+      localStorage.setItem('arScale', value);
+    });
   }
-  
-  if (positionYSlider && viewerInstance.controls) {
-    positionYSlider.addEventListener('input', updatePosition);
-  }
-  
-  if (positionZSlider && viewerInstance.controls) {
-    positionZSlider.addEventListener('input', updatePosition);
-  }
-  
-  // マーカー画像変更処理（マーカー型ARの場合）
-  if (arType === 'marker') {
-    const changeMarkerButton = document.getElementById('change-marker');
-    if (changeMarkerButton) {
-      changeMarkerButton.addEventListener('click', () => {
-        // 実際の実装ではマーカーアップロード画面を表示
-        alert('マーカー画像を変更します。（実装予定）');
-      });
-    }
-  }
-  
+
   // クリーンアップ関数を返す
   return () => {
     if (viewerInstance && viewerInstance.dispose) {

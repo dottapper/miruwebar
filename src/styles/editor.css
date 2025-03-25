@@ -41,45 +41,27 @@
     display: flex;
     flex-direction: column;
     flex-grow: 1;
-    min-height: 0; /* これがないとFlexboxの子要素が親の高さを超えることがあります */
+    min-height: 0;
   }
   
-  /* 新しい2列レイアウト */
-  .editor-layout {
-    display: flex;
-    gap: 2rem;
-    flex-grow: 1;
-    height: calc(100vh - 220px); /* ヘッダーやその他のUIの高さを考慮して調整 */
+  /* 新しい3カラムレイアウト */
+  .editor-grid-layout {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 1.5rem;
+    height: calc(100vh - 180px);
   }
   
-  /* 左側の設定パネル */
-  .settings-panel {
-    width: 320px;
-    flex-shrink: 0;
+  /* 左側のアップロードパネル */
+  .upload-panel {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
   }
   
-  .panel-section {
-    background-color: var(--color-surface);
-    border-radius: var(--border-radius-medium);
-    padding: 1.5rem;
-    box-shadow: var(--shadow-small);
-  }
-  
-  .panel-section h3 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-  }
-  
-  /* 右側のビューアーパネル */
+  /* 中央のビューアーパネル */
   .viewer-panel {
-    flex: 1;
-    min-width: 0; /* FlexboxでオーバーフローしないようにするためのFix */
     background-color: var(--color-surface);
     border-radius: var(--border-radius-medium);
     box-shadow: var(--shadow-small);
@@ -94,6 +76,29 @@
     width: 100%;
     height: 100%;
     background-color: #2a2a2a;
+  }
+  
+  /* 右側の調整パネル */
+  .controls-panel {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  /* パネルセクション共通 */
+  .panel-section {
+    background-color: var(--color-surface);
+    border-radius: var(--border-radius-medium);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-small);
+  }
+  
+  .panel-section h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
   }
   
   /* アップロードエリア */
@@ -157,15 +162,15 @@
     color: var(--color-text-secondary);
   }
   
-  /* マーカー画像プレビュー */
-  .marker-preview-container {
+  /* マーカーサムネイル表示 */
+  .marker-thumbnail-container {
     display: flex;
     flex-direction: column;
     gap: 1rem;
     align-items: center;
   }
   
-  #marker-image {
+  #marker-thumbnail {
     width: 100%;
     max-height: 180px;
     object-fit: contain;
@@ -173,23 +178,20 @@
     border: 1px solid var(--color-border);
   }
   
-  /* マーカープレースホルダー（ビューアー内） */
-  .marker-placeholder-container {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    height: 25%;
-    display: flex;
-    justify-content: center;
-    z-index: 1;
+  /* ファイル一覧 */
+  .file-list {
+    min-height: 100px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-small);
+    padding: 1rem;
   }
   
-  .marker-placeholder {
-    width: 50%;
-    height: 90%;
-    background-color: rgba(255, 255, 255, 0.1);
-    border: 2px dashed rgba(255, 255, 255, 0.3);
-    border-radius: var(--border-radius-small);
+  .empty-text {
+    color: var(--color-text-disabled);
+    text-align: center;
+    font-size: 0.9rem;
+    margin: 0;
+    padding: 1rem 0;
   }
   
   /* コントロールグループとスライダー */
@@ -257,21 +259,46 @@
     flex: 1;
   }
   
+  /* フォームセレクト */
+  .form-select {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-medium);
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B0B0B0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    background-size: 16px;
+  }
+  
+  .form-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+  
   /* モバイル対応 */
-  @media (max-width: 768px) {
-    .editor-layout {
-      flex-direction: column;
+  @media (max-width: 1024px) {
+    .editor-grid-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr;
+      gap: 1rem;
       height: auto;
     }
     
-    .settings-panel {
-      width: 100%;
+    .viewer-panel {
+      height: 400px;
+      order: 1;
+    }
+    
+    .upload-panel {
       order: 2;
     }
     
-    .viewer-panel {
-      width: 100%;
-      height: 350px;
-      order: 1;
+    .controls-panel {
+      order: 3;
     }
   }

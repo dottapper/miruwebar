@@ -62,60 +62,21 @@ export function initARViewer(containerId, options = {}) {
     scene.add(gridHelper);
   }
   
-  // マーカー型ARの場合、マーカープレーン追加
+  // マーカー型ARの場合のマーカープレーン作成
   let markerPlane;
+  let markerMaterial;
   if (config.markerMode) {
-    const markerGeometry = new THREE.PlaneGeometry(1, 1);
-    const markerMaterial = new THREE.MeshBasicMaterial({ 
+    const markerSize = 2; // マーカーのサイズ
+    const markerGeometry = new THREE.PlaneGeometry(markerSize, markerSize);
+    markerMaterial = new THREE.MeshBasicMaterial({ 
       color: 0xffffff,
       side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.5
     });
     markerPlane = new THREE.Mesh(markerGeometry, markerMaterial);
-    markerPlane.rotation.x = -Math.PI / 2; // 水平に配置
-    markerPlane.position.y = -0.5;  // 少し下に配置
+    markerPlane.rotation.x = -Math.PI / 2; // 水平に配置（床面として）
+    markerPlane.position.y = -0.01; // わずかに下げて、モデルとのZ-fightingを防止
     markerPlane.receiveShadow = true;
     scene.add(markerPlane);
-    
-    // テクスチャをロードしてマーカーに適用する関数
-    function setMarkerTexture(textureUrl) {
-      if (!textureUrl) return;
-      
-      const textureLoader = new THREE.TextureLoader();
-      textureLoader.load(
-        textureUrl,
-        (texture) => {
-          // テクスチャの縦横比に合わせてジオメトリを調整
-          const aspectRatio = texture.image.width / texture.image.height;
-          
-          // マーカープレーンを更新
-          scene.remove(markerPlane);
-          
-          // 新しいジオメトリでマーカープレーンを作成
-          const newGeometry = new THREE.PlaneGeometry(aspectRatio, 1);
-          markerPlane.geometry.dispose();
-          markerPlane.geometry = newGeometry;
-          
-          // テクスチャを適用
-          markerMaterial.map = texture;
-          markerMaterial.needsUpdate = true;
-          markerMaterial.opacity = 1.0;
-          
-          scene.add(markerPlane);
-        },
-        undefined,
-        (error) => {
-          console.error('マーカーテクスチャの読み込みに失敗:', error);
-        }
-      );
-    }
-    
-    // LocalStorageからマーカー画像を取得（マーカーモードの場合）
-    const markerImageUrl = localStorage.getItem('markerImageUrl');
-    if (markerImageUrl) {
-      setMarkerTexture(markerImageUrl);
-    }
   }
   
   // GLBモデルの読み込み
@@ -176,6 +137,53 @@ export function initARViewer(containerId, options = {}) {
     );
   }
   
+  // マーカーテクスチャを設定する関数
+  function setMarkerTexture(textureUrl) {
+    if (!config.markerMode || !textureUrl || !markerPlane) return;
+    
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(
+      textureUrl,
+      (texture) => {
+        // テクスチャの縦横比に合わせてジオメトリを調整
+        const aspectRatio = texture.image.width / texture.image.height;
+        
+        // マーカープレーンを更新
+        scene.remove(markerPlane);
+        
+        // 新しいジオメトリでマーカープレーンを作成
+        const markerSize = 2; // 基本サイズ
+        const newGeometry = new THREE.PlaneGeometry(
+          aspectRatio > 1 ? markerSize : markerSize * aspectRatio,
+          aspectRatio > 1 ? markerSize / aspectRatio : markerSize
+        );
+        
+        markerPlane.geometry.dispose();
+        markerPlane.geometry = newGeometry;
+        
+        // テクスチャを適用
+        if (markerMaterial) {
+          markerMaterial.map = texture;
+          markerMaterial.needsUpdate = true;
+        }
+        
+        scene.add(markerPlane);
+      },
+      undefined,
+      (error) => {
+        console.error('マーカーテクスチャの読み込みに失敗:', error);
+      }
+    );
+  }
+  
+  // LocalStorageからマーカー画像を取得（マーカーモードの場合）
+  if (config.markerMode) {
+    const markerImageUrl = localStorage.getItem('markerImageUrl');
+    if (markerImageUrl) {
+      setMarkerTexture(markerImageUrl);
+    }
+  }
+  
   // ウィンドウリサイズ対応
   function onWindowResize() {
     camera.aspect = container.clientWidth / container.clientHeight;
@@ -214,11 +222,9 @@ export function initARViewer(containerId, options = {}) {
     loadNewModel: (modelPath) => {
       loadModel(modelPath);
     },
-    // マーカー型AR用の追加機能
+    // マーカーテクスチャ設定用の関数も公開
     setMarkerTexture: (textureUrl) => {
-      if (config.markerMode && setMarkerTexture) {
-        setMarkerTexture(textureUrl);
-      }
+      setMarkerTexture(textureUrl);
     }
   };
   
@@ -241,6 +247,11 @@ export function initARViewer(containerId, options = {}) {
       if (gridHelper) {
         gridHelper.geometry.dispose();
         gridHelper.material.dispose();
+      }
+      
+      if (markerPlane) {
+        markerPlane.geometry.dispose();
+        if (markerMaterial) markerMaterial.dispose();
       }
     },
     controls: modelControls
