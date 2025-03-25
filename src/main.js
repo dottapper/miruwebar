@@ -7,6 +7,7 @@ import './styles/login.css';
 import './styles/select-ar.css';
 import './styles/marker-upload.css';
 
+
 document.querySelector('#app').innerHTML = `
   <div>
     <a href="https://vite.dev" target="_blank">

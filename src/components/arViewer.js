@@ -3,16 +3,24 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-export function initARViewer(containerId) {
+export function initARViewer(containerId, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) {
     console.error('コンテナが見つかりません:', containerId);
     return;
   }
 
+  // デフォルトオプションとマージ
+  const config = {
+    showGrid: true,
+    markerMode: false,
+    backgroundColor: 0x2a2a2a,
+    ...options
+  };
+
   // シーン、カメラ、レンダラーのセットアップ
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x2a2a2a);
+  scene.background = new THREE.Color(config.backgroundColor);
   
   const camera = new THREE.PerspectiveCamera(
     75, 
@@ -20,7 +28,7 @@ export function initARViewer(containerId) {
     0.1, 
     1000
   );
-  camera.position.set(0, 1, 3);
+  camera.position.set(0, 1.5, 3);
   
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -47,9 +55,68 @@ export function initARViewer(containerId) {
   directionalLight.shadow.mapSize.height = 1024;
   scene.add(directionalLight);
   
-  // グリッドヘルパーの追加
-  const gridHelper = new THREE.GridHelper(10, 10, 0x555555, 0x333333);
-  scene.add(gridHelper);
+  // グリッドヘルパーの追加（オプションに基づく）
+  let gridHelper;
+  if (config.showGrid) {
+    gridHelper = new THREE.GridHelper(10, 10, 0x555555, 0x333333);
+    scene.add(gridHelper);
+  }
+  
+  // マーカー型ARの場合、マーカープレーン追加
+  let markerPlane;
+  if (config.markerMode) {
+    const markerGeometry = new THREE.PlaneGeometry(1, 1);
+    const markerMaterial = new THREE.MeshBasicMaterial({ 
+      color: 0xffffff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.5
+    });
+    markerPlane = new THREE.Mesh(markerGeometry, markerMaterial);
+    markerPlane.rotation.x = -Math.PI / 2; // 水平に配置
+    markerPlane.position.y = -0.5;  // 少し下に配置
+    markerPlane.receiveShadow = true;
+    scene.add(markerPlane);
+    
+    // テクスチャをロードしてマーカーに適用する関数
+    function setMarkerTexture(textureUrl) {
+      if (!textureUrl) return;
+      
+      const textureLoader = new THREE.TextureLoader();
+      textureLoader.load(
+        textureUrl,
+        (texture) => {
+          // テクスチャの縦横比に合わせてジオメトリを調整
+          const aspectRatio = texture.image.width / texture.image.height;
+          
+          // マーカープレーンを更新
+          scene.remove(markerPlane);
+          
+          // 新しいジオメトリでマーカープレーンを作成
+          const newGeometry = new THREE.PlaneGeometry(aspectRatio, 1);
+          markerPlane.geometry.dispose();
+          markerPlane.geometry = newGeometry;
+          
+          // テクスチャを適用
+          markerMaterial.map = texture;
+          markerMaterial.needsUpdate = true;
+          markerMaterial.opacity = 1.0;
+          
+          scene.add(markerPlane);
+        },
+        undefined,
+        (error) => {
+          console.error('マーカーテクスチャの読み込みに失敗:', error);
+        }
+      );
+    }
+    
+    // LocalStorageからマーカー画像を取得（マーカーモードの場合）
+    const markerImageUrl = localStorage.getItem('markerImageUrl');
+    if (markerImageUrl) {
+      setMarkerTexture(markerImageUrl);
+    }
+  }
   
   // GLBモデルの読み込み
   const loader = new GLTFLoader();
@@ -92,7 +159,7 @@ export function initARViewer(containerId) {
         let cameraZ = Math.abs(maxDim / (2 * Math.tan(fov / 2)));
         cameraZ *= 1.5; // 少し余裕を持たせる
         
-        camera.position.set(center.x, center.y, center.z + cameraZ);
+        camera.position.set(center.x, center.y + size.y / 3, center.z + cameraZ);
         camera.near = cameraZ / 100;
         camera.far = cameraZ * 100;
         camera.updateProjectionMatrix();
@@ -146,6 +213,12 @@ export function initARViewer(containerId) {
     },
     loadNewModel: (modelPath) => {
       loadModel(modelPath);
+    },
+    // マーカー型AR用の追加機能
+    setMarkerTexture: (textureUrl) => {
+      if (config.markerMode && setMarkerTexture) {
+        setMarkerTexture(textureUrl);
+      }
     }
   };
   
@@ -155,6 +228,20 @@ export function initARViewer(containerId) {
       window.removeEventListener('resize', onWindowResize);
       container.removeChild(renderer.domElement);
       renderer.dispose();
+      
+      if (model) {
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.geometry.dispose();
+            child.material.dispose();
+          }
+        });
+      }
+      
+      if (gridHelper) {
+        gridHelper.geometry.dispose();
+        gridHelper.material.dispose();
+      }
     },
     controls: modelControls
   };
