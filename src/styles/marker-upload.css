@@ -1,0 +1,79 @@
+/* src/styles/marker-upload.css */
+@import './common.css';
+
+.hint {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.upload-area {
+  margin: 1.5rem 0;
+  border-radius: var(--border-radius-medium);
+  border: 2px dashed var(--color-border);
+  padding: 1.5rem;
+  transition: all var(--transition-standard);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.upload-area.highlight {
+  border-color: var(--color-primary);
+  background-color: rgba(124, 77, 255, 0.05);
+}
+
+.upload-preview {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: var(--color-text-secondary);
+}
+
+.upload-placeholder svg {
+  opacity: 0.6;
+}
+
+.upload-placeholder p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+#marker-preview {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+.upload-info {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.upload-info p {
+  margin: 0.3rem 0;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+#upload-marker:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

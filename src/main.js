@@ -5,6 +5,7 @@ import { setupCounter } from './counter.js'
 import './styles/editor.css'
 import './styles/login.css';
 import './styles/select-ar.css';
+import './styles/marker-upload.css';
 
 document.querySelector('#app').innerHTML = `
   <div>
@@ -48,8 +49,17 @@ const app = document.querySelector('#app');
 
 // 表示切り替え
 function render() {
-  const route = window.location.hash || '#/login';
-  const renderFunc = routes[route] || showLogin;
+  // URLハッシュ全体を取得
+  const fullRoute = window.location.hash || '#/login';
+  
+  // ベースルート（パラメータ部分を除く）を抽出
+  const baseRoute = fullRoute.split('?')[0];
+  
+  console.log('現在のルート:', fullRoute, 'ベースルート:', baseRoute);
+  
+  // ベースルートに対応する表示関数を選択
+  const renderFunc = routes[baseRoute] || showLogin;
+  
   app.innerHTML = ''; // 表示を初期化
   renderFunc(app);     // 選ばれた関数にappを渡して表示
 }

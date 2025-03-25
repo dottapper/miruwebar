@@ -1,5 +1,7 @@
 // src/components/ui.js
 
+import { showMarkerUpload } from '../views/marker-upload.js';
+
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
  */
@@ -43,9 +45,16 @@ export function showNewProjectModal() {
     arTypeButtons.forEach(button => {
       button.addEventListener('click', () => {
         const arType = button.dataset.type;
-        // 画面遷移（今後の実装予定）
-        window.location.hash = `#/editor?type=${arType}`;
-        closeModal();
+        
+        // マーカー型ARの場合は、マーカーアップロード画面を表示
+        if (arType === 'marker') {
+          closeModal();
+          showMarkerUpload();
+        } else {
+          // それ以外のARタイプは直接エディタ画面へ遷移
+          window.location.hash = `#/editor?type=${arType}`;
+          closeModal();
+        }
       });
     });
     
