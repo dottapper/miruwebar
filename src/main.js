@@ -2,6 +2,9 @@ import './styles/style.css'
 import javascriptLogo from './javascript.svg'
 import viteLogo from '/vite.svg'
 import { setupCounter } from './counter.js'
+import './styles/editor.css'
+import './styles/login.css';
+import './styles/select-ar.css';
 
 document.querySelector('#app').innerHTML = `
   <div>
