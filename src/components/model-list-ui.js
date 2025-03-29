@@ -88,11 +88,16 @@ const handleModelListChanged = (e) => {
             </button>
           </div>
         `;
-  
+        
+        
         // モデル選択イベント (情報表示エリア全体をクリック)
         item.querySelector('.file-item-info').addEventListener('click', () => {
           modelControls.switchToModel(index);
+          // TransformControlsを表示
+          modelControls.toggleTransformControls(true);
         });
+  
+        
   
         // 削除ボタンイベント
         item.querySelector('.model-delete-btn').addEventListener('click', (e) => {

@@ -15,7 +15,7 @@
     background-color: rgba(255, 82, 82, 0.1);
   }
 
-.editor-container {
+  .editor-container {
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -64,20 +64,24 @@
   /* 3カラムレイアウト */
   .editor-grid-layout {
     display: grid;
-    grid-template-columns: 250px 1fr 250px;  /* 280pxから250pxに変更 */
-    gap: 1.5rem;
-    width: 100%;    
+    grid-template-columns: 280px 1fr 280px;  /* カラム幅を調整 */
+    gap: 2rem;               /* カラム間の余白を少し増やす */
+    width: 100%;
     height: calc(100vh - 180px);
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: hidden;        /* 全体のはみ出しを防ぐ */
+    padding: 0 15px;         /* 全体に左右の余白を追加 */
   }
   
   /* 左側のアップロードパネル */
   .upload-panel {
-    overflow-y: auto;
+    overflow-y: auto;       /* 縦スクロールを有効化 */
+    overflow-x: hidden;     /* 横スクロールを無効化 */
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-height: calc(100vh - 200px); /* 最大高さを制限 */
+    padding-right: 10px;    /* 右側に少し余白を追加 */
   }
   
   .viewer-panel {
@@ -100,8 +104,8 @@
   }
   
   /* 右側の調整パネル */
- /* パネル内のスクロールバー制御 */
-.controls-panel {
+  /* パネル内のスクロールバー制御 */
+  .controls-panel {
     overflow-y: auto;
     overflow-x: hidden; /* 横スクロールバーを非表示に */
     display: flex;
@@ -113,9 +117,11 @@
   
   /* パネルセクション共通 */
   .panel-section {
-    overflow: hidden; /* はみ出し部分を隠す */
+    overflow: visible;       /* 必要な内容が見えるようにする */
     width: 100%;
     box-sizing: border-box;
+    padding: 0 10px;         /* 左右に少し余白を追加 */
+    margin-bottom: 1.5rem;   /* 下の余白はそのまま */
   }
   
   .panel-section h3 {
@@ -136,6 +142,11 @@
     gap: 1rem;
     transition: all var(--transition-standard);
     cursor: pointer;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
   
   .upload-area.highlight {
@@ -179,7 +190,12 @@
     font-weight: 500;
     font-size: 0.9rem;
     color: var(--color-text-primary);
+    white-space: nowrap;      /* 追加 */
+    overflow: hidden;         /* 追加 */
+    text-overflow: ellipsis;  /* 追加 */
+    max-width: 180px;         /* 追加 */
   }
+  
   
   .model-size {
     font-size: 0.8rem;
@@ -314,11 +330,12 @@
     flex-direction: column;
     gap: 1rem;
     align-items: center;
+    margin-bottom: 1rem;    /* 下部に余白を追加 */
   }
   
   #marker-thumbnail {
     width: 100%;
-    max-height: 180px;
+    max-height: 150px;      /* 少し小さくする */
     object-fit: contain;
     border-radius: var(--border-radius-small);
     border: 1px solid var(--color-border);
@@ -327,6 +344,8 @@
   /* ファイル一覧 */
   .file-list {
     min-height: 100px;
+    max-height: 200px;      /* 最大高さを制限 */
+    overflow-y: auto;       /* 内容が多い場合はスクロール */
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius-small);
     padding: 1rem;
@@ -354,8 +373,8 @@
     border: 1px solid var(--color-border);
     cursor: pointer;
     transition: all var(--transition-quick);
+    word-break: break-word; /* 長いテキストを折り返す */
   }
-  
   .file-item:hover {
     background-color: var(--color-surface-light);
   }
@@ -376,9 +395,12 @@
     font-size: 0.9rem;
     color: var(--color-text-primary);
     margin-bottom: 0.3rem;
-    word-break: break-all;
+    /* word-break: break-all; を削除または以下に置き換え */
+    white-space: nowrap;      /* 追加 */
+    overflow: hidden;         /* 追加 */
+    text-overflow: ellipsis;  /* 追加 */
+    max-width: 180px;         /* 追加 */
   }
-  
   .file-size {
     font-size: 0.8rem;
     color: var(--color-text-secondary);
@@ -527,6 +549,64 @@
     outline: none;
     border-color: var(--color-primary);
   }
+
+  /* src/styles/editor.css に追加 */
+.transform-mode-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+    padding: 0.8rem;
+    background-color: var(--color-surface);
+    border-radius: var(--border-radius-small);
+  }
+  
+  .transform-mode-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  
+/* 操作モードボタンのスタイル */
+.transform-mode-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  
+  
+  .transform-mode-btn {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-small);
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  
+  .transform-mode-btn.active {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+  }
+  
+  .transform-mode-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .transform-mode-btn.active svg {
+    opacity: 1;
+  }
+  
+  .transform-mode-btn:hover {
+    background-color: var(--color-surface-light);
+  }
+  
   
   /* モバイル対応 */
   @media (max-width: 768px) { 

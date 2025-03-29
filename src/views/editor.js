@@ -111,6 +111,21 @@ export function showEditor(container) {
 <div class="controls-panel">
   <div class="panel-section">
     <h3>モデル調整</h3>
+    <!-- 操作モード選択ボタン -->
+<div class="control-group">
+  <label>操作モード:</label>
+  <div class="transform-mode-buttons">
+    <button class="transform-mode-btn active" data-mode="translate" title="移動">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l-3 3 3 3"></path><path d="M9 5l3-3 3 3"></path><path d="M15 19l3-3 3 3"></path><path d="M19 9l3 3-3 3"></path><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>
+    </button>
+    <button class="transform-mode-btn" data-mode="rotate" title="回転">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.41 16.59a10.5 10.5 0 1 1 1.5-1.5"></path><polyline points="15 19 19 19 19 15"></polyline></svg>
+    </button>
+    <button class="transform-mode-btn" data-mode="scale" title="拡大/縮小">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11.5V9a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5"></path><circle cx="18" cy="11.5" r="1"></circle><path d="m14 9 3-3 3 3"></path><path d="m14 14 3 3 3-3"></path></svg>
+    </button>
+  </div>
+</div>
     <!-- スケールスライダー -->
     <div class="control-group">
       <label for="scale-slider">スケール:</label>
@@ -218,7 +233,100 @@ const viewerInstance = initARViewer('ar-viewer', {
     document.getElementById('total-file-size').textContent = `現在使用中：${totalFileSizeMB}MB / 50MB`;
   }
   // --- ここまで ---
+// TransformControlsの操作モード選択ボタン
+const addTransformControls = () => {
+  const controlsPanel = document.querySelector('.panel-section');
+  if (!controlsPanel) return;
+  
+  /*
+  const transformModeContainer = document.createElement('div');
+  transformModeContainer.className = 'transform-mode-controls';
+  transformModeContainer.innerHTML = `
+    <div class="transform-mode-title">操作モード:</div>
+    <div class="transform-mode-buttons">
+      <button class="transform-mode-btn active" data-mode="translate">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="5 9 2 12 5 15"></polyline>
+          <polyline points="9 5 12 2 15 5"></polyline>
+          <polyline points="15 19 12 22 9 19"></polyline>
+          <polyline points="19 9 22 12 19 15"></polyline>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <line x1="12" y1="2" x2="12" y2="22"></line>
+        </svg>
+        移動
+      </button>
+      <button class="transform-mode-btn" data-mode="rotate">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="8 12 12 16 16 12"></polyline>
+          <line x1="12" y1="8" x2="12" y2="16"></line>
+        </svg>
+        回転
+      </button>
+      <button class="transform-mode-btn" data-mode="scale">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        </svg>
+        拡大
+      </button>
+    </div>
+  `;
+  
+  controlsPanel.insertBefore(transformModeContainer, controlsPanel.firstChild);
+  */
+  // TransformControlsのモード切り替え
+  const transformModeButtons = document.querySelectorAll('.transform-mode-btn');
+  transformModeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // ボタンの見た目を更新
+      transformModeButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      // ViewerのTransformControlsのモードを変更
+      const mode = btn.dataset.mode;
+      viewerInstance.controls.setTransformMode(mode);
+    });
+  });
+};
 
+// 関数を呼び出し
+addTransformControls();
+
+// TransformControlsの変更イベントをリッスン
+const arViewerContainer = document.getElementById('ar-viewer');
+if (arViewerContainer) {
+  arViewerContainer.addEventListener('transformChanged', (e) => {
+    // スライダーの値を更新
+    if (scaleSlider && scaleValue) {
+      const avgScale = (e.detail.scale.x + e.detail.scale.y + e.detail.scale.z) / 3;
+      scaleSlider.value = avgScale.toFixed(1);
+      scaleValue.textContent = avgScale.toFixed(1);
+      // 実寸サイズの更新
+      updateRealSizeDisplay(avgScale);
+    }
+    
+    if (rotationSlider && rotationValue) {
+      const yRot = Math.round(e.detail.rotation.y + 360) % 360;
+      rotationSlider.value = yRot;
+      rotationValue.textContent = `${yRot}°`;
+    }
+    
+    if (positionXSlider && positionXValue) {
+      positionXSlider.value = e.detail.position.x.toFixed(1);
+      positionXValue.textContent = e.detail.position.x.toFixed(1);
+    }
+    
+    if (positionYSlider && positionYValue) {
+      positionYSlider.value = e.detail.position.y.toFixed(1);
+      positionYValue.textContent = e.detail.position.y.toFixed(1);
+    }
+    
+    if (positionZSlider && positionZValue) {
+      positionZSlider.value = e.detail.position.z.toFixed(1);
+      positionZValue.textContent = e.detail.position.z.toFixed(1);
+    }
+  });
+}
 
 
   // GLBモデルアップロード機能

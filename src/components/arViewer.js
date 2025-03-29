@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
 export function initARViewer(containerId, options = {}) {
     console.log(`ARViewer: Initializing with container ID: ${containerId}`);
@@ -45,17 +46,9 @@ export function initARViewer(containerId, options = {}) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // よりソフトな影
   container.appendChild(renderer.domElement);
-  // サイズが0の場合に備えて、少し遅延してからサイズを再設定
-setTimeout(() => {
-    console.log(`ARViewer: Delayed resize - Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
-    if (container.clientWidth > 0 && container.clientHeight > 0) {
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.render(scene, camera);
-    }
-  }, 100);
-
+  // arViewer.js の initARViewer 関数内、レンダラーの設定後に追加
+  // Raycaster（クリック検出用）
+  
   // OrbitControlsを追加
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -64,6 +57,51 @@ setTimeout(() => {
   controls.minDistance = 0.1; // 最小距離を小さく
   controls.maxDistance = 500;
   controls.target.set(0, 0, 0); // ターゲットを明示的に設定
+
+// TransformControlsを初期化
+const transformControls = new TransformControls(camera, renderer.domElement);
+transformControls.size = 0.75; // コントロールのサイズを調整
+transformControls.addEventListener('dragging-changed', (event) => {
+    // ドラッグ中はOrbitControlsを無効化
+  controls.enabled = !event.value;
+});
+transformControls.visible = false; // 初期状態では非表示
+scene.add(transformControls);
+transformControls.addEventListener('objectChange', () => {
+    if (activeModelIndex >= 0) {
+      const modelData = modelList[activeModelIndex];
+      const model = modelData.model;
+      
+      // モデルデータに最新の位置・回転・スケールを保存
+      modelData.position.copy(model.position);
+      modelData.rotation.copy(model.rotation);
+      modelData.scale.copy(model.scale);
+      
+      // カスタムイベント発火（UI更新用）
+      const event = new CustomEvent('transformChanged', {
+        detail: {
+          index: activeModelIndex,
+          position: {
+            x: model.position.x,
+            y: model.position.y,
+            z: model.position.z
+          },
+          rotation: {
+            x: THREE.MathUtils.radToDeg(model.rotation.x),
+            y: THREE.MathUtils.radToDeg(model.rotation.y),
+            z: THREE.MathUtils.radToDeg(model.rotation.z)
+          },
+          scale: {
+            x: model.scale.x,
+            y: model.scale.y,
+            z: model.scale.z
+          }
+        }
+      });
+      container.dispatchEvent(event);
+    }
+  });
+
 
   // 光源の追加
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // 少し明るく
@@ -438,6 +476,69 @@ const newCameraPos = new THREE.Vector3(
     renderer.render(scene, camera);
   }
   window.addEventListener('resize', onWindowResize);
+  window.addEventListener('resize', onWindowResize);
+
+  // Raycaster（クリック検出用）
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  
+  // モデルクリック処理
+  renderer.domElement.addEventListener('click', (event) => {
+    // マウス座標の正規化
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    
+    // 検出対象はモデルリスト内のモデルのみ
+    const selectableObjects = [];
+    modelList.forEach(modelData => {
+      if (modelData.visible) {
+        modelData.model.traverse(child => {
+          if (child.isMesh) {
+            selectableObjects.push(child);
+          }
+        });
+      }
+    });
+    
+    const intersects = raycaster.intersectObjects(selectableObjects);
+    
+    if (intersects.length > 0) {
+      // クリックされたメッシュから親のモデルを特定
+      let selectedMesh = intersects[0].object;
+      let modelIndex = -1;
+      
+      // モデルインデックスを特定
+      modelList.forEach((modelData, index) => {
+        let isParent = false;
+        modelData.model.traverse(child => {
+          if (child === selectedMesh) {
+            isParent = true;
+          }
+        });
+        if (isParent) {
+          modelIndex = index;
+        }
+      });
+      
+// モデルクリック処理内の該当部分
+if (modelIndex >= 0) {
+    // モデルを選択状態に
+    setActiveModel(modelIndex);
+    
+    // TransformControlsを確実に表示
+    transformControls.attach(modelList[modelIndex].model);
+    transformControls.visible = true;
+    console.log("TransformControls attached to model:", modelIndex);
+  }
+    } else {
+      // 空クリック時にTransformControlsを非表示に
+      transformControls.detach();
+      transformControls.visible = false;
+    }
+  });
 
   // アニメーションループ
   let animationFrameId = null; // この行を追加
@@ -510,6 +611,25 @@ const newCameraPos = new THREE.Vector3(
     // アクティブモデルのインデックス取得
     getActiveModelIndex: () => {
       return activeModelIndex;
+    },
+    
+    // TransformControlsのモード切り替え
+    setTransformMode: (mode) => {
+      if (['translate', 'rotate', 'scale'].includes(mode)) {
+        transformControls.mode = mode;
+        return true;
+      }
+      return false;
+    },
+    
+    // TransformControlsの表示/非表示を切り替える
+    toggleTransformControls: (visible) => {
+      transformControls.visible = visible;
+      if (!visible) {
+        transformControls.detach();
+      } else if (activeModelIndex >= 0) {
+        transformControls.attach(modelList[activeModelIndex].model);
+      }
     },
 
     // アクティブモデルの情報取得
