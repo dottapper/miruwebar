@@ -1,4 +1,3 @@
-// src/components/arViewer.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -68,38 +67,71 @@ transformControls.addEventListener('dragging-changed', (event) => {
 transformControls.visible = false; // 初期状態では非表示
 scene.add(transformControls);
 transformControls.addEventListener('objectChange', () => {
-    if (activeModelIndex >= 0) {
+  if (activeModelIndex < 0 || !modelList[activeModelIndex]) {
+    console.warn("objectChange triggered but no active model found.");
+    return; // アクティブモデルがなければ何もしない
+}
       const modelData = modelList[activeModelIndex];
       const model = modelData.model;
+
+
+    // --- 値のチェックを追加 ---
+    const pos = model.position;
+    const rot = model.rotation;
+    const scl = model.scale;
+
+       // ★★★ この if 文を追加 ★★★
+       if (
+        isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z) || !isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z) ||
+        isNaN(rot.x) || isNaN(rot.y) || isNaN(rot.z) || !isFinite(rot.x) || !isFinite(rot.y) || !isFinite(rot.z) ||
+        isNaN(scl.x) || isNaN(scl.y) || isNaN(scl.z) || !isFinite(scl.x) || !isFinite(scl.y) || !isFinite(scl.z) ||
+        scl.x <= 0 || scl.y <= 0 || scl.z <= 0 // スケールが0以下も不正とする
+    ) {
+      
+      console.warn('不正な Transform 値が検出されました。更新をスキップします。', { pos, rot, scl });
+
+      // ★★★ この3行のコメントを外す ★★★
+      model.position.copy(modelData.position);
+      model.rotation.copy(modelData.rotation);
+      model.scale.copy(modelData.scale);
+      // ★★★ ここまで ★★★
+  
+      return; // 不正な値ならここで処理を中断
+  }
+
+      console.log('objectChange - Position:', model.position.x.toFixed(3), model.position.y.toFixed(3), model.position.z.toFixed(3));
+      console.log('objectChange - Rotation:', THREE.MathUtils.radToDeg(model.rotation.x).toFixed(1), THREE.MathUtils.radToDeg(model.rotation.y).toFixed(1), THREE.MathUtils.radToDeg(model.rotation.z).toFixed(1));
+      console.log('objectChange - Scale:', model.scale.x.toFixed(3), model.scale.y.toFixed(3), model.scale.z.toFixed(3));
       
       // モデルデータに最新の位置・回転・スケールを保存
-      modelData.position.copy(model.position);
-      modelData.rotation.copy(model.rotation);
-      modelData.scale.copy(model.scale);
+      modelData.position.copy(pos); // model.position の代わりに変数 pos を使う
+      modelData.rotation.copy(rot); // model.rotation の代わりに変数 rot を使う
+      modelData.scale.copy(scl);    // model.scale の代わりに変数 scl を使う
+
       
       // カスタムイベント発火（UI更新用）
       const event = new CustomEvent('transformChanged', {
         detail: {
           index: activeModelIndex,
           position: {
-            x: model.position.x,
-            y: model.position.y,
-            z: model.position.z
+            x: pos.x, // model.position.x -> pos.x
+            y: pos.y, // model.position.y -> pos.y
+            z: pos.z  // model.position.z -> pos.z
           },
           rotation: {
-            x: THREE.MathUtils.radToDeg(model.rotation.x),
-            y: THREE.MathUtils.radToDeg(model.rotation.y),
-            z: THREE.MathUtils.radToDeg(model.rotation.z)
+            x: THREE.MathUtils.radToDeg(rot.x), // model.rotation.x -> rot.x
+            y: THREE.MathUtils.radToDeg(rot.y), // model.rotation.y -> rot.y
+            z: THREE.MathUtils.radToDeg(rot.z)  // model.rotation.z -> rot.z
           },
           scale: {
-            x: model.scale.x,
-            y: model.scale.y,
-            z: model.scale.z
+            x: scl.x, // model.scale.x -> scl.x
+            y: scl.y, // model.scale.y -> scl.y
+            z: scl.z  // model.scale.z -> scl.z
           }
         }
       });
       container.dispatchEvent(event);
-    }
+    
   });
 
 
@@ -334,39 +366,44 @@ if (config.onModelLoaded) {
     if (index === activeModelIndex) {
       return false;
     }
-
-    const previousActiveIndex = activeModelIndex; // ★ previousActiveIndex を定義
-
-    // 前のアクティブモデルを非表示に
+  
+    const previousActiveIndex = activeModelIndex;
+  
+    // 前のアクティブモデルを非表示にする代わりに表示したままにする
     if (previousActiveIndex >= 0 && previousActiveIndex < modelList.length) {
-        _setModelVisibility(previousActiveIndex, false);
+      console.log(`About to hide previous model: ${previousActiveIndex}`);
+      console.log(`Previous model visible before: ${modelList[previousActiveIndex].visible}`);
+    // _setModelVisibility(previousActiveIndex, false);
+      console.log(`Previous model visible after: ${modelList[previousActiveIndex].visible}`);
+      
+      // モデルが表示されていない場合のみ表示する
+      if (!modelList[previousActiveIndex].visible) {
+        _setModelVisibility(previousActiveIndex, true);
+      }
     }
-
+  
     // 新しいアクティブモデルを表示
     if (index >= 0 && index < modelList.length) {
       _setModelVisibility(index, true);
       activeModelIndex = index;
-
+  
       const activeModelData = modelList[activeModelIndex];
       applyModelTransform(activeModelData);
-     // adjustCameraToModel(activeModelData.model); // ← コメントアウトして呼び出しを抑制
-
+      // adjustCameraToModel(activeModelData.model); // コメントアウト済み
     } else {
       activeModelIndex = -1;
-      // 必要ならカメラをリセット
-      // resetCamera();
+      // カメラリセットは不要
     }
-
-// activeModelChangedイベントを発火 (コンテナに対して)
-const activeModelChangedEvent = new Event('activeModelChanged');
-activeModelChangedEvent.detail = { 
-    index: activeModelIndex, 
-    previousIndex: previousActiveIndex 
-};
-container.dispatchEvent(activeModelChangedEvent); // container を使用
-return true;
-}  
-
+  
+    // activeModelChangedイベントを発火
+    const activeModelChangedEvent = new Event('activeModelChanged');
+    activeModelChangedEvent.detail = { 
+      index: activeModelIndex, 
+      previousIndex: previousActiveIndex 
+    };
+    container.dispatchEvent(activeModelChangedEvent);
+    return true;
+  }
   // モデルのトランスフォームを適用
   function applyModelTransform(modelData) {
     if (!modelData || !modelData.model) return;
@@ -481,9 +518,11 @@ const newCameraPos = new THREE.Vector3(
   // Raycaster（クリック検出用）
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
+  let boundingBox = null;
   
   // モデルクリック処理
   renderer.domElement.addEventListener('click', (event) => {
+    console.log("Click event triggered");
     // マウス座標の正規化
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -493,50 +532,124 @@ const newCameraPos = new THREE.Vector3(
     
     // 検出対象はモデルリスト内のモデルのみ
     const selectableObjects = [];
-    modelList.forEach(modelData => {
-      if (modelData.visible) {
-        modelData.model.traverse(child => {
-          if (child.isMesh) {
-            selectableObjects.push(child);
-          }
-        });
+modelList.forEach(modelData => {
+  if (modelData.visible) {
+    modelData.model.traverse(child => {
+      if (child.isMesh) {
+        selectableObjects.push(child);
       }
     });
+  }
+});
+console.log(`Selectable objects count: ${selectableObjects.length}`);
     
-    const intersects = raycaster.intersectObjects(selectableObjects);
-    
+    const intersects = raycaster.intersectObjects(selectableObjects, true); // 第2引数 true を追加
+   
     if (intersects.length > 0) {
-      // クリックされたメッシュから親のモデルを特定
-      let selectedMesh = intersects[0].object;
-      let modelIndex = -1;
-      
-      // モデルインデックスを特定
-      modelList.forEach((modelData, index) => {
-        let isParent = false;
-        modelData.model.traverse(child => {
-          if (child === selectedMesh) {
-            isParent = true;
-          }
-        });
-        if (isParent) {
-          modelIndex = index;
+      // クリックされた一番手前のメッシュを取得
+      const selectedMesh = intersects[0].object;
+
+      // クリックされたメッシュがどのモデルに属するか特定
+      let targetModel = null;
+      let targetModelIndex = -1;
+
+      // selectedMesh の祖先を辿って、modelList に含まれるモデルを探す
+      selectedMesh.traverseAncestors((ancestor) => {
+        // 既に targetModel が見つかっていれば探索を終了
+        if (targetModel) return;
+
+        // modelList 内のモデルと比較
+        const foundIndex = modelList.findIndex(data => data.model === ancestor);
+        if (foundIndex !== -1) {
+          targetModel = modelList[foundIndex].model;
+          targetModelIndex = foundIndex;
         }
       });
-      
-// モデルクリック処理内の該当部分
-if (modelIndex >= 0) {
-    // モデルを選択状態に
-    setActiveModel(modelIndex);
-    
-    // TransformControlsを確実に表示
-    transformControls.attach(modelList[modelIndex].model);
+
+      // クリックされたオブジェクトが管理下のモデルに属していた場合
+      if (targetModel && targetModelIndex !== -1) {
+        console.log(`Clicked model found: Index=${targetModelIndex}, Name=${modelList[targetModelIndex].fileName}`);
+        console.log(`Model visible: ${modelList[targetModelIndex].visible}`);
+        console.log(`Model in scene: ${modelList[targetModelIndex].model.parent === scene}`);
+
+        // --- バウンディングボックスの処理 ---
+        // 既存のバウンディングボックスがあれば削除
+        if (boundingBox) {
+          scene.remove(boundingBox);
+          boundingBox = null; // 変数もリセット
+        }
+        // 新しいバウンディングボックスを作成してシーンに追加
+        boundingBox = new THREE.BoxHelper(targetModel, 0x00ffff); // 色をシアンに変更（見やすくするため）
+        scene.add(boundingBox);
+
+// TransformControlsを対象モデルにアタッチする前に有効なObject3Dかチェック
+if (targetModel instanceof THREE.Object3D) {
+  try {
+    transformControls.attach(targetModel);
     transformControls.visible = true;
-    console.log("TransformControls attached to model:", modelIndex);
+    console.log("Successfully attached TransformControls to model");
+              // ★★★ このログを追加 ★★★
+              console.log('Model transform after attach:',
+                'Visible:', targetModel.visible,
+                'Position:', targetModel.position.x, targetModel.position.y, targetModel.position.z,
+                'Scale:', targetModel.scale.x, targetModel.scale.y, targetModel.scale.z,
+                'Parent:', targetModel.parent ? targetModel.parent.type : 'null'
+            );
+            // ★★★ ここまで追加 ★★★
+  } catch (error) {
+    console.error("Error attaching TransformControls:", error);
+    transformControls.visible = false;
   }
+} else {
+  console.error("Target model is not a valid THREE.Object3D instance");
+  transformControls.visible = false;
+}
+        // --- アクティブモデルの切り替え処理 ---
+        // クリックされたモデルが現在のアクティブモデルと違う場合のみ切り替える
+        if (targetModelIndex !== activeModelIndex) {
+          console.log(`Switching active model from ${activeModelIndex} to ${targetModelIndex}`);
+          console.log('Before calling setActiveModel. Model visible:', targetModel.visible, 'Parent:', targetModel.parent?.type);
+          setActiveModel(targetModelIndex); // ※ setActiveModel は内部で以前のモデルを非表示にする
+          const currentModelData = modelList[activeModelIndex];
+        console.log('After calling setActiveModel. Model visible:', currentModelData?.model.visible, 'Parent:', currentModelData?.model.parent?.type);
+        } else {
+          console.log(`Model ${targetModelIndex} is already active.`);
+          // 既にアクティブなモデルをクリックした場合でも、
+          // バウンディングボックスとTransformControlsは上記で再表示（またはアタッチし直し）される
+          const currentModelData = modelList[activeModelIndex];
+         console.log('Clicked already active model. Model visible:', currentModelData?.model.visible, 'Parent:', currentModelData?.model.parent?.type);
+        }
+
+      } else {
+        // 管理外のオブジェクトがクリックされた場合（通常はあまりないはず）
+        console.log('Clicked object is not part of a managed model or model not found in list.');
+        // 必要であれば、管理外オブジェクト用の選択解除処理をここに追加
+        // 例: TransformControls をデタッチするなど
+        transformControls.detach();
+        transformControls.visible = false;
+        if (boundingBox) {
+            scene.remove(boundingBox);
+            boundingBox = null;
+        }
+      }
+
     } else {
-      // 空クリック時にTransformControlsを非表示に
-      transformControls.detach();
+      // --- 空クリック時の処理 (変更なし) ---
+      // 選択解除処理
+      try {
+        transformControls.detach();
+      } catch (error) {
+        console.error("Error detaching TransformControls:", error);
+      }
       transformControls.visible = false;
+      // バウンディングボックスがあれば削除
+      if (boundingBox) {
+        scene.remove(boundingBox);
+        boundingBox = null;
+      }
+      console.log('Clicked on empty space. Deselecting.');
+      // 必要ならアクティブモデルインデックスもリセット
+      // setActiveModel(-1); // ← 必要に応じてコメント解除
     }
   });
 
@@ -829,4 +942,4 @@ if (modelIndex >= 0) {
     controls: modelControls,
     getContainer: modelControls.getContainer // ★ 追加
   };
-}
+} 
