@@ -12,30 +12,33 @@ export function showNewProjectModal() {
     
     // モーダルのコンテンツを設定
     modalOverlay.innerHTML = `
-      <div class="modal-content">
-        <h2>新規プロジェクト作成</h2>
-        
-        <div class="ar-type-grid">
-          <button class="ar-type-button" data-type="marker">
-            マーカー型AR
-          </button>
-          <button class="ar-type-button" data-type="markerless">
-            マーカーレスAR
-          </button>
-          <button class="ar-type-button" data-type="location">
-            ロケーションベースAR
-          </button>
-          <button class="ar-type-button" data-type="object">
-            物体認識型AR
-          </button>
-          <button class="ar-type-button" data-type="face">
-            フェイスタイプAR
-          </button>
-        </div>
-        
-        <button id="close-modal" class="cancel-button">キャンセル</button>
-      </div>
-    `;
+  <div class="modal-content">
+    <h2>新規プロジェクト作成</h2>
+    
+    <div class="ar-type-grid">
+      <button class="ar-type-button" data-type="marker">
+        マーカー型AR
+      </button>
+      <button class="ar-type-button" data-type="markerless">
+        マーカーレスAR
+      </button>
+      <button class="ar-type-button" data-type="location">
+        ロケーションベースAR
+      </button>
+      <button class="ar-type-button" data-type="object">
+        物体認識型AR
+      </button>
+      <button class="ar-type-button" data-type="face">
+        フェイスタイプAR
+      </button>
+      <button class="ar-type-button" data-type="faceswitch">
+        FaceSwitch AR（ベータ）
+      </button>
+    </div>
+    
+    <button id="close-modal" class="cancel-button">キャンセル</button>
+  </div>
+`;
     
     // モーダルをDOMに追加
     document.body.appendChild(modalOverlay);

@@ -1,4 +1,20 @@
 /* src/styles/editor.css */
+
+.delete-file-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    padding: 0.3rem;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    transition: all var(--transition-quick);
+  }
+  
+  .delete-file-btn:hover {
+    color: var(--color-accent);
+    background-color: rgba(255, 82, 82, 0.1);
+  }
+
 .editor-container {
     display: flex;
     flex-direction: column;
@@ -45,11 +61,15 @@
   }
   
   /* 新しい3カラムレイアウト */
+  /* 3カラムレイアウト */
   .editor-grid-layout {
     display: grid;
     grid-template-columns: 280px 1fr 280px;
     gap: 1.5rem;
+    width: 100%;    
     height: calc(100vh - 180px);
+    box-sizing: border-box; /* paddingやborderを幅や高さに含める */
+    overflow: hidden; /* 全体のはみ出しを防ぐ */
   }
   
   /* 左側のアップロードパネル */
@@ -70,6 +90,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    align-self: stretch !important; /* 強制的に stretch を適用 */
   }
   
   #ar-viewer {
@@ -79,19 +100,22 @@
   }
   
   /* 右側の調整パネル */
-  .controls-panel {
+ /* パネル内のスクロールバー制御 */
+.controls-panel {
     overflow-y: auto;
+    overflow-x: hidden; /* 横スクロールバーを非表示に */
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-height: calc(100vh - 200px); /* 高さの最大値を設定 */
+    min-width: 0; /* ★ Grid/Flexアイテムが内容で縮小できなくなるのを防ぐ */
   }
   
   /* パネルセクション共通 */
   .panel-section {
-    background-color: var(--color-surface);
-    border-radius: var(--border-radius-medium);
-    padding: 1.5rem;
-    box-shadow: var(--shadow-small);
+    overflow: hidden; /* はみ出し部分を隠す */
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .panel-section h3 {
@@ -161,6 +185,128 @@
     font-size: 0.8rem;
     color: var(--color-text-secondary);
   }
+
+  /* モデル一覧 */
+
+  .current-model-info {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .current-model-info h4 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  
+  #current-model-name {
+    font-size: 1rem;
+    color: var(--color-text-secondary);
+  }
+  
+  #current-model-name.has-model {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .model-list-container {
+    margin-bottom: 1rem;
+  }
+  
+  .model-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+  }
+  
+  .model-list-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  
+  .model-list-items {
+    min-height: 50px;
+  }
+  
+  .model-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--color-surface);
+    border-radius: var(--border-radius-small);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: all var(--transition-quick);
+  }
+  
+  .model-list-item:hover {
+    background-color: var(--color-surface-light);
+  }
+  
+  .model-list-item.active {
+    border-color: var(--color-primary);
+    background-color: rgba(124, 77, 255, 0.1);
+  }
+  
+  .model-item-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+  
+  .model-item-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+    word-break: break-all;
+  }
+  
+  .model-item-size {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+  
+  .model-item-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  
+  .model-delete-btn, .model-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    padding: 0.3rem;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    transition: all var(--transition-quick);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .model-delete-btn:hover {
+    color: var(--color-accent);
+    background-color: rgba(255, 82, 82, 0.1);
+  }
+  
+  .model-toggle-btn:hover {
+    color: var(--color-primary);
+    background-color: rgba(124, 77, 255, 0.1);
+  }
+  
+  /* 現在のモデル情報パネル */
+  .model-info-panel {
+    background-color: var(--color-surface);
+    border-radius: var(--border-radius-medium);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--color-border);
+  }
+  
   
   /* マーカーサムネイル表示 */
   .marker-thumbnail-container {
@@ -197,6 +343,51 @@
     justify-content: space-between;
   }
   
+  .file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--color-surface);
+    border-radius: var(--border-radius-small);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    transition: all var(--transition-quick);
+  }
+  
+  .file-item:hover {
+    background-color: var(--color-surface-light);
+  }
+  
+  .file-item.active {
+    border-color: var(--color-primary);
+    background-color: rgba(124, 77, 255, 0.1);
+  }
+  
+  .file-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+  
+  .file-name {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    margin-bottom: 0.3rem;
+    word-break: break-all;
+  }
+  
+  .file-size {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+  }
+  
+  .file-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
   .empty-text {
     color: var(--color-text-disabled);
     text-align: center;
@@ -221,12 +412,12 @@
     font-weight: 500;
   }
   
+  /* スライダーの調整 */
   .slider-with-value {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
+    width: 100%;
+    box-sizing: border-box;
   }
-  
+
   .slider-with-value input[type="range"] {
     flex: 1;
   }
@@ -237,6 +428,32 @@
     font-family: monospace;
     font-size: 0.9rem;
     color: var(--color-text-secondary);
+  }
+
+  /* スケールサイズ表示の修正 */
+  .size-display {
+    margin-top: 4px;        /* 上の間隔 (調整可) */
+    width: 100%;           /* ★ 親(.control-group)の幅に合わせる */
+    box-sizing: border-box; /* ★ paddingを含めて幅計算 */
+    /* overflow, white-space などは子要素(#scale-size-label)に任せる */
+  }
+  #scale-size-label {
+    display: block;         /* ★ ブロック要素にして幅・overflowを効かせる */
+    font-size: 12px;        /* 文字サイズ (調整可) */
+    line-height: 1.2;       /* 行間 (調整可) */
+    color: var(--color-text-secondary); /* 文字色 */
+    white-space: nowrap;    /* ★ テキストを折り返さない */
+    overflow: hidden;       /* ★ 親要素からはみ出した部分を隠す */
+    text-overflow: ellipsis;/* ★ 隠れた部分を「...」で表示 */
+    max-width: 100%;        /* ★ 親(.size-display)の幅を超えない */
+    text-align: right;      /* 右寄せ (スライダーの値と合わせる) */
+  }
+
+  .size-info {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
   }
 
   .storage-usage {

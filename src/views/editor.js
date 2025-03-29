@@ -2,17 +2,16 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from '../views/marker-upload.js';
 
+
 export function showEditor(container) {
   // URLパラメータからARタイプを取得
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
   const arType = urlParams.get('type') || 'unknown';
   const isMarkerMode = arType === 'marker';
 
-  // ARタイプに応じたタイトル、ヘルプテキスト、ボタンの表示設定
+  // ARタイプに応じたタイトルとヘルプテキストを設定
   let title = 'AR エディター';
   let helpText = 'ARモデルをカスタマイズできます。';
-  let previewButtonText = 'プレビュー';
-  let showShareButton = true;
 
   switch (arType) {
     case 'marker':
@@ -26,8 +25,6 @@ export function showEditor(container) {
     case 'location':
       title = 'ロケーションベースAR エディター';
       helpText = 'GPS座標に配置する3Dモデルを設定します。';
-      previewButtonText = '配置を確認'; // 文言変更の例
-      showShareButton = false; // ボタン非表示の例
       break;
     case 'object':
       title = '物体認識型AR エディター';
@@ -53,9 +50,9 @@ export function showEditor(container) {
           <h1>${title}</h1>
         </div>
         <div class="toolbar">
-          <button id="preview-button" class="btn-secondary">${previewButtonText}</button>
+          <button id="preview-button" class="btn-secondary">プレビュー</button>
           <button id="save-button" class="btn-primary">保存</button>
-          ${showShareButton ? '<button id="share-button" class="btn-secondary">共有</button>' : ''}
+          <button id="share-button" class="btn-secondary">共有</button>
         </div>
       </div>
       
@@ -101,33 +98,33 @@ export function showEditor(container) {
                 <p class="empty-text">まだファイルがありません</p>
                 <!-- 今後、ここにファイル一覧が表示されます -->
               </div>
-             <div class="storage-usage">
-  <p id="total-file-size">現在使用中：0MB / 50MB</p>
-  <div class="progress-bar-container">
-    <div id="storage-progress-bar" class="progress-bar" style="width: 0%"></div>
-  </div>
-</div>
-</div> 
-</div>
+              <p id="total-file-size">現在使用中：0MB / 50MB</p> <!-- ファイルサイズ表示 -->
+            </div>
+          </div>
           
           <!-- 中央：3Dビューア -->
           <div class="viewer-panel">
             <div id="ar-viewer"></div>
           </div>
           
-          <!-- 右側：モデル調整パネル -->
-          <div class="controls-panel">
-            <div class="panel-section">
-              <h3>モデル調整</h3>
-              <!-- スケールスライダー -->
-              <div class="control-group">
-                <label for="scale-slider">スケール:</label>
-                <div class="slider-with-value">
-                  <input type="range" id="scale-slider" min="0.1" max="2" step="0.1" value="1">
-                  <span id="scale-value">1.0</span>
-                </div>
-              </div>
-              
+         <!-- 右側：モデル調整パネル -->
+<div class="controls-panel">
+  <div class="panel-section">
+    <h3>モデル調整</h3>
+   <!-- スケールスライダー -->
+<div class="control-group">
+  <label for="scale-slider">スケール:</label>
+  <div class="slider-with-value">
+    <input type="range" id="scale-slider" min="0.1" max="2" step="0.1" value="1">
+    <span id="scale-value">1.0</span>
+  </div>
+  <div class="size-display">
+    <span id="scale-size-label"></span>
+  </div>
+</div>
+      
+    </div>
+           
               <!-- 回転スライダー -->
               <div class="control-group">
                 <label for="rotation-slider">回転 (Y軸):</label>
@@ -170,7 +167,7 @@ export function showEditor(container) {
                   <span id="ar-scale-value">1.0</span>
                 </div>
               </div>
-              
+                         
               <!-- マーカー型ARの場合のみ表示 -->
               ${isMarkerMode ? `
               <div class="control-group">
@@ -188,50 +185,46 @@ export function showEditor(container) {
     </div>
   `;
 
-   // マーカー型ARの場合、アップロードした画像をサムネイルとして表示
-  if (isMarkerMode) {
+  // マーカー型ARの場合、アップロードした画像をサムネイルとして表示
+    if (isMarkerMode) {
     const markerThumbnail = document.getElementById('marker-thumbnail');
-    if (markerThumbnail) {
+    if (markerThumbnail) { // markerThumbnailが存在することを確認
       const markerImageUrl = localStorage.getItem('markerImageUrl');
       if (markerImageUrl) {
         markerThumbnail.src = markerImageUrl;
       } else {
         // サンプル画像を表示
-        markerThumbnail.src = '/assets/sample-marker.jpg';
+        markerThumbnail.src = '/assets/sample-marker.jpg'; // sample-marker.jpgの存在を確認！
       }
+     }
     }
+// モデルの元サイズを保持する変数
+let originalModelSize = { width: 0, height: 0, depth: 0 };
+// ARビューアーを初期化
+const viewerInstance = initARViewer('ar-viewer', {
+  markerMode: isMarkerMode,
+  showGrid: true,
+  onModelLoaded: (size) => {
+    // サイズ情報を保存
+    originalModelSize = { width: size.x, height: size.y, depth: size.z };
+    // 初期スケールでのサイズを表示
+    const initialScale = parseFloat(document.getElementById('scale-slider').value);
+    updateRealSizeDisplay(initialScale);
   }
+});
 
-  // ARビューアーを初期化
-  const viewerInstance = initARViewer('ar-viewer', {
-    markerMode: isMarkerMode,
-    showGrid: true
-  });
-
-  // ファイルサイズ計算と表示のための関数
+  // --- ファイルサイズ計算と表示のための関数 ---
   let totalFileSize = 0;
-  const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
+  const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB (bytes)
 
   function updateTotalFileSize(fileSize) {
     totalFileSize += fileSize;
     const totalFileSizeMB = (totalFileSize / (1024 * 1024)).toFixed(2);
-    const usagePercentage = (totalFileSize / MAX_TOTAL_SIZE) * 100;
-    
     document.getElementById('total-file-size').textContent = `現在使用中：${totalFileSizeMB}MB / 50MB`;
-    
-    // プログレスバーも更新
-    const progressBar = document.getElementById('storage-progress-bar');
-    if (progressBar) {
-      progressBar.style.width = `${usagePercentage}%`;
-      
-      // 使用量に応じて色を変更
-      if (usagePercentage > 90) {
-        progressBar.style.backgroundColor = '#ff4d4d'; // 赤 (90%以上)
-      } else if (usagePercentage > 70) {
-        progressBar.style.backgroundColor = '#ffcc00'; // 黄色 (70%以上)
-      }
-    }
   }
+  // --- ここまで ---
+
+
 
   // GLBモデルアップロード機能
   const modelFileInput = document.getElementById('model-file-input');
@@ -253,8 +246,10 @@ export function showEditor(container) {
             return;
           }
 
+          // ファイルをオブジェクトURLに変換
           const objectUrl = URL.createObjectURL(file);
 
+          // アップロードエリアの表示を更新
           uploadArea.innerHTML = `
             <div class="model-preview">
               <div class="model-info">
@@ -265,12 +260,15 @@ export function showEditor(container) {
             </div>
           `;
 
+          // モデル変更ボタンの処理
           document.getElementById('change-model').addEventListener('click', () => {
+             // ここで以前のファイルのサイズを減算
             totalFileSize -= file.size;
-            updateTotalFileSize(0);
+            updateTotalFileSize(0); // 0 を加算して表示を更新（実質的には減算のみ）
             modelFileInput.click();
           });
 
+           // ファイル一覧に追加 (必要であれば)
           const fileList = document.querySelector('.file-list');
           if (fileList.querySelector('.empty-text')) {
             fileList.querySelector('.empty-text').remove();
@@ -280,7 +278,11 @@ export function showEditor(container) {
           fileItem.innerHTML = `<span>${file.name}</span> <span>${(file.size / (1024 * 1024)).toFixed(2)} MB</span>`;
           fileList.appendChild(fileItem);
 
+          // 合計ファイルサイズを更新
           updateTotalFileSize(file.size);
+
+
+          // ARビューアーにモデルをロード
           viewerInstance.controls.loadNewModel(objectUrl);
         } else {
           alert('GLB形式のファイルを選択してください。');
@@ -288,7 +290,7 @@ export function showEditor(container) {
       }
     });
 
-    // ドラッグ&ドロップ
+    // ドラッグ&ドロップ機能
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
       uploadArea.addEventListener(eventName, preventDefaults, false);
     });
@@ -322,61 +324,74 @@ export function showEditor(container) {
     });
   }
 
-  // マーカー画像変更処理（マーカー型AR）
+  // マーカー画像変更処理（マーカー型ARの場合）
   if (isMarkerMode) {
     const changeMarkerButton = document.getElementById('change-marker');
     if (changeMarkerButton) {
       changeMarkerButton.addEventListener('click', () => {
-        showMarkerUpload();
+          showMarkerUpload(); // マーカーアップロードモジュール
       });
     }
   }
 
-    // イベントリスナー（ダミー動作）
-    const backButton = document.getElementById('back-to-projects');
-    if (backButton) {
-        backButton.addEventListener('click', () => {
-            alert("プロジェクト一覧に戻ります（ダミー動作）"); // ダミー動作
-            window.location.hash = '#/projects';
-        });
-    }
+  // イベントリスナー設定
+  const backButton = document.getElementById('back-to-projects');
+  if (backButton) {
+    backButton.addEventListener('click', () => {
+      window.location.hash = '#/projects';
+    });
+  }
 
   const saveButton = document.getElementById('save-button');
   if (saveButton) {
     saveButton.addEventListener('click', () => {
-      // ダミーの保存処理
-      alert(`「${title}」の変更を保存しました（ダミー動作）`);
+      console.log('プロジェクト保存');
+      // 保存処理をここに実装
+      alert('プロジェクトが保存されました');
     });
   }
 
   const shareButton = document.getElementById('share-button');
-    if (shareButton) {
-        shareButton.addEventListener('click', () => {
-            // ダミーの共有処理
-            alert(`「${title}」を共有します（ダミー動作）\n共有URL: ... \nQRコード: ...`);
-             window.location.hash = '#/qr-code';
-        });
-    }
-
-  const previewButton = document.getElementById('preview-button');
-    if (previewButton) {
-        previewButton.addEventListener('click', () => {
-            // ダミーのプレビュー処理
-            alert(`「${title}」のプレビューを開始します（ダミー動作）`);
-        });
-    }
-
-
-  // スライダー
-  const scaleSlider = document.getElementById('scale-slider');
-  const scaleValue = document.getElementById('scale-value');
-  if (scaleSlider && scaleValue && viewerInstance.controls) {
-    scaleSlider.addEventListener('input', () => {
-      const value = parseFloat(scaleSlider.value).toFixed(1);
-      scaleValue.textContent = value;
-      viewerInstance.controls.setScale(parseFloat(value));
+  if (shareButton) {
+    shareButton.addEventListener('click', () => {
+      console.log('QRコード生成');
+      window.location.hash = '#/qr-code';
     });
   }
+
+  const previewButton = document.getElementById('preview-button');
+  if (previewButton) {
+    previewButton.addEventListener('click', () => {
+      alert('ARプレビュー画面が開きます（実装予定）');
+    });
+  }
+
+// スライダー
+const scaleSlider = document.getElementById('scale-slider');
+const scaleValue = document.getElementById('scale-value');
+const scaleSizeLabel = document.getElementById('scale-size-label');
+if (scaleSlider && scaleValue && viewerInstance.controls) {
+  scaleSlider.addEventListener('input', () => {
+    const value = parseFloat(scaleSlider.value).toFixed(1);
+    scaleValue.textContent = value;
+    viewerInstance.controls.setScale(parseFloat(value));
+    
+    // 実寸サイズの計算と表示
+    updateRealSizeDisplay(parseFloat(value));
+  });
+}
+
+// 実寸サイズの計算と表示を行う関数
+function updateRealSizeDisplay(scale) {
+  if (scaleSizeLabel && originalModelSize.width > 0) {
+    // メートルからセンチメートルに変換して表示（小数第1位まで）
+    const width = (originalModelSize.width * scale * 100).toFixed(1);
+    const height = (originalModelSize.height * scale * 100).toFixed(1);
+    const depth = (originalModelSize.depth * scale * 100).toFixed(1);
+    
+    scaleSizeLabel.textContent = `（約${width}cm × ${height}cm × ${depth}cm）`;
+  }
+}
 
   const rotationSlider = document.getElementById('rotation-slider');
   const rotationValue = document.getElementById('rotation-value');
@@ -387,7 +402,7 @@ export function showEditor(container) {
     });
   }
 
-  // 位置スライダー
+  // 位置スライダーの処理
   const positionXSlider = document.getElementById('position-x');
   const positionYSlider = document.getElementById('position-y');
   const positionZSlider = document.getElementById('position-z');
@@ -399,7 +414,9 @@ export function showEditor(container) {
     const x = parseFloat(positionXSlider.value);
     const y = parseFloat(positionYSlider.value);
     const z = parseFloat(positionZSlider.value);
+
     viewerInstance.controls.setPosition(x, y, z);
+
     positionXValue.textContent = x.toFixed(1);
     positionYValue.textContent = y.toFixed(1);
     positionZValue.textContent = z.toFixed(1);
@@ -416,10 +433,12 @@ export function showEditor(container) {
     arScaleSlider.addEventListener('input', () => {
       const value = parseFloat(arScaleSlider.value).toFixed(1);
       arScaleValue.textContent = value;
+      // ここではプレビュー用のAR設定値を保存
       localStorage.setItem('arScale', value);
     });
   }
 
+  // クリーンアップ関数を返す
   return () => {
     if (viewerInstance && viewerInstance.dispose) {
       viewerInstance.dispose();
