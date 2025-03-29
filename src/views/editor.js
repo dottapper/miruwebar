@@ -102,87 +102,82 @@ export function showEditor(container) {
             </div>
           </div>
           
-          <!-- 中央：3Dビューア -->
-          <div class="viewer-panel">
-            <div id="ar-viewer"></div>
-          </div>
+<!-- 中央：3Dビューア -->
+<div class="viewer-panel" style="height: calc(100vh - 250px);">
+  <div id="ar-viewer"></div>
+</div>
           
          <!-- 右側：モデル調整パネル -->
 <div class="controls-panel">
   <div class="panel-section">
     <h3>モデル調整</h3>
-   <!-- スケールスライダー -->
-<div class="control-group">
-  <label for="scale-slider">スケール:</label>
-  <div class="slider-with-value">
-    <input type="range" id="scale-slider" min="0.1" max="2" step="0.1" value="1">
-    <span id="scale-value">1.0</span>
-  </div>
-  <div class="size-display">
-    <span id="scale-size-label"></span>
-  </div>
-</div>
-      
+    <!-- スケールスライダー -->
+    <div class="control-group">
+      <label for="scale-slider">スケール:</label>
+      <div class="slider-with-value">
+        <input type="range" id="scale-slider" min="0.1" max="2" step="0.1" value="1">
+        <span id="scale-value">1.0</span>
+      </div>
+      <div class="size-display">
+        <span id="scale-size-label"></span>
+      </div>
     </div>
-           
-              <!-- 回転スライダー -->
-              <div class="control-group">
-                <label for="rotation-slider">回転 (Y軸):</label>
-                <div class="slider-with-value">
-                  <input type="range" id="rotation-slider" min="0" max="360" step="1" value="0">
-                  <span id="rotation-value">0°</span>
-                </div>
-              </div>
-              
-              <!-- 位置調整 -->
-              <div class="control-group">
-                <label>位置:</label>
-                <div class="position-controls">
-                  <div class="position-control">
-                    <span>X:</span>
-                    <input type="range" id="position-x" min="-2" max="2" step="0.1" value="0">
-                    <span id="position-x-value">0.0</span>
-                  </div>
-                  <div class="position-control">
-                    <span>Y:</span>
-                    <input type="range" id="position-y" min="-2" max="2" step="0.1" value="0">
-                    <span id="position-y-value">0.0</span>
-                  </div>
-                  <div class="position-control">
-                    <span>Z:</span>
-                    <input type="range" id="position-z" min="-2" max="2" step="0.1" value="0">
-                    <span id="position-z-value">0.0</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- ARオプション設定 -->
-            <div class="panel-section">
-              <h3>AR設定</h3>
-              <div class="control-group">
-                <label for="ar-scale">ARスケール倍率:</label>
-                <div class="slider-with-value">
-                  <input type="range" id="ar-scale" min="0.5" max="3" step="0.1" value="1">
-                  <span id="ar-scale-value">1.0</span>
-                </div>
-              </div>
-                         
-              <!-- マーカー型ARの場合のみ表示 -->
-              ${isMarkerMode ? `
-              <div class="control-group">
-                <label for="marker-detection">マーカー検出:</label>
-                <select id="marker-detection" class="form-select">
-                  <option value="fast">高速（精度低）</option>
-                  <option value="normal" selected>標準</option>
-                  <option value="accurate">高精度（速度低）</option>
-                </select>
-              </div>` : ''}
-            </div>
-          </div>
+    
+    <!-- 回転スライダー -->
+    <div class="control-group">
+      <label for="rotation-slider">回転 (Y軸):</label>
+      <div class="slider-with-value">
+        <input type="range" id="rotation-slider" min="0" max="360" step="1" value="0">
+        <span id="rotation-value">0°</span>
+      </div>
+    </div>
+    
+    <!-- 位置調整 -->
+    <div class="control-group">
+      <label>位置:</label>
+      <div class="position-controls">
+        <div class="position-control">
+          <span>X:</span>
+          <input type="range" id="position-x" min="-2" max="2" step="0.1" value="0">
+          <span id="position-x-value">0.0</span>
+        </div>
+        <div class="position-control">
+          <span>Y:</span>
+          <input type="range" id="position-y" min="-2" max="2" step="0.1" value="0">
+          <span id="position-y-value">0.0</span>
+        </div>
+        <div class="position-control">
+          <span>Z:</span>
+          <input type="range" id="position-z" min="-2" max="2" step="0.1" value="0">
+          <span id="position-z-value">0.0</span>
         </div>
       </div>
     </div>
+  </div>
+  
+  <!-- ARオプション設定を独立したパネルセクションに -->
+  <div class="panel-section">
+    <h3>AR設定</h3>
+    <div class="control-group">
+      <label for="ar-scale">ARスケール倍率:</label>
+      <div class="slider-with-value">
+        <input type="range" id="ar-scale" min="0.5" max="3" step="0.1" value="1">
+        <span id="ar-scale-value">1.0</span>
+      </div>
+    </div>
+    
+    <!-- マーカー型ARの場合のみ表示 -->
+    ${isMarkerMode ? `
+    <div class="control-group">
+      <label for="marker-detection">マーカー検出:</label>
+      <select id="marker-detection" class="form-select">
+        <option value="fast">高速（精度低）</option>
+        <option value="normal" selected>標準</option>
+        <option value="accurate">高精度（速度低）</option>
+      </select>
+    </div>` : ''}
+  </div>
+</div>
   `;
 
   // マーカー型ARの場合、アップロードした画像をサムネイルとして表示

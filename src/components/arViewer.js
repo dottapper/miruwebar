@@ -4,11 +4,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 export function initARViewer(containerId, options = {}) {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    console.error('コンテナが見つかりません:', containerId);
-    return null; // 失敗時は null を返す
-  }
+    console.log(`ARViewer: Initializing with container ID: ${containerId}`);
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.error('コンテナが見つかりません:', containerId);
+      return null; // 失敗時は null を返す
+    }
+    
+    console.log(`ARViewer: Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
+
 
   // デフォルトオプションとマージ
   const config = {
@@ -32,13 +36,25 @@ export function initARViewer(containerId, options = {}) {
   camera.position.set(0, 5, 2); // 初期カメラ位置を真上寄り（X=0, Y=10, Z=2）に変更
   camera.lookAt(0, 0, 0);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // alpha: true を追加する場合あり
-  renderer.setSize(container.clientWidth, container.clientHeight);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // レンダラーのサイズ設定を遅延
+  // 通常のサイズ設定は行っておく
+  renderer.setSize(container.clientWidth || 800, container.clientHeight || 600);
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; // よりソフトな影
   container.appendChild(renderer.domElement);
+  // サイズが0の場合に備えて、少し遅延してからサイズを再設定
+setTimeout(() => {
+    console.log(`ARViewer: Delayed resize - Container dimensions: ${container.clientWidth}x${container.clientHeight}`);
+    if (container.clientWidth > 0 && container.clientHeight > 0) {
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+    }
+  }, 100);
 
   // OrbitControlsを追加
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -406,19 +422,39 @@ const newCameraPos = new THREE.Vector3(
   // ウィンドウリサイズ対応
   function onWindowResize() {
     if (!container) return; // コンテナがない場合は何もしない
-    camera.aspect = container.clientWidth / container.clientHeight;
+    
+    // 明示的にコンテナのサイズを再取得
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    
+    renderer.setSize(width, height);
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
+    
+    // 強制的に1フレームレンダリング
+    renderer.render(scene, camera);
   }
   window.addEventListener('resize', onWindowResize);
 
   // アニメーションループ
-  let animationFrameId = null; // アニメーションフレームIDを保持
+  let animationFrameId = null; // この行を追加
+  let lastWidth = container ? container.clientWidth : 0;
+  let lastHeight = container ? container.clientHeight : 0;
+  
   function animate(time) {
     animationFrameId = requestAnimationFrame(animate);
     // TWEEN.update(time); // Tween.jsを使う場合
+    
+    // コンテナのサイズ変更をチェック
+    if (container && (lastWidth !== container.clientWidth || lastHeight !== container.clientHeight)) {
+      lastWidth = container.clientWidth;
+      lastHeight = container.clientHeight;
+      onWindowResize();
+    }
+    
     controls.update(); // damping有効時は必須
     renderer.render(scene, camera);
   }
