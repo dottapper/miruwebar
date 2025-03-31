@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-
+// ★★★ TransformControls インポート確認ログ ★★★
+console.log('[arViewer Import Check] Imported TransformControls:', TransformControls);
+// ★★★ ここまで ★★★
 export function initARViewer(containerId, options = {}) {
     console.log(`ARViewer: Initializing with container ID: ${containerId}`);
     const container = document.getElementById(containerId);
@@ -57,15 +59,51 @@ export function initARViewer(containerId, options = {}) {
   controls.maxDistance = 500;
   controls.target.set(0, 0, 0); // ターゲットを明示的に設定
 
-// TransformControlsを初期化
-const transformControls = new TransformControls(camera, renderer.domElement);
+  // TransformControlsを初期化
+  // ★★★ TransformControls インスタンス化前ログ ★★★
+  console.log('[arViewer Instance Check] Before new TransformControls. Camera:', camera, 'Renderer DOM:', renderer.domElement);
+  // ★★★ ここまで ★★★
+  const transformControls = new TransformControls(camera, renderer.domElement);
+  // ★★★ TransformControls インスタンス化後ログ ★★★
+  console.log('[arViewer Instance Check] After new TransformControls. Instance:', transformControls);
+    if (transformControls instanceof THREE.Object3D) {
+        console.log('  - Instance IS an Object3D.');
+    } else {
+        console.error('  - ERROR: Instance is NOT an Object3D immediately after creation!');
+    }
+    // ★★★ ここまで ★★★
+    // ★★★ プロトタイプチェーンを確認 ★★★
+        console.log('  - transformControls prototype:', Object.getPrototypeOf(transformControls));
+        console.log('  - transformControls constructor:', transformControls.constructor);
+        console.log('  - Expected Object3D:', THREE.Object3D);
+        console.log('  - Is prototype Object3D.prototype?', Object.getPrototypeOf(transformControls) === THREE.Object3D.prototype);
+        console.log('  - Is constructor Object3D?', transformControls.constructor === THREE.Object3D);
+    // ★★★ ここまで追加 ★★★
+    
 transformControls.size = 0.75; // コントロールのサイズを調整
 transformControls.addEventListener('dragging-changed', (event) => {
     // ドラッグ中はOrbitControlsを無効化
   controls.enabled = !event.value;
 });
 transformControls.visible = false; // 初期状態では非表示
-scene.add(transformControls);
+        // ★★★ TransformControls の scene.add を安全に行う ★★★
+        if (transformControls instanceof THREE.Object3D) {
+          console.log('[arViewer Init] transformControls is an instance of THREE.Object3D. Adding to scene.');
+          try {
+              scene.add(transformControls);
+              console.log('[arViewer Init] Successfully added transformControls to scene.');
+          } catch (addError) {
+              console.error('[arViewer Init] Error adding transformControls to scene:', addError);
+              console.error('  - transformControls object:', transformControls);
+          }
+      } else {
+          console.error('[arViewer Init] ERROR: transformControls is NOT an instance of THREE.Object3D!');
+          console.error('  - transformControls object:', transformControls);
+          // エラーの場合、追加しない
+      }
+      // ★★★ ここまで ★★★
+// 明示的にモードを設定
+transformControls.mode = 'translate';
 transformControls.addEventListener('objectChange', () => {
   if (activeModelIndex < 0 || !modelList[activeModelIndex]) {
     console.warn("objectChange triggered but no active model found.");
@@ -85,9 +123,9 @@ transformControls.addEventListener('objectChange', () => {
         isNaN(pos.x) || isNaN(pos.y) || isNaN(pos.z) || !isFinite(pos.x) || !isFinite(pos.y) || !isFinite(pos.z) ||
         isNaN(rot.x) || isNaN(rot.y) || isNaN(rot.z) || !isFinite(rot.x) || !isFinite(rot.y) || !isFinite(rot.z) ||
         isNaN(scl.x) || isNaN(scl.y) || isNaN(scl.z) || !isFinite(scl.x) || !isFinite(scl.y) || !isFinite(scl.z) ||
-        scl.x <= 0 || scl.y <= 0 || scl.z <= 0 // スケールが0以下も不正とする
+        scl.x < 0.001 || scl.y < 0.001 || scl.z < 0.001 // 極端に小さいスケールを不正とする
     ) {
-      
+
       console.warn('不正な Transform 値が検出されました。更新をスキップします。', { pos, rot, scl });
 
       // ★★★ この3行のコメントを外す ★★★
@@ -95,7 +133,26 @@ transformControls.addEventListener('objectChange', () => {
       model.rotation.copy(modelData.rotation);
       model.scale.copy(modelData.scale);
       // ★★★ ここまで ★★★
-  
+      
+      console.warn('不正な Transform 値が検出されました。元の値に戻します。', { pos, rot, scl });
+
+      // 元の値に戻す
+      console.log('元の値:', { 
+          position: modelData.position.toArray(),
+          rotation: modelData.rotation.toArray(),
+          scale: modelData.scale.toArray() 
+      });
+      
+      model.position.copy(modelData.position);
+      model.rotation.copy(modelData.rotation);
+      model.scale.copy(modelData.scale);
+      
+      console.log('戻した後の値:', { 
+          position: model.position.toArray(),
+          rotation: model.rotation.toArray(),
+          scale: model.scale.toArray() 
+      });
+
       return; // 不正な値ならここで処理を中断
   }
 
@@ -252,6 +309,7 @@ transformControls.addEventListener('objectChange', () => {
         loader.load(
             modelUrl,
             (gltf) => {
+              console.log('[arViewer Load Callback] GLTF loaded successfully. Entering try block...'); // ★★★ この行を追加 ★★★
               try {
                 const model = gltf.scene;
                 let storedObjectUrl = null; // Mapに保存するURL
@@ -271,11 +329,52 @@ transformControls.addEventListener('objectChange', () => {
                 });
 
                 // スケールと位置の初期調整
-                const box = new THREE.Box3().setFromObject(model);
-                const size = new THREE.Vector3();
+            // ★★★ バウンディングボックス計算のデバッグを追加 ★★★
+            let box, size, center; // 変数をletで宣言
+            let calculationSuccess = false; // 計算成功フラグ
+
+            try {
+                console.log('[arViewer BBox Debug] Calculating bounding box for model:', model);
+                box = new THREE.Box3().setFromObject(model);
+                console.log('  - Calculated box:', box);
+
+                // box.min と box.max が有効かチェック
+                if (!box || !isFinite(box.min.x) || !isFinite(box.min.y) || !isFinite(box.min.z) ||
+                    !isFinite(box.max.x) || !isFinite(box.max.y) || !isFinite(box.max.z)) {
+                    throw new Error(`Bounding box calculation failed (min/max invalid): ${JSON.stringify(box)}`);
+                }
+
+                size = new THREE.Vector3();
                 box.getSize(size);
-                const center = new THREE.Vector3();
+                console.log('  - Calculated size:', size);
+
+                // size が有効かチェック (マイナスやNaNは異常)
+                if (!size || !isFinite(size.x) || !isFinite(size.y) || !isFinite(size.z) || size.x < 0 || size.y < 0 || size.z < 0) {
+                     throw new Error(`Bounding box size calculation failed (size invalid): ${JSON.stringify(size)}`);
+                }
+
+                center = new THREE.Vector3();
                 box.getCenter(center);
+                console.log('  - Calculated center:', center);
+
+                // center が有効かチェック
+                if (!center || !isFinite(center.x) || !isFinite(center.y) || !isFinite(center.z)) {
+                     throw new Error(`Bounding box center calculation failed (center invalid): ${JSON.stringify(center)}`);
+                }
+
+                calculationSuccess = true; // ここまで来たら成功
+
+            } catch (bboxError) {
+                const modelNameInfo = fileName ? ` for model ${fileName}` : '';
+                console.error(`[arViewer BBox Debug] Error during bounding box calculation${modelNameInfo}:`, bboxError);
+                // 計算失敗時の代替値を設定
+                box = new THREE.Box3(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5)); // 仮のボックス (1x1x1)
+                size = new THREE.Vector3(1, 1, 1);
+                center = new THREE.Vector3(0, 0.5, 0);
+                console.warn('[arViewer BBox Debug] Using fallback bounding box values.');
+                calculationSuccess = false; // 失敗フラグ
+            }
+            // ★★★ ここまで ★★★
                 // モデルのサイズを通知するコールバックがあれば呼び出し
 if (config.onModelLoaded) {
     config.onModelLoaded(size);
@@ -284,15 +383,43 @@ if (config.onModelLoaded) {
                 const maxSize = Math.max(size.x, size.y, size.z);
                 let scale = 1.0;
 
-                if (maxSize > 1e-6) { // 非常に小さいモデルを除外
-                    if (config.markerMode) {
-                        const targetSize = 0.5; // マーカーサイズ(1.0)の半分
-                        scale = targetSize / maxSize;
-                    } else {
-                        const targetSize = 2.0; // シーンサイズに合わせた目標サイズ
-                        scale = targetSize / maxSize;
+                        // ★★★ ここから変更 ★★★
+            // maxSize が有効な数値か、かつゼロより大きいかチェック
+            if (isFinite(maxSize) && maxSize > 1e-6) {
+              let targetSize;
+              if (config.markerMode) {
+                  targetSize = 0.5; // マーカーサイズ(1.0)の半分
+              } else {
+                  targetSize = 2.0; // シーンサイズに合わせた目標サイズ
+              }
+              // ゼロ除算を防ぐため、ここでも maxSize をチェック（念のため）
+              if (maxSize > 1e-9) { // より厳しいチェック
+                  scale = targetSize / maxSize;
+              } else {
+                  console.warn(`[arViewer] maxSize is too small (${maxSize}) to calculate scale safely. Resetting scale to 1.0.`);
+                  scale = 1.0;
+              }
+
+
+              // 計算結果のスケールが有効な数値かチェック
+              if (!isFinite(scale)) {
+                  console.warn(`[arViewer] Calculated scale is not finite (${scale}). Resetting to 1.0. maxSize: ${maxSize}, targetSize: ${targetSize}`);
+                  scale = 1.0; // 不正な場合はデフォルト値に戻す
+              }
+
+          } else {
+              // エラーメッセージにファイル名を追加
+              const modelNameInfo = fileName ? ` for model ${fileName}` : '';
+              console.warn(`[arViewer] Invalid maxSize (${maxSize}) calculated${modelNameInfo}. Using default scale 1.0.`);
+              scale = 1.0; // maxSize が不正な場合はデフォルトスケールを使用
+          }
+          // ★★★ ここまで変更 ★★★
+
+                      // 最終的なスケールが有効か再確認（念のため）
+                      if (!isFinite(scale) || scale <= 0) {
+                        console.warn(`[arViewer] Final scale is invalid (${scale}) before setting. Resetting to 1.0.`);
+                        scale = 1.0;
                     }
-                }
                 scale = Math.max(0.01, Math.min(100, scale)); // 極端なスケールを防ぐ
                 model.scale.set(scale, scale, scale);
 
@@ -303,8 +430,37 @@ if (config.onModelLoaded) {
                 // box.getSize(size);
 
                 // 位置調整: 中心を原点に、底面をY=0に
-                model.position.sub(center); // 中心を原点へ
-                model.position.y -= box.min.y; // 底面をY=0へ (min.yはローカル座標)
+               // model.position.sub(center); // 中心を原点へ
+               // model.position.y -= box.min.y; // 底面をY=0へ (min.yはローカル座標)
+                           // ★★★ 位置調整の安全対策を追加 ★★★
+            const centerIsValid = center && isFinite(center.x) && isFinite(center.y) && isFinite(center.z);
+            const minYIsValid = box && box.min && isFinite(box.min.y);
+
+            if (centerIsValid && minYIsValid) {
+                // center と min.y が有効な場合のみ位置調整を実行
+                model.position.sub(center);
+                model.position.y -= box.min.y;
+
+                // さらに、調整後の位置もチェック (念のため)
+                const finalPos = model.position;
+                if (!isFinite(finalPos.x) || !isFinite(finalPos.y) || !isFinite(finalPos.z)) {
+                    console.warn(`[arViewer] Position became invalid after adjustment. Resetting position. Original center:`, center, `Original box.min.y:`, box.min.y);
+                    // 問題が発生したら、元の位置（スケール適用直後）に戻すか、(0,0,0) にする
+                    // ここでは一旦 (0,0,0) にリセットしてみます
+                    model.position.set(0, 0, 0);
+                }
+
+            } else {
+                // エラーメッセージにファイル名を追加
+                const modelNameInfo = fileName ? ` for model ${fileName}` : '';
+                console.warn(`[arViewer] Invalid center or box.min.y detected${modelNameInfo}. Skipping position adjustment.`);
+                console.warn('  - Center:', center, ' (Valid:', centerIsValid, ')');
+                console.warn('  - Box Min Y:', box && box.min ? box.min.y : 'N/A', ' (Valid:', minYIsValid, ')');
+                // 位置調整ができない場合、モデルは原点 (0,0,0) に配置される（サブトラクション前なので）
+                // または、明示的に (0,0,0) をセットしても良い
+                model.position.set(0, 0, 0); // 安全のため原点に配置
+            }
+            // ★★★ ここまで ★★★
 
                 // モデルデータを作成
                 const modelData = createModelData(model, storedObjectUrl, fileName, fileSize);
@@ -382,18 +538,39 @@ if (config.onModelLoaded) {
       }
     }
   
-    // 新しいアクティブモデルを表示
-    if (index >= 0 && index < modelList.length) {
-      _setModelVisibility(index, true);
-      activeModelIndex = index;
+   // 新しいモデルを確実に表示し、TransformControlsをアタッチする
+if (index >= 0 && index < modelList.length) {
+  _setModelVisibility(index, true);
+  activeModelIndex = index;
   
-      const activeModelData = modelList[activeModelIndex];
-      applyModelTransform(activeModelData);
-      // adjustCameraToModel(activeModelData.model); // コメントアウト済み
-    } else {
-      activeModelIndex = -1;
-      // カメラリセットは不要
+  const activeModelData = modelList[activeModelIndex];
+  applyModelTransform(activeModelData);
+  
+  // TransformControlsを確実にアタッチし直す
+  if (transformControls) {
+    transformControls.detach();
+    // モデルが有効なObject3Dかどうかチェック
+if (activeModelData.model instanceof THREE.Object3D) {
+  transformControls.attach(activeModelData.model);
+  transformControls.visible = true;
+  console.log('[arViewer] Attached TransformControls to model:', activeModelData.model);
+} else {
+  console.error('[arViewer] Cannot attach TransformControls - model is not a valid Object3D:', activeModelData.model);
+  // 子オブジェクトがあれば最初の子にアタッチしてみる
+  if (activeModelData.model.children && activeModelData.model.children.length > 0) {
+    const firstChild = activeModelData.model.children[0];
+    if (firstChild instanceof THREE.Object3D) {
+      transformControls.attach(firstChild);
+      transformControls.visible = true;
+      console.log('[arViewer] Attached TransformControls to model child:', firstChild);
     }
+  }
+}
+    transformControls.visible = true;
+  }
+} else {
+  activeModelIndex = -1;
+}
   
     // activeModelChangedイベントを発火
     const activeModelChangedEvent = new Event('activeModelChanged');
@@ -513,7 +690,7 @@ const newCameraPos = new THREE.Vector3(
     renderer.render(scene, camera);
   }
   window.addEventListener('resize', onWindowResize);
-  window.addEventListener('resize', onWindowResize);
+  
 
   // Raycaster（クリック検出用）
   const raycaster = new THREE.Raycaster();
@@ -542,8 +719,22 @@ modelList.forEach(modelData => {
   }
 });
 console.log(`Selectable objects count: ${selectableObjects.length}`);
-    
-    const intersects = raycaster.intersectObjects(selectableObjects, true); // 第2引数 true を追加
+        // ★★★ Raycaster デバッグ用ログを追加 ★★★
+        console.log('[Raycaster Debug] Checking intersections with these objects:');
+        selectableObjects.forEach((obj, i) => {
+            console.log(`  [${i}] Type: ${obj.type}, Visible: ${obj.visible}, Parent Type: ${obj.parent ? obj.parent.type : 'null'}, Position:`, obj.position);
+        });
+        console.log('[Raycaster Debug] Raycaster details:', raycaster);
+        const intersects = raycaster.intersectObjects(selectableObjects, true); // 第2引数 true を追加
+        // ★★★ ここまで ★★★
+            // ★★★ Raycaster デバッグ用ログを追加 ★★★
+    console.log(`[Raycaster Debug] Intersects found: ${intersects.length}`);
+    if (intersects.length > 0) {
+        console.log('[Raycaster Debug] First intersected object:', intersects[0].object);
+        console.log('  - Distance:', intersects[0].distance);
+        console.log('  - Point:', intersects[0].point);
+    }
+    // ★★★ ここまで ★★★
    
     if (intersects.length > 0) {
       // クリックされた一番手前のメッシュを取得
@@ -572,30 +763,72 @@ console.log(`Selectable objects count: ${selectableObjects.length}`);
         console.log(`Model visible: ${modelList[targetModelIndex].visible}`);
         console.log(`Model in scene: ${modelList[targetModelIndex].model.parent === scene}`);
 
+        console.log('[arViewer] Attaching to targetModel:', targetModel);
+        console.log('[arViewer] targetModel type:', targetModel.type); // Type (Group, Mesh, etc.)
+        console.log('[arViewer] targetModel children count:', targetModel.children.length); // 子オブジェクトの数
         // --- バウンディングボックスの処理 ---
+        const actualObjectToControl = targetModel.children[0] || targetModel;
         // 既存のバウンディングボックスがあれば削除
-        if (boundingBox) {
-          scene.remove(boundingBox);
-          boundingBox = null; // 変数もリセット
-        }
-        // 新しいバウンディングボックスを作成してシーンに追加
-        boundingBox = new THREE.BoxHelper(targetModel, 0x00ffff); // 色をシアンに変更（見やすくするため）
+        if (boundingBox) scene.remove(boundingBox); // 先に削除しておく
+        boundingBox = new THREE.BoxHelper(actualObjectToControl, 0x00ffff); // 修正: actualObjectToControl を使う
         scene.add(boundingBox);
 
 // TransformControlsを対象モデルにアタッチする前に有効なObject3Dかチェック
-if (targetModel instanceof THREE.Object3D) {
+if (actualObjectToControl instanceof THREE.Object3D) {
   try {
-    transformControls.attach(targetModel);
-    transformControls.visible = true;
+    // 一度デタッチしてからアタッチする
+    transformControls.detach();
+    
+    // モード設定を明示的に行う（デフォルトはtranslate）
+    if (!transformControls.mode || transformControls.mode === '') {
+      transformControls.mode = 'translate';
+    }
+                // ★★★ デバッグ用ログを追加 ★★★
+            console.log('[arViewer Debug] Attempting to attach TransformControls to:', actualObjectToControl);
+            if (actualObjectToControl instanceof THREE.Object3D) {
+                console.log('  - Type:', actualObjectToControl.type);
+                console.log('  - Visible:', actualObjectToControl.visible);
+                console.log('  - Parent:', actualObjectToControl.parent ? actualObjectToControl.parent.type : 'null');
+                console.log('  - Position:', actualObjectToControl.position.x, actualObjectToControl.position.y, actualObjectToControl.position.z);
+                console.log('  - Scale:', actualObjectToControl.scale.x, actualObjectToControl.scale.y, actualObjectToControl.scale.z);
+                // バウンディングボックス/スフィアの計算を試みる（エラーが出るか確認）
+                try {
+                    const testBox = new THREE.Box3().setFromObject(actualObjectToControl);
+                    const testSphere = new THREE.Sphere();
+                    testBox.getBoundingSphere(testSphere);
+                    console.log('  - BoundingSphere Radius:', testSphere.radius);
+                    if (isNaN(testSphere.radius)) {
+                        console.error('  - WARNING: BoundingSphere radius is NaN!');
+                    }
+                } catch (e) {
+                    console.error('  - Error calculating bounding box/sphere:', e);
+                }
+            } else {
+                console.error('  - ERROR: actualObjectToControl is NOT an instance of THREE.Object3D!');
+            }
+            // ★★★ デバッグ用ログここまで ★★★
+    // アタッチして表示
+transformControls.attach(actualObjectToControl);
+transformControls.visible = true;
+    
     console.log("Successfully attached TransformControls to model");
-              // ★★★ このログを追加 ★★★
-              console.log('Model transform after attach:',
-                'Visible:', targetModel.visible,
-                'Position:', targetModel.position.x, targetModel.position.y, targetModel.position.z,
-                'Scale:', targetModel.scale.x, targetModel.scale.y, targetModel.scale.z,
-                'Parent:', targetModel.parent ? targetModel.parent.type : 'null'
-            );
-            // ★★★ ここまで追加 ★★★
+    console.log('TransformControls mode:', transformControls.mode);
+    console.log('TransformControls visible:', transformControls.visible);
+    
+    // 明示的にシーンに追加（既に追加されていても問題ない）
+    if (transformControls.parent !== scene) {
+      scene.add(transformControls);
+    }
+    
+    // モデルの情報をログ出力
+    console.log('Model transform after attach:',
+      'Visible:', targetModel.visible,
+      'Position:', targetModel.position.x, targetModel.position.y, targetModel.position.z,
+      'Scale:', targetModel.scale.x, targetModel.scale.y, targetModel.scale.z,
+      'Parent:', targetModel.parent ? targetModel.parent.type : 'null'
+    );
+// ★★★ デバッグ用: 何にアタッチしたかログ追加 ★★★
+console.log('[arViewer] Successfully attached TransformControls to:', actualObjectToControl);
   } catch (error) {
     console.error("Error attaching TransformControls:", error);
     transformControls.visible = false;
@@ -726,15 +959,42 @@ if (targetModel instanceof THREE.Object3D) {
       return activeModelIndex;
     },
     
-    // TransformControlsのモード切り替え
-    setTransformMode: (mode) => {
-      if (['translate', 'rotate', 'scale'].includes(mode)) {
-        transformControls.mode = mode;
-        return true;
-      }
-      return false;
-    },
-    
+      // TransformControlsのモード切り替え
+      setTransformMode: (mode) => {
+        console.log(`[arViewer] setTransformMode called with mode: ${mode}`);
+        if (['translate', 'rotate', 'scale'].includes(mode)) {
+          try {
+            // 現在アタッチされているオブジェクトを保存
+            const currentObject = transformControls.object;
+            
+            // 一度デタッチ
+            transformControls.detach();
+            
+            // モードを設定
+            transformControls.mode = mode;
+            console.log(`[arViewer] transformControls.mode is now: ${transformControls.mode}`);
+            
+            // 元のオブジェクトが存在する場合は再アタッチ
+            if (currentObject) {
+              transformControls.attach(currentObject);
+              transformControls.visible = true;
+              console.log('[arViewer] Re-attached to object after mode change');
+            } else if (activeModelIndex >= 0 && modelList[activeModelIndex]) {
+              // アクティブモデルがある場合はそれをアタッチ
+              transformControls.attach(modelList[activeModelIndex].model);
+              transformControls.visible = true;
+              console.log('[arViewer] Attached to active model after mode change');
+            }
+            
+            return true;
+          } catch (error) {
+            console.error('[arViewer] Error setting transformControls.mode:', error);
+            return false;
+          }
+        }
+        console.log(`[arViewer] Invalid mode provided: ${mode}`);
+        return false;
+      },
     // TransformControlsの表示/非表示を切り替える
     toggleTransformControls: (visible) => {
       transformControls.visible = visible;

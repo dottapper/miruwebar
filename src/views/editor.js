@@ -222,6 +222,60 @@ const viewerInstance = initARViewer('ar-viewer', {
     updateRealSizeDisplay(initialScale);
   }
 });
+// 操作モード切り替えボタン要素を取得 (querySelector を使用)
+const translateButton = document.querySelector('button[data-mode="translate"]');
+const rotateButton = document.querySelector('button[data-mode="rotate"]');
+const scaleButton = document.querySelector('button[data-mode="scale"]');
+
+// ボタンの存在チェック
+if (!translateButton || !rotateButton || !scaleButton) {
+  console.error('モード切り替えボタンの要素が見つかりません。HTMLの data-mode 属性を確認してください。');
+} else if (!viewerInstance || !viewerInstance.controls) {
+  console.error('ARビューワーのインスタンスまたはコントロールが見つかりません。');
+} else {
+
+  // 現在アクティブなボタンを管理する関数 (見た目の更新用)
+  const setActiveButton = (activeButton) => {
+    translateButton.classList.remove('active');
+    rotateButton.classList.remove('active');
+    scaleButton.classList.remove('active');
+    if (activeButton) {
+      activeButton.classList.add('active');
+    }
+  };
+
+  // 移動ボタンのクリックイベント
+  translateButton.addEventListener('click', () => {
+    const success = viewerInstance.controls.setTransformMode('translate');
+    if (success) {
+      console.log('Transform mode set to: translate');
+      setActiveButton(translateButton);
+    }
+  });
+
+  // 回転ボタンのクリックイベント
+  rotateButton.addEventListener('click', () => {
+    const success = viewerInstance.controls.setTransformMode('rotate');
+    if (success) {
+      console.log('Transform mode set to: rotate');
+      setActiveButton(rotateButton);
+    }
+  });
+
+  // 拡大ボタンのクリックイベント
+  scaleButton.addEventListener('click', () => {
+    const success = viewerInstance.controls.setTransformMode('scale');
+    if (success) {
+      console.log('Transform mode set to: scale');
+      setActiveButton(scaleButton);
+    }
+  });
+
+  // 初期状態を 'translate' に設定し、対応するボタンをアクティブにする
+  viewerInstance.controls.setTransformMode('translate');
+  setActiveButton(translateButton);
+}
+
 
   // --- ファイルサイズ計算と表示のための関数 ---
   let totalFileSize = 0;
