@@ -46,7 +46,101 @@ export function initARViewer(containerId, options = {}) {
   controls.dampingFactor = 0.1;
   controls.minDistance = 0.1;
   controls.maxDistance = 500;
-  controls.target.set(0, 0, 0);
+  //controls.target.set(0, 0, 0);
+
+  // OrientationCube (方向キューブ) の追加
+  // 小さなシーンとカメラを作成
+  const cubeScene = new THREE.Scene();
+  const cubeCamera = new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, 0.1, 10);
+  cubeCamera.position.set(0, 0, 5);
+  cubeCamera.lookAt(0, 0, 0);
+
+  // キューブの作成
+  const cubeSize = 0.65;
+  const cubeGeometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+  
+  // 各面のマテリアルを作成（6つの面、それぞれに異なる色を設定）
+  const cubeMaterials = [
+    new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.8 }), // 右面 (X+)
+    new THREE.MeshBasicMaterial({ color: 0x5555ff, transparent: true, opacity: 0.8 }), // 左面 (X-)
+    new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.8 }), // 上面 (Y+)
+    new THREE.MeshBasicMaterial({ color: 0xffff55, transparent: true, opacity: 0.8 }), // 下面 (Y-)
+    new THREE.MeshBasicMaterial({ color: 0xff55ff, transparent: true, opacity: 0.8 }), // 前面 (Z+)
+    new THREE.MeshBasicMaterial({ color: 0x55ffff, transparent: true, opacity: 0.8 })  // 後面 (Z-)
+  ];
+  
+  // 軸の色を定義
+  const axisColors = {
+    x: 0xff5555, // 赤 (X軸)
+    y: 0x55ff55, // 緑 (Y軸)
+    z: 0x5555ff  // 青 (Z軸)
+  };
+  
+  // キューブのエッジを強調表示するための線
+  const edgeGeometry = new THREE.EdgesGeometry(cubeGeometry);
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+  const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+  
+  // キューブを作成
+  const orientationCube = new THREE.Mesh(cubeGeometry, cubeMaterials);
+  orientationCube.add(edges);
+
+  // テキストラベル（各軸の方向を示す）
+  const addAxisLabel = (text, position, color) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`;
+    ctx.font = 'bold 40px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 32, 32);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(position);
+    sprite.scale.set(0.3, 0.3, 0.3);
+    orientationCube.add(sprite);
+  };
+  
+  const xColor = new THREE.Color(axisColors.x);
+  const yColor = new THREE.Color(axisColors.y);
+  const zColor = new THREE.Color(axisColors.z);
+  
+  addAxisLabel('X', new THREE.Vector3(cubeSize * 0.7, 0, 0), xColor);
+  addAxisLabel('Y', new THREE.Vector3(0, cubeSize * 0.7, 0), yColor);
+  addAxisLabel('Z', new THREE.Vector3(0, 0, cubeSize * 0.7), zColor);
+  
+  // キューブを追加
+  cubeScene.add(orientationCube);
+  
+  // 軸のヘルパーを追加（オプション）
+  const axisHelper = new THREE.AxesHelper(cubeSize * 0.9);
+  orientationCube.add(axisHelper);
+  
+  // キューブ用のレンダラー（メインレンダラーから作成）
+  const cubeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  cubeRenderer.setSize(80, 80); // キューブの表示サイズ
+  cubeRenderer.setClearColor(0x000000, 0); // 透明な背景
+  
+  // キューブのDOMスタイル設定
+  cubeRenderer.domElement.style.position = 'absolute';
+  cubeRenderer.domElement.style.top = '10px';
+  cubeRenderer.domElement.style.right = '10px';
+  cubeRenderer.domElement.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+  cubeRenderer.domElement.style.borderRadius = '8px';
+  cubeRenderer.domElement.style.zIndex = '1000';
+  cubeRenderer.domElement.style.cursor = 'pointer';
+  cubeRenderer.domElement.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.2)';
+  cubeRenderer.domElement.title = 'クリックすると正面ビューに戻ります';
+  
+  // コンテナに追加
+  container.appendChild(cubeRenderer.domElement);
+  
+  // クリックイベントを追加 - 正面ビュー（デフォルトカメラ位置）に戻る
+  cubeRenderer.domElement.addEventListener('click', resetCameraToFrontView);
 
   const transformControls = new TransformControls(camera, renderer.domElement);
   transformControls.addEventListener('dragging-changed', function (event) {
@@ -62,6 +156,7 @@ export function initARViewer(containerId, options = {}) {
     modelData.position.copy(model.position);
     modelData.rotation.copy(model.rotation);
     modelData.scale.copy(model.scale);
+    console.log('Model Scale:', model.scale.x, model.scale.y, model.scale.z); 
     const event = new CustomEvent('transformChanged', {
       detail: {
         index: activeModelIndex,
@@ -80,10 +175,10 @@ export function initARViewer(containerId, options = {}) {
   scene.add(transformControls);
 
   // ライトとグリッドヘルパー
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 2.1); // ← 0.6 から 2.1 に変更　全体のライトを調整
   scene.add(ambientLight);
 
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.3); // ← 0.8 から 0.3 に変更
   directionalLight.position.set(5, 10, 7.5);
   directionalLight.castShadow = true;
   directionalLight.shadow.mapSize.width = 2048;
@@ -306,6 +401,7 @@ export function initARViewer(containerId, options = {}) {
     camera.far = distance * 10;
     camera.updateProjectionMatrix();
     controls.update();
+    controls.target.copy(modelWorldCenter); 
     controls.minDistance = maxDim * 0.2;
     controls.maxDistance = Math.max(distance * 20, 50);
   }
@@ -420,7 +516,61 @@ scene.add(boundingBox);
     }
   });
 
-  // アニメーションループ
+  // 正面ビューにカメラをリセットする関数
+  function resetCameraToFrontView() {
+    // アクティブなモデルがある場合はモデルを中心に
+    if (activeModelIndex >= 0 && modelList[activeModelIndex] && modelList[activeModelIndex].model) {
+      const model = modelList[activeModelIndex].model;
+      const box = new THREE.Box3().setFromObject(model);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5;
+      
+      // 新しいカメラ位置 (モデルの正面から見る)
+      camera.position.set(center.x, center.y + maxDim * 0.5, center.z + cameraZ);
+      controls.target.copy(center);
+    } else {
+      // モデルがない場合はデフォルト位置に
+      camera.position.set(0, 5, 2);
+      controls.target.set(0, 0, 0);
+    }
+    
+    // アニメーションなしで即座に更新
+    camera.updateProjectionMatrix();
+    controls.update();
+    
+    // ユーザーに視覚的なフィードバックを提供
+    const feedback = document.createElement('div');
+    feedback.textContent = '正面ビューに戻りました';
+    feedback.style.position = 'absolute';
+    feedback.style.top = '100px';
+    feedback.style.right = '10px';
+    feedback.style.padding = '8px 12px';
+    feedback.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    feedback.style.color = 'white';
+    feedback.style.borderRadius = '4px';
+    feedback.style.fontSize = '12px';
+    feedback.style.transition = 'opacity 1s';
+    feedback.style.opacity = '1';
+    feedback.style.zIndex = '1001';
+    
+    container.appendChild(feedback);
+    
+    // 2秒後にフィードバックを消す
+    setTimeout(() => {
+      feedback.style.opacity = '0';
+      setTimeout(() => {
+        container.removeChild(feedback);
+      }, 1000);
+    }, 2000);
+  }
+
+  // アニメーションループを修正して方向キューブも更新
   let animationFrameId = null;
   let lastWidth = container.clientWidth, lastHeight = container.clientHeight;
   function animate(time) {
@@ -431,7 +581,18 @@ scene.add(boundingBox);
       onWindowResize();
     }
     controls.update();
+    
+    // メインシーンのレンダリング
     renderer.render(scene, camera);
+    
+    // 方向キューブの更新とレンダリング
+    // カメラの回転に合わせてキューブも回転させる
+    if (orientationCube) {
+      orientationCube.rotation.copy(camera.rotation);
+      // キューブのZ軸を180度回転させてカメラと同じ向きを示すようにする
+      orientationCube.rotation.z += Math.PI;
+      cubeRenderer.render(cubeScene, cubeCamera);
+    }
   }
   animate();
 
@@ -516,14 +677,30 @@ scene.add(boundingBox);
     removeModel: (index) => {
       if (index >= 0 && index < modelList.length) {
         const removedModelData = modelList[index];
+        
+        // Detach TransformControls if it's attached to the model being removed
+        if (transformControls.object === removedModelData.model) {
+          transformControls.detach();
+          transformControls.visible = false;
+        }
+
+        // Remove bounding box if it exists
+        if (boundingBox) {
+          scene.remove(boundingBox);
+          boundingBox = null;
+        }
+
         if (removedModelData.model.parent) {
           scene.remove(removedModelData.model);
         }
         disposeModelResources(removedModelData);
         modelList.splice(index, 1);
+        
         let newActiveIndex = -1;
         if (modelList.length === 0) {
           activeModelIndex = -1;
+          transformControls.detach();
+          transformControls.visible = false;
         } else if (activeModelIndex === index) {
           newActiveIndex = 0;
         } else if (activeModelIndex > index) {
@@ -531,7 +708,9 @@ scene.add(boundingBox);
         } else {
           newActiveIndex = activeModelIndex;
         }
+        
         setActiveModel(newActiveIndex);
+        
         const modelListChangedEvent = new CustomEvent('modelListChanged', {
           detail: { models: modelControls.getAllModels(), activeModelIndex }
         });
@@ -563,6 +742,50 @@ scene.add(boundingBox);
         modelData.position.copy(modelData.model.position);
       }
     },
+     // --- ↓↓↓ リセット機能を追加 ↓↓↓ ---
+     resetScaleRatio: () => {
+      const modelData = getActiveModelData(); // 現在アクティブなモデルのデータを取得
+      if (modelData && modelData.model) {
+        const model = modelData.model;
+        const currentScale = model.scale;
+
+        // リセット後のスケール値を計算 (ここではXYZの平均値を使う例)
+        // もし「元の大きさ」を保持したいなら、X,Y,Zの中で最大値を基準にするなどの方法も考えられます
+        const avgScale = (currentScale.x + currentScale.y + currentScale.z) / 3;
+
+        // 非常に小さい値にならないように下限を設定 (例: 0.001)
+        const newScaleValue = Math.max(0.001, avgScale);
+
+        // モデルのスケールをXYZすべて同じ値に設定
+        model.scale.set(newScaleValue, newScaleValue, newScaleValue);
+
+        // 内部データも更新
+        modelData.scale.copy(model.scale);
+
+        // UIに変更を通知するために transformChanged イベントを発行
+        // (これをしないと、XYZ表示や他のUIが更新されない)
+        const event = new CustomEvent('transformChanged', {
+          detail: {
+            index: activeModelIndex,
+            position: { x: model.position.x, y: model.position.y, z: model.position.z },
+            rotation: {
+              x: THREE.MathUtils.radToDeg(model.rotation.x),
+              y: THREE.MathUtils.radToDeg(model.rotation.y),
+              z: THREE.MathUtils.radToDeg(model.rotation.z)
+            },
+            // 更新されたスケール値を渡す
+            scale: { x: model.scale.x, y: model.scale.y, z: model.scale.z }
+          }
+        });
+        container.dispatchEvent(event);
+
+        console.log('Scale ratio reset to:', newScaleValue); // 動作確認ログ
+      } else {
+        console.warn('Cannot reset scale: No active model found.');
+      }
+    }, // ← カンマを確認
+    // --- ↑↑↑ リセット機能を追加 ↑↑↑ ---
+
     resetCamera: () => {
       const modelData = getActiveModelData();
       if (modelData) {
@@ -616,7 +839,11 @@ scene.add(boundingBox);
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
-    }
+    },
+    // 正面ビューにリセットするメソッドを追加
+    resetToFrontView: () => {
+      resetCameraToFrontView();
+    },
   };
 
   return {

@@ -20,6 +20,7 @@
   flex-direction: column;
   flex-shrink: 0;
   position: relative;
+  z-index: 5;
 }
 
 .side-menu::before {
@@ -185,10 +186,14 @@
   border-radius: var(--border-radius-medium);
   transition: transform var(--transition-standard), box-shadow var(--transition-standard);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-small);
+  border: 1px solid var(--color-border);
+  padding: 1.5rem;
+  height: auto;
+  min-height: 160px;
   display: flex;
-  height: 150px;
+  flex-direction: column;
 }
 
 .project-card::after {
@@ -206,33 +211,59 @@
   box-shadow: var(--shadow-medium);
 }
 
+/* 非公開プロジェクトのスタイル */
+.project-card.private {
+  opacity: 0.8;
+  background-color: rgba(36, 36, 36, 0.8);
+}
+
 .card-content {
-  flex-grow: 1;
-  padding: 1.5rem;
-  cursor: pointer;
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
 .project-date {
   font-size: 0.8rem;
   color: var(--color-text-secondary);
-  margin-bottom: 0.5rem;
+}
+
+.date-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.date-separator {
+  color: var(--color-border);
+  opacity: 0.5;
 }
 
 .project-title {
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: 1rem;
   color: var(--color-text-primary);
+  text-align: left;
 }
 
 .project-type {
   font-size: 0.9rem;
   color: var(--color-text-secondary);
-  margin-top: auto;
   position: relative;
   padding-left: 20px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
 }
 
 .project-type::before {
@@ -248,24 +279,60 @@
   opacity: 0.7;
 }
 
-/* カードメニューボタン */
-.card-menu {
+.card-footer {
+  margin-top: auto;
   display: flex;
-  align-items: flex-start;
-  padding: 1rem 0.5rem;
-  position: relative;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.public-status {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.status-label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  min-width: 3.5rem;
+  text-align: left;
+}
+
+.access-count {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.access-count svg {
+  opacity: 0.6;
+}
+
+/* カードメニュー */
+.card-menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 50;
 }
 
 .card-menu-button {
   background: transparent;
   border: none;
   color: var(--color-text-secondary);
-  font-size: 1.4rem;
   cursor: pointer;
-  padding: 0.3rem;
+  padding: 0.5rem;
   border-radius: var(--border-radius-small);
   transition: all var(--transition-quick);
   line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .card-menu-button:hover {
@@ -273,37 +340,50 @@
   color: var(--color-text-primary);
 }
 
-/* カードドロップダウンメニュー */
 .card-menu-dropdown {
   position: absolute;
   top: 100%;
   right: 0;
-  background-color: var(--color-surface-light);
+  width: 160px;
+  background-color: var(--color-surface);
   border-radius: var(--border-radius-medium);
   box-shadow: var(--shadow-medium);
-  width: 140px;
-  z-index: 10;
-  display: none;
-  animation: fadeIn 0.2s ease-out;
-  overflow: hidden;
+  margin-top: 5px;
   border: 1px solid var(--color-border);
+  overflow: hidden;
+  display: none;
+  z-index: 100;
 }
 
 .card-menu-dropdown.show {
   display: block;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .dropdown-item {
   padding: 0.8rem 1rem;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: background-color var(--transition-quick);
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  transition: all 0.2s ease;
 }
 
 .dropdown-item:hover {
   background-color: rgba(255, 255, 255, 0.05);
   color: var(--color-text-primary);
+}
+
+.dropdown-item svg {
+  opacity: 0.7;
+  transition: opacity var(--transition-quick);
+}
+
+.dropdown-item:hover svg {
+  opacity: 1;
 }
 
 .dropdown-item.delete {
@@ -312,6 +392,10 @@
 
 .dropdown-item.delete:hover {
   background-color: rgba(255, 82, 82, 0.1);
+}
+
+.dropdown-item.delete svg {
+  color: var(--color-accent);
 }
 
 /* ページネーション */
@@ -466,4 +550,60 @@
 .no-projects p {
   color: var(--color-text-secondary);
   font-size: 1.1rem;
+}
+
+/* スイッチトグル */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #333;
+  transition: .3s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .3s;
+}
+
+input:checked + .slider {
+  background-color: var(--color-primary);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--color-primary);
+}
+
+input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }

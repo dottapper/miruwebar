@@ -164,6 +164,46 @@
     to { transform: translateY(0); opacity: 1; }
   }
   
+  /* 通知メッセージのスタイル */
+  .notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: var(--border-radius-medium);
+    color: white;
+    box-shadow: var(--shadow-medium);
+    z-index: 1000;
+    animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-out 2.7s forwards;
+    max-width: 350px;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .notification.success {
+    background-color: #4CAF50;
+  }
+  
+  .notification.error {
+    background-color: var(--color-accent);
+  }
+  
+  .notification.info {
+    background-color: var(--color-primary);
+  }
+  
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  
   /* ユーティリティクラス */
   .text-center { text-align: center; }
   .mb-1 { margin-bottom: 0.5rem; }

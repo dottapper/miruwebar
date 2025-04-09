@@ -175,3 +175,84 @@ export function showNewProjectModal() {
       }
     });
   }
+
+  /**
+   * プロジェクト保存用のモーダルを表示する
+   * @param {Object} options - モーダルのオプション
+   * @param {Function} onSave - 保存時のコールバック
+   */
+  export function showSaveProjectModal(options = {}, onSave) {
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'modal-overlay';
+    
+    modalOverlay.innerHTML = `
+        <div class="modal-content">
+            <h2>${options.isEdit ? 'プロジェクトを更新' : '新規プロジェクトを保存'}</h2>
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="project-name" style="display: block; margin-bottom: 0.5rem;">プロジェクト名 *</label>
+                <input type="text" 
+                    id="project-name" 
+                    class="form-input" 
+                    value="${options.currentName || ''}" 
+                    placeholder="プロジェクト名を入力"
+                    style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border);"
+                    required>
+            </div>
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="project-description" style="display: block; margin-bottom: 0.5rem;">説明</label>
+                <textarea 
+                    id="project-description" 
+                    class="form-input" 
+                    rows="3"
+                    placeholder="プロジェクトの説明を入力（任意）"
+                    style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border);"
+                >${options.currentDescription || ''}</textarea>
+            </div>
+            <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button id="save-project" class="primary-button" style="background: var(--gradient-primary); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
+                    ${options.isEdit ? '更新' : '保存'}
+                </button>
+                <button id="cancel-save" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
+                    キャンセル
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modalOverlay);
+
+    // イベントハンドラ
+    const handleSave = () => {
+        const nameInput = document.getElementById('project-name');
+        const descInput = document.getElementById('project-description');
+        
+        if (!nameInput.value.trim()) {
+            nameInput.classList.add('error');
+            nameInput.style.borderColor = 'var(--color-accent)';
+            return;
+        }
+
+        const projectData = {
+            name: nameInput.value.trim(),
+            description: descInput.value.trim(),
+            id: options.projectId || null,
+            timestamp: Date.now()
+        };
+
+        if (onSave) onSave(projectData);
+        document.body.removeChild(modalOverlay);
+    };
+
+    document.getElementById('save-project').addEventListener('click', handleSave);
+    document.getElementById('cancel-save').addEventListener('click', () => {
+        document.body.removeChild(modalOverlay);
+    });
+
+    // エラー表示のクリア
+    document.getElementById('project-name').addEventListener('input', (e) => {
+        if (e.target.value.trim()) {
+            e.target.classList.remove('error');
+            e.target.style.borderColor = '';
+        }
+    });
+  }

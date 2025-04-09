@@ -6,7 +6,7 @@ import './styles/editor.css'
 import './styles/login.css';
 import './styles/select-ar.css';
 import './styles/marker-upload.css';
-
+import './styles/version-info.css';
 
 document.querySelector('#app').innerHTML = `
   <div>
