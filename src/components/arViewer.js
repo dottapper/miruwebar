@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { initLoadingManager, showLoadingScreen, hideLoadingScreen, updateProgress } from '../utils/loadingManager.js';
 
 
 export function initARViewer(containerId, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) {
-    console.error('コンテナが見つかりません:', containerId);
+    console.error(`ARViewer: コンテナID "${containerId}" が見つかりません`);
     return null;
   }
   
@@ -19,6 +20,9 @@ export function initARViewer(containerId, options = {}) {
     ...options
   };
 
+  // ローディングマネージャーの初期化（コンテナIDを渡す）
+  const loadingManager = initLoadingManager(containerId);
+  
   // シーン・カメラ・レンダラーの初期化
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(config.backgroundColor);
@@ -218,8 +222,42 @@ export function initARViewer(containerId, options = {}) {
   // モデル管理用変数
   const modelList = [];
   let activeModelIndex = -1;
-  const loader = new GLTFLoader();
   const objectUrls = new Map();
+  // 選択オブジェクト表示用のBoxHelper
+  let boundingBox = null;
+
+  // Three.jsのローディングマネージャーを作成
+  const threeLoadingManager = new THREE.LoadingManager();
+  
+  // ロード開始時の処理
+  threeLoadingManager.onStart = (url, itemsLoaded, itemsTotal) => {
+    loadingManager.showLoadingScreen();
+    console.log(`Started loading: ${url}`);
+  };
+  
+  // ロード中の処理（進捗更新）
+  threeLoadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+    const progressPercent = (itemsLoaded / itemsTotal) * 100;
+    loadingManager.updateProgress(progressPercent, `モデルを読み込んでいます... ${Math.floor(progressPercent)}%`);
+    console.log(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files.`);
+  };
+  
+  // ロード完了時の処理
+  threeLoadingManager.onLoad = () => {
+    setTimeout(() => {
+      loadingManager.hideLoadingScreen();
+    }, 500);
+    console.log('Loading complete!');
+  };
+  
+  // ロードエラー時の処理
+  threeLoadingManager.onError = (url) => {
+    loadingManager.updateProgress(100, 'エラーが発生しました。再読み込みしてください。');
+    console.error(`Error loading: ${url}`);
+  };
+  
+  // GLTFLoaderにローディングマネージャーを設定
+  const loader = new GLTFLoader(threeLoadingManager);
 
   function createModelData(model, objectUrl, fileName, fileSize) {
     return {
@@ -261,6 +299,9 @@ export function initARViewer(containerId, options = {}) {
   // モデル読み込み関数
   function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0) {
     return new Promise((resolve, reject) => {
+      // ローディング画面を表示
+      loadingManager.showLoadingScreen();
+      
       let createdObjectUrl = null;
       if (modelUrl instanceof Blob || modelUrl instanceof File) {
         createdObjectUrl = URL.createObjectURL(modelUrl);
@@ -322,8 +363,15 @@ export function initARViewer(containerId, options = {}) {
           reject(innerError);
         }
       }, xhr => {
+        // 進捗状況の更新
+        if (xhr.lengthComputable) {
+          const progressPercent = (xhr.loaded / xhr.total) * 100;
+          loadingManager.updateProgress(progressPercent, `${fileName}: ${progressPercent.toFixed(0)}% ロード完了`);
+        }
         console.log(`${fileName}: ${(xhr.loaded / xhr.total * 100).toFixed(0)}% ロード完了`);
       }, error => {
+        // エラー時の処理
+        loadingManager.updateProgress(100, 'エラーが発生しました。再読み込みしてください。');
         if (isBlobUrl) URL.revokeObjectURL(modelUrl);
         reject(error);
       });
@@ -355,13 +403,32 @@ export function initARViewer(containerId, options = {}) {
         _setModelVisibility(previousActiveIndex, true);
       }
     }
+    
+    // 古いバウンディングボックスを削除
+    if (boundingBox) {
+      scene.remove(boundingBox);
+      boundingBox = null;
+    }
+    
     if (index >= 0 && index < modelList.length) {
       _setModelVisibility(index, true);
       activeModelIndex = index;
       const activeModelData = modelList[activeModelIndex];
       applyModelTransform(activeModelData);
+      
+      // 新しいモデルに水色のバウンディングボックスを追加
+      boundingBox = new THREE.BoxHelper(activeModelData.model, 0x00ffff);
+      scene.add(boundingBox);
+      
+      // TransformControlsをアタッチ
+      transformControls.detach();
+      transformControls.attach(activeModelData.model);
+      transformControls.visible = true;
     } else {
       activeModelIndex = -1;
+      // TransformControlsを非表示に
+      transformControls.detach();
+      transformControls.visible = false;
     }
     const activeModelChangedEvent = new CustomEvent('activeModelChanged', {
       detail: { index: activeModelIndex, previousIndex: previousActiveIndex }
@@ -448,7 +515,6 @@ export function initARViewer(containerId, options = {}) {
   // クリックイベントとRaycaster
   const raycaster = new THREE.Raycaster();
   const mouse = new THREE.Vector2();
-  let boundingBox = null;
   
   renderer.domElement.addEventListener('click', (event) => {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -477,41 +543,26 @@ export function initARViewer(containerId, options = {}) {
         }
       });
       if (targetModel && targetModelIndex !== -1) {
-     // --- バウンディングボックスの処理 ---
-// 常に targetModel を対象にするように修正
-const actualObjectToControl = targetModel;
-if (boundingBox) scene.remove(boundingBox);
-boundingBox = new THREE.BoxHelper(actualObjectToControl, 0x00ffff);
-scene.add(boundingBox);
-
-        try {
-          transformControls.detach();
-          if (!transformControls.mode) transformControls.mode = 'translate';
-          
-          if (!(actualObjectToControl instanceof THREE.Object3D)) { // ★型チェック追加
-              
-          }
-          transformControls.attach(actualObjectToControl); // 元の attach 処理
-          
-          transformControls.visible = true;
-        } catch (error) {
-          transformControls.visible = false;
-        }
+        // モデルが見つかった場合は setActiveModel を呼び出す
+        // setActiveModel でバウンディングボックスとTransformControlsを処理するようになった
         if (targetModelIndex !== activeModelIndex) {
           setActiveModel(targetModelIndex);
         }
-      } else {
-        transformControls.detach();
-        transformControls.visible = false;
-        if (boundingBox) {
-          scene.remove(boundingBox);
-          boundingBox = null;
-        }
       }
     } else {
+      // 何も選択されていない場合は全て解除
+      transformControls.detach();
+      transformControls.visible = false;
       if (boundingBox) {
         scene.remove(boundingBox);
         boundingBox = null;
+      }
+      if (activeModelIndex >= 0) {
+        activeModelIndex = -1;
+        const activeModelChangedEvent = new CustomEvent('activeModelChanged', {
+          detail: { index: -1, previousIndex: activeModelIndex }
+        });
+        container.dispatchEvent(activeModelChangedEvent);
       }
     }
   });
@@ -582,17 +633,17 @@ scene.add(boundingBox);
     }
     controls.update();
     
-    // メインシーンのレンダリング
-    renderer.render(scene, camera);
+    // バウンディングボックスを更新（選択されたオブジェクトの位置・回転・スケールに合わせる）
+    if (boundingBox && activeModelIndex >= 0 && modelList[activeModelIndex]) {
+      boundingBox.update();
+    }
     
-    // 方向キューブの更新とレンダリング
-    // カメラの回転に合わせてキューブも回転させる
+    // 方向キューブを更新
     if (orientationCube) {
       orientationCube.rotation.copy(camera.rotation);
-      // キューブのZ軸を180度回転させてカメラと同じ向きを示すようにする
-      orientationCube.rotation.z += Math.PI;
       cubeRenderer.render(cubeScene, cubeCamera);
     }
+    renderer.render(scene, camera);
   }
   animate();
 
@@ -654,8 +705,20 @@ scene.add(boundingBox);
       transformControls.visible = visible;
       if (!visible) {
         transformControls.detach();
+        // TransformControlsを非表示にする時はバウンディングボックスも非表示にするオプション
+        // 必要に応じてコメントアウトを解除する
+        // if (boundingBox) {
+        //   scene.remove(boundingBox);
+        //   boundingBox = null;
+        // }
       } else if (activeModelIndex >= 0) {
         transformControls.attach(modelList[activeModelIndex].model);
+        
+        // TransformControlsを表示する時、バウンディングボックスも再表示
+        if (!boundingBox && modelList[activeModelIndex]) {
+          boundingBox = new THREE.BoxHelper(modelList[activeModelIndex].model, 0x00ffff);
+          scene.add(boundingBox);
+        }
       }
     },
     getActiveModelInfo: () => {
@@ -844,6 +907,10 @@ scene.add(boundingBox);
     resetToFrontView: () => {
       resetCameraToFrontView();
     },
+    // ローディング画面の手動制御用関数を追加
+    showLoadingScreen: loadingManager.showLoadingScreen,
+    hideLoadingScreen: loadingManager.hideLoadingScreen,
+    updateLoadingProgress: loadingManager.updateProgress
   };
 
   return {

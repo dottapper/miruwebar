@@ -76,14 +76,14 @@ export default function showProjects(container) {
         <div class="logo-container">
           <div class="logo">Miru WebAR</div>
         </div>
-        <div class="menu-item active">
+        <div class="menu-item active" id="projects-menu-item">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
             <polyline points="14 2 14 8 20 8"/>
           </svg>
           プロジェクト
         </div>
-        <div class="menu-item">
+        <div class="menu-item" id="media-menu-item">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
             <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -91,7 +91,7 @@ export default function showProjects(container) {
           </svg>
           メディア一覧
         </div>
-        <div class="menu-item">
+        <div class="menu-item" id="analytics-menu-item">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 3v18h18"/>
             <path d="M18.4 9l-1.3 1.3"/>
@@ -102,6 +102,12 @@ export default function showProjects(container) {
             <path d="M16 13v7"/>
           </svg>
           分析
+        </div>
+        <div class="menu-item" id="loading-screen-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+          </svg>
+          ローディング画面
         </div>
         <div class="menu-spacer"></div>
         <!-- バージョン情報ボタン (divに変更) -->
@@ -151,6 +157,32 @@ export default function showProjects(container) {
   const projectsPerPage = 6; // 1ページあたりのプロジェクト数
   let currentPage = 1;
   
+  // メニュー項目のアクティブ状態を更新
+  function updateActiveMenuItem() {
+    // 現在のハッシュを取得
+    const currentHash = window.location.hash || '#/projects';
+    
+    // すべてのメニュー項目からアクティブクラスを削除
+    document.querySelectorAll('.side-menu .menu-item').forEach(item => {
+      item.classList.remove('active');
+    });
+    
+    // 現在のページに対応するメニュー項目をアクティブに設定
+    if (currentHash.startsWith('#/projects')) {
+      document.getElementById('projects-menu-item')?.classList.add('active');
+    } else if (currentHash.startsWith('#/media')) {
+      document.getElementById('media-menu-item')?.classList.add('active');
+    } else if (currentHash.startsWith('#/analytics')) {
+      document.getElementById('analytics-menu-item')?.classList.add('active');
+    } else if (currentHash.startsWith('#/loading-screen')) {
+      document.getElementById('loading-screen-btn')?.classList.add('active');
+    }
+  }
+  
+  // 初期化時とハッシュ変更時にアクティブメニューを更新
+  updateActiveMenuItem();
+  window.addEventListener('hashchange', updateActiveMenuItem);
+  
   // バージョン情報ボタンのイベントリスナー設定
   const versionInfoBtn = document.getElementById('version-info-btn');
   if (versionInfoBtn) {
@@ -165,6 +197,20 @@ export default function showProjects(container) {
     });
   } else {
     console.warn('バージョン情報ボタンが見つかりません');
+  }
+
+  // ローディング画面設定ボタンのイベントリスナー設定
+  const loadingScreenBtn = document.getElementById('loading-screen-btn');
+  if (loadingScreenBtn) {
+    loadingScreenBtn.addEventListener('click', () => {
+      console.log('ローディング画面設定ボタンがクリックされました');
+      try {
+        // ハッシュベースのルーティングを使用
+        window.location.hash = '#/loading-screen';
+      } catch (error) {
+        console.error('ローディング画面設定画面への遷移エラー:', error);
+      }
+    });
   }
 
   // グローバルに関数を公開して、デバッグを容易にする

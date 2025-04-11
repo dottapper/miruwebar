@@ -1,7 +1,7 @@
 // src/views/editor.js
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from '../views/marker-upload.js'; // 依存関係を確認
-import { showSaveProjectModal } from '../components/ui.js'; // 保存モーダルをインポート
+import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
 import { saveProject, getProject } from '../api/projects.js'; // プロジェクト保存APIをインポート
 
 export function showEditor(container) {
@@ -54,6 +54,7 @@ export function showEditor(container) {
         </div>
         <div class="toolbar">
           <button id="preview-button" class="btn-secondary">プレビュー</button>
+          <button id="qrcode-button" class="btn-secondary">QRコードを発行</button>
           <button id="save-button" class="btn-primary">保存</button>
           <button id="share-button" class="btn-secondary">共有</button>
         </div>
@@ -199,6 +200,7 @@ export function showEditor(container) {
   const saveButton = document.getElementById('save-button');
   const shareButton = document.getElementById('share-button');
   const previewButton = document.getElementById('preview-button');
+  const qrcodeButton = document.getElementById('qrcode-button');
   const scaleSlider = document.getElementById('scale-slider');
   const scaleValue = document.getElementById('scale-value');
   const scaleSizeLabel = document.getElementById('scale-size-label');
@@ -614,6 +616,27 @@ export function showEditor(container) {
   if (backButton) {
     backButton.addEventListener('click', () => window.location.hash = '#/projects');
   }
+  
+  // QRコードボタン
+  if (qrcodeButton) {
+    qrcodeButton.addEventListener('click', () => {
+      // 選択中のモデル名を取得
+      let selectedModelName = 'sample';
+      
+      if (viewerInstance?.controls?.getActiveModelInfo) {
+        const activeModel = viewerInstance.controls.getActiveModelInfo();
+        if (activeModel) {
+          selectedModelName = activeModel.fileName || 'model';
+        }
+      }
+      
+      // QRコードモーダルを表示
+      showQRCodeModal({
+        modelName: selectedModelName
+      });
+    });
+  }
+  
   if (saveButton) {
     saveButton.addEventListener('click', () => {
       // URLからプロジェクトIDを取得（編集モードかどうか判断するため）
@@ -693,9 +716,20 @@ export function showEditor(container) {
   }
   if (shareButton) {
     shareButton.addEventListener('click', () => {
-        // 現在のプロジェクトIDなどを渡してQRコード画面へ
-        const projectId = urlParams.get('id') || 'new'; // URLからID取得を試みる
-        window.location.hash = `#/qr-code?project=${projectId}`;
+      // 選択中のモデル名を取得
+      let selectedModelName = 'sample';
+      
+      if (viewerInstance?.controls?.getActiveModelInfo) {
+        const activeModel = viewerInstance.controls.getActiveModelInfo();
+        if (activeModel) {
+          selectedModelName = activeModel.fileName || 'model';
+        }
+      }
+      
+      // QRコードモーダルを表示
+      showQRCodeModal({
+        modelName: selectedModelName
+      });
     });
   }
   if (previewButton) {

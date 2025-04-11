@@ -7,6 +7,12 @@ import './styles/login.css';
 import './styles/select-ar.css';
 import './styles/marker-upload.css';
 import './styles/version-info.css';
+import './styles/loading-screen-editor.css'; // ローディング画面エディタ用のスタイルを追加
+import './styles/loading-screen.css'; // ローディング画面のスタイルをインポート
+
+// QRCode ライブラリを読み込み (グローバルに利用できるようにwindowに設定)
+import QRCode from 'qrcode'
+window.QRCode = QRCode;
 
 document.querySelector('#app').innerHTML = `
   <div>
@@ -35,6 +41,7 @@ import showSelectAR from './views/select-ar.js';
 import showProjects from './views/projects.js';
 import { showEditor } from './views/editor.js';  // デフォルトエクスポートでない場合
 import showQRCode from './views/qr-code.js';
+import showLoadingScreenEditor from './views/loading-screen-editor.js'; // ローディング画面エディタを追加
 
 // ルートに対応する表示関数のマップ
 const routes = {
@@ -43,6 +50,7 @@ const routes = {
   '#/projects': showProjects,
   '#/editor': showEditor,
   '#/qr-code': showQRCode,
+  '#/loading-screen': showLoadingScreenEditor, // ローディング画面エディタのルートを追加
 };
 
 // アプリ表示エリア
