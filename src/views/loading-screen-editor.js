@@ -17,6 +17,13 @@ const defaultSettings = {
   customAnimation: null
 };
 
+// フォントサイズのプリセット
+let fontSizePresets = {
+  small: 0.8,
+  medium: 1.0,
+  large: 1.2
+};
+
 /**
  * 色名を16進数に変換するマッピング
  */
@@ -183,13 +190,32 @@ const animationPresets = {
 const mockAPI = {
   // 設定取得API
   async getSettings() {
+    // localStorageから読み込み試行
+    const storedSettings = localStorage.getItem('loadingScreenSettings');
+    if (storedSettings) {
+      try {
+        console.log('ローカルストレージから設定を読み込みました');
+        return Promise.resolve(JSON.parse(storedSettings));
+      } catch (e) {
+        console.error('ローカルストレージのデータのパースに失敗:', e);
+        // エラーの場合はデフォルトを返す
+      }
+    }
+    console.log('デフォルト設定を使用します');
     return Promise.resolve({...defaultSettings});
   },
   
   // 設定保存API
   async saveSettings(data) {
     console.log('Mock API - データ保存:', data);
-    return Promise.resolve({...data, id: 1});
+    // localStorageに保存
+    try {
+        localStorage.setItem('loadingScreenSettings', JSON.stringify(data));
+        console.log('設定をローカルストレージに保存しました');
+    } catch (e) {
+        console.error('ローカルストレージへの保存に失敗:', e);
+    }
+    return Promise.resolve({...data, id: 1}); // モックIDを返す
   }
 };
 
@@ -198,8 +224,169 @@ const mockAPI = {
  * @param {HTMLElement} container - 表示先のコンテナ要素
  */
 export default function showLoadingScreenEditor(container) {
-  // 認証チェックは削除 - サイトのルーティングシステムが自動的に処理するため
-  // このビューは認証済みユーザーのみがアクセスできるようになっている前提
+  // ★★★ 最初に currentSettings を初期化 ★★★
+  let currentSettings = { ...defaultSettings };
+  let logoFile = null;
+  let customAnimationFile = null;
+  const registeredListeners = [];
+  let loadingManager = null;
+
+  // ドラッグ&ドロップ関連のユーティリティ関数を追加
+  const preventDefaults = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const highlight = (element) => (e) => {
+    preventDefaults(e);
+    element.classList.add('dragover');
+  };
+
+  const unhighlight = (element) => (e) => {
+    preventDefaults(e);
+    element.classList.remove('dragover');
+  };
+
+  const handleLogoDrop = (e) => {
+    preventDefaults(e);
+    logoPreview.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleLogoFile(files[0]);
+    }
+  };
+
+  const handleAnimationDrop = (e) => {
+    preventDefaults(e);
+    animationPreview.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleAnimationFile(files[0]);
+    }
+  };
+
+  // イベントハンドラ関数の定義
+  const eventHandlers = {
+    handleTabClick: (e) => {
+      e.preventDefault();
+      const button = e.currentTarget;
+      const targetTab = button.getAttribute('data-tab');
+      if (!targetTab) return;
+
+      // 全てのタブとコンテンツから active クラスを削除
+      const tabButtons = container.querySelectorAll('.tab-button');
+      tabButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+
+      const tabContents = container.querySelectorAll('.tab-content');
+      tabContents.forEach(content => {
+        content.classList.remove('active');
+        content.setAttribute('aria-hidden', 'true');
+      });
+
+      // クリックされたタブとそれに対応するコンテンツを active に
+      button.classList.add('active');
+      button.setAttribute('aria-selected', 'true');
+
+      const targetContent = container.querySelector(`.tab-content[data-tab="${targetTab}"]`);
+      if (targetContent) {
+        targetContent.classList.add('active');
+        targetContent.setAttribute('aria-hidden', 'false');
+      }
+
+      // タブ切替後にプレビュー位置を維持
+      const previewFrame = document.querySelector('.smartphone-frame');
+      if (previewFrame) {
+        const currentPosition = previewFrame.getBoundingClientRect();
+        requestAnimationFrame(() => {
+          previewFrame.style.position = 'relative';
+          previewFrame.style.top = '0';
+        });
+      }
+
+      // 背景の高さを調整
+      setTimeout(fixPreviewBackground, 100);
+    },
+
+    handleOrientationClick(e) {
+      const orientationButton = e.target.closest('.orientation-button');
+      if (!orientationButton) return;
+
+      const orientation = orientationButton.dataset.orientation;
+      const frame = document.querySelector('.smartphone-frame');
+      if (!frame) return;
+
+      // アクティブなボタンを更新
+      document.querySelectorAll('.orientation-button').forEach(btn => btn.classList.remove('active'));
+      orientationButton.classList.add('active');
+
+      // フレームのオリエンテーションを更新
+      frame.className = `smartphone-frame ${orientation}`;
+    },
+
+    handleThemeOptionClick(e) {
+      const theme = e.target.getAttribute('data-theme');
+      if (!theme) return;
+      
+      themeOptions.forEach(option => option.classList.remove('active'));
+      e.target.classList.add('active');
+      
+      applyThemePreset(theme);
+    },
+
+    handleResetClick() {
+      if (confirm('設定をデフォルトに戻しますか？')) {
+        currentSettings = {...defaultSettings};
+        updateFormValues();
+        updatePreview();
+      }
+    },
+
+    handleSaveClick: async (e) => {
+      e.preventDefault();
+      await saveSettings();
+    },
+
+    handleCancelClick: () => {
+      if (confirm('編集をキャンセルして前の画面に戻りますか？')) {
+        console.log("前の画面に戻ります");
+        
+        try {
+          // ハッシュ変更による画面遷移を実行
+          window.location.hash = '#/projects';
+          
+          // クリーンアップ処理は一旦コメントアウト
+          // 遷移が確実に実行されることを優先
+          /*
+          setTimeout(() => {
+            try {
+              if (registeredListeners && registeredListeners.length) {
+                registeredListeners.forEach(({element, eventName, handler, options}) => {
+                  if (element) element.removeEventListener(eventName, handler, options);
+                });
+                registeredListeners.length = 0;
+              }
+            } catch (e) {
+              console.warn("クリーンアップ中にエラーが発生:", e);
+            }
+          }, 100);
+          */
+        } catch (error) {
+          console.error("戻る処理中にエラーが発生:", error);
+          // 最終手段としてプロジェクト一覧URLへ直接遷移
+          window.location.href = '/projects.html';
+        }
+      }
+    },
+
+    handleFormSubmit: (e) => {
+      e.preventDefault();
+    },
+
+    // その他のイベントハンドラ...
+  };
 
   // HTML構造を作成
   container.innerHTML = `
@@ -209,59 +396,37 @@ export default function showLoadingScreenEditor(container) {
       </div>
       
       <div class="editor-container">
-        <!-- 設定パネル -->
         <div class="settings-panel">
-          <form id="loading-settings-form">
-            <!-- タブナビゲーション -->
-            <div class="settings-tabs">
-              <button type="button" class="tab-button active" data-tab="general">一般設定</button>
-              <button type="button" class="tab-button" data-tab="text">テキスト設定</button>
-              <button type="button" class="tab-button" data-tab="animation">アニメーション設定</button>
-            </div>
-            
+          <div class="settings-tabs" role="tablist">
+            <button class="tab-button active" data-tab="general" role="tab" aria-selected="true" aria-controls="general-content">一般設定</button>
+            <button class="tab-button" data-tab="text" role="tab" aria-selected="false" aria-controls="text-content">テキスト設定</button>
+            <button class="tab-button" data-tab="animation" role="tab" aria-selected="false" aria-controls="animation-content">アニメーション設定</button>
+          </div>
+          
+          <form id="loading-screen-form">
             <!-- 一般設定タブ -->
-            <div class="tab-content active" data-tab="general">
-              <!-- ロゴ画像アップロード -->
+            <div class="tab-content active" id="general-content" data-tab="general" role="tabpanel" aria-labelledby="tab-general">
               <div class="form-group">
-                <label for="logo-upload">ロゴ画像</label>
-                <div class="file-input-container">
-                  <div class="file-preview" id="logo-preview">
-                    <span>ロゴ画像をアップロード</span>
-                    <small>ここにファイルをドラッグ＆ドロップするか、下のボタンをクリック</small>
-                  </div>
-                  <label for="logo-upload" class="file-input-button">ファイルを選択</label>
-                  <input type="file" id="logo-upload" name="logo" accept="image/*">
-                </div>
-              </div>
-              
-              <!-- 背景色設定 -->
-              <div class="form-group">
-                <label for="bg-color">背景色</label>
+                <label>背景色</label>
                 <div class="color-picker-container">
-                  <input type="color" id="bg-color-picker" value="#000000">
-                  <input type="text" id="bg-color" name="bgColor" placeholder="rgba(0, 0, 0, 0.85)">
+                  <input type="color" id="bg-color-picker" name="bgColor">
+                  <input type="text" id="bg-color-text" placeholder="rgba(0, 0, 0, 0.85)">
                 </div>
               </div>
-              
-              <!-- テキスト色設定 -->
               <div class="form-group">
-                <label for="text-color">テキスト色</label>
+                <label>テキスト色</label>
                 <div class="color-picker-container">
-                  <input type="color" id="text-color-picker" value="#ffffff">
-                  <input type="text" id="text-color" name="textColor" placeholder="white">
+                  <input type="color" id="text-color-picker" name="textColor">
+                  <input type="text" id="text-color-text" placeholder="white">
                 </div>
               </div>
-              
-              <!-- アクセントカラー設定 -->
               <div class="form-group">
-                <label for="accent-color">アクセントカラー（プログレスバー）</label>
+                <label>アクセントカラー（プログレスバー）</label>
                 <div class="color-picker-container">
-                  <input type="color" id="accent-color-picker" value="#00a8ff">
-                  <input type="text" id="accent-color" name="accentColor" placeholder="#00a8ff">
+                  <input type="color" id="progress-color-picker" name="accentColor">
+                  <input type="text" id="progress-color-text" placeholder="#00a8ff">
                 </div>
               </div>
-              
-              <!-- プリセットテーマ選択 -->
               <div class="form-group">
                 <label>プリセットテーマ</label>
                 <div class="preset-themes">
@@ -286,183 +451,158 @@ export default function showLoadingScreenEditor(container) {
             </div>
             
             <!-- テキスト設定タブ -->
-            <div class="tab-content" data-tab="text">
-              <!-- ブランド名設定 -->
+            <div class="tab-content" id="text-content" data-tab="text" role="tabpanel" aria-labelledby="tab-text">
               <div class="form-group">
-                <label for="brand-name">ブランド名</label>
-                <input type="text" id="brand-name" name="name" placeholder="表示するブランド名">
+                <label>ロゴ画像</label>
+                <div class="file-input-container">
+                  <div class="file-preview" id="logo-preview">
+                    <img src="/path/to/default-logo.png" alt="ロゴ">
+                  </div>
+                  <button type="button" class="file-input-button" id="logo-upload-trigger">
+                    ファイルを選択
+                  </button>
+                  <input type="file" id="logo-upload" accept="image/*" style="display: none;">
+                </div>
               </div>
-              
-              <!-- サブタイトル設定 -->
               <div class="form-group">
-                <label for="sub-title">サブタイトル</label>
-                <input type="text" id="sub-title" name="subTitle" placeholder="サブタイトルテキスト">
+                <label>ブランド名</label>
+                <input type="text" id="brand-name" name="name" placeholder="miru-WebAR">
               </div>
-              
-              <!-- ローディングメッセージ設定 -->
               <div class="form-group">
-                <label for="loading-message">ローディングメッセージ</label>
-                <input type="text" id="loading-message" name="loadingMessage" placeholder="ローディング中に表示するメッセージ">
+                <label>サブタイトル</label>
+                <input type="text" id="sub-title" name="subTitle" placeholder="WebARエクスペリエンス">
               </div>
-              
-              <!-- フォントスケール設定 -->
               <div class="form-group">
-                <label for="font-scale">フォントサイズ調整 <span id="font-scale-value" class="font-size-value">100%</span></label>
-                <input type="range" id="font-scale" name="fontScale" min="0.5" max="1.5" step="0.1" value="1.0">
+                <label>進捗テキスト</label>
+                <input type="text" id="loading-message" name="loadingMessage" placeholder="モデルを読み込んでいます...">
+              </div>
+              <div class="form-group">
+                <label>フォントサイズ倍率</label>
+                <input type="range" id="font-scale" name="fontScale" min="0.5" max="2" step="0.1" value="1.0">
+                <div class="font-size-value">1.0x</div>
                 <div class="font-size-presets">
-                  <span data-scale="0.7">小</span>
-                  <span data-scale="1.0">中</span>
-                  <span data-scale="1.3">大</span>
+                  <span data-scale="0.8">S</span>
+                  <span data-scale="1.0" class="active">M</span>
+                  <span data-scale="1.2">L</span>
                 </div>
               </div>
             </div>
             
             <!-- アニメーション設定タブ -->
-            <div class="tab-content" data-tab="animation">
-              <!-- アニメーションタイプ設定 -->
+            <div class="tab-content" id="animation-content" data-tab="animation" role="tabpanel" aria-labelledby="tab-animation">
               <div class="form-group">
-                <label for="animation-type">アニメーションタイプ</label>
-                <select id="animation-type" name="animationType">
-                  <option value="fade">フェード</option>
-                  <option value="slide">スライド</option>
-                  <option value="zoom">ズーム</option>
-                  <option value="pulse">パルス</option>
-                  <option value="bounce">バウンス</option>
-                  <option value="spin">スピン</option>
-                  <option value="wave">ウェーブ</option>
-                </select>
+                <p>アニメーション設定は近日公開予定です。</p>
               </div>
-              
-              <!-- アニメーション速度設定 -->
-              <div class="form-group">
-                <label for="animation-speed">アニメーション速度</label>
-                <select id="animation-speed" name="animationSpeed">
-                  <option value="slow">遅い</option>
-                  <option value="normal">普通</option>
-                  <option value="fast">速い</option>
-                </select>
-              </div>
-              
-              <!-- カスタムアニメーション -->
-              <div class="form-group">
-                <label for="custom-animation">カスタムアニメーション</label>
-                <div class="file-input-container">
-                  <div class="file-preview" id="animation-preview">
-                    <span>アニメーションファイルをアップロード</span>
-                    <small>対応形式: JSON (Lottie), GIF, SVG</small>
-                    <small>ここにファイルをドラッグ＆ドロップするか、下のボタンをクリック</small>
-                  </div>
-                  <label for="custom-animation" class="file-input-button">ファイルを選択</label>
-                  <input type="file" id="custom-animation" name="customAnimation" accept=".json,.gif,.svg">
-                </div>
-              </div>
-            </div>
-            
-            <!-- 固定フッター -->
-            <div class="fixed-footer">
-              <button type="button" class="reset-button" id="reset-button">リセット</button>
-              <button type="button" class="preview-button" id="preview-animation-button">アニメーションをプレビュー</button>
-              <button type="button" class="cancel-button" id="cancel-button">キャンセル</button>
-              <button type="button" class="save-button" id="save-button">保存</button>
             </div>
           </form>
         </div>
         
         <!-- プレビューパネル -->
         <div class="preview-panel">
-          <h2>プレビュー</h2>
-          
-          <!-- 画面向き切替 -->
-          <div class="preview-orientation">
-            <label>画面向き: </label>
-            <div class="orientation-toggle">
-              <button type="button" class="orientation-button active" data-orientation="portrait">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                  <line x1="12" y1="18" x2="12" y2="18.01" />
-                </svg>
-                縦向き
-              </button>
-              <button type="button" class="orientation-button" data-orientation="landscape">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="2" y="5" width="20" height="14" rx="2" ry="2" />
-                  <line x1="18" y1="12" x2="18.01" y2="12" />
-                </svg>
-                横向き
-              </button>
+          <div class="preview-header">
+            <h2>プレビュー</h2>
+            <div class="preview-orientation">
+              <div class="orientation-toggle">
+                <button class="orientation-button active" data-orientation="portrait">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                    <line x1="12" y1="18" x2="12" y2="18"></line>
+                  </svg>
+                  縦向き
+                </button>
+                <button class="orientation-button" data-orientation="landscape">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="18" y1="12" x2="18" y2="12"></line>
+                  </svg>
+                  横向き
+                </button>
+              </div>
             </div>
           </div>
           
           <div class="preview-container">
             <div class="smartphone-frame portrait" id="preview-frame">
-              <div class="smartphone-screen">
-                <div class="loading-screen-preview" id="preview-screen">
-                  <img id="preview-logo" class="preview-logo" src="/path/to/default-logo.png" alt="ロゴ">
-                  <div id="preview-brand" class="preview-brand">miru-WebAR</div>
-                  <div id="preview-subtitle" class="preview-subtitle">WebARエクスペリエンス</div>
-                  <div class="preview-progress">
-                    <div id="preview-bar" class="preview-bar"></div>
-                  </div>
-                  <div id="preview-text" class="preview-text">モデルを読み込んでいます...</div>
+              <div class="smartphone-screen" id="preview-screen">
+                <div class="loading-screen-preview">
+                  <img src="/path/to/default-logo.png" alt="ロゴ" class="preview-logo" id="preview-logo" style="display: none;">
+                  <div class="preview-brand" id="preview-brand">miru-WebAR</div>
+                  <div class="preview-subtitle" id="preview-subtitle">WebARエクスペリエンス</div>
+                  <div class="preview-progress"><div class="preview-bar" id="preview-bar"></div></div>
+                  <div class="preview-text" id="preview-text">モデルを読み込んでいます...</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      
+      <div class="fixed-footer">
+        <button id="loading-reset-button" class="reset-button">リセット</button>
+        <button id="loading-cancel-button" class="cancel-button">戻る</button>
+        <button id="loading-save-button" class="save-button">保存</button>
+      </div>
     </div>
   `;
 
   // フォーム要素を取得
-  const form = document.getElementById('loading-settings-form');
-  const brandNameInput = document.getElementById('brand-name');
-  const subTitleInput = document.getElementById('sub-title');
-  const loadingMessageInput = document.getElementById('loading-message');
-  const logoUpload = document.getElementById('logo-upload');
-  const logoPreview = document.getElementById('logo-preview');
-  const bgColorInput = document.getElementById('bg-color');
-  const bgColorPicker = document.getElementById('bg-color-picker');
-  const textColorInput = document.getElementById('text-color');
-  const textColorPicker = document.getElementById('text-color-picker');
-  const accentColorInput = document.getElementById('accent-color');
-  const accentColorPicker = document.getElementById('accent-color-picker');
-  const animationTypeSelect = document.getElementById('animation-type');
-  const animationSpeedSelect = document.getElementById('animation-speed');
-  const fontScaleSlider = document.getElementById('font-scale');
-  const fontScaleValue = document.getElementById('font-scale-value');
-  const customAnimationUpload = document.getElementById('custom-animation');
-  const animationPreview = document.getElementById('animation-preview');
+  let form = document.getElementById('loading-screen-form');
+  let brandNameInput = document.getElementById('brand-name');
+  let subTitleInput = document.getElementById('sub-title');
+  let loadingMessageInput = document.getElementById('loading-message');
+  let logoUploadInput = document.getElementById('logo-upload');
+  let logoUploadTrigger = document.getElementById('logo-upload-trigger');
+  let logoPreview = document.getElementById('logo-preview');
+  let bgColorTextInput = document.getElementById('bg-color-text');
+  let bgColorPicker = document.getElementById('bg-color-picker');
+  let textColorTextInput = document.getElementById('text-color-text');
+  let textColorPicker = document.getElementById('text-color-picker');
+  let progressColorTextInput = document.getElementById('progress-color-text');
+  let progressColorPicker = document.getElementById('progress-color-picker');
+  let animationTypeSelect = document.getElementById('loading-animation-type');
+  let animationSpeedSelect = document.getElementById('loading-animation-speed');
+  let fontScaleSlider = document.getElementById('font-scale');
+  let fontScaleValue = document.getElementById('font-scale-value');
+  let customAnimationInput = document.getElementById('custom-animation');
+  let customAnimationTrigger = document.getElementById('custom-animation-trigger');
+  let animationPreview = document.getElementById('animation-preview');
   
   // プレビュー要素を取得
-  const previewFrame = document.getElementById('preview-frame');
-  const previewScreen = document.getElementById('preview-screen');
-  const previewLogo = document.getElementById('preview-logo');
-  const previewBrand = document.getElementById('preview-brand');
-  const previewSubtitle = document.getElementById('preview-subtitle');
-  const previewText = document.getElementById('preview-text');
-  const previewBar = document.getElementById('preview-bar');
-  const previewAnimationButton = document.getElementById('preview-animation-button');
+  let previewFrame = document.getElementById('preview-frame');
+  let previewScreen = document.getElementById('preview-screen');
+  let previewLogo = document.getElementById('preview-logo');
+  let previewBrand = document.getElementById('preview-brand');
+  let previewSubtitle = document.getElementById('preview-subtitle');
+  let previewText = document.getElementById('preview-text');
+  let previewBar = document.getElementById('preview-bar');
+  let previewAnimationButton = document.getElementById('preview-animation-button');
   
   // タブ切り替え要素を取得
-  const tabButtons = document.querySelectorAll('.tab-button');
-  const tabContents = document.querySelectorAll('.tab-content');
+  let tabButtons = document.querySelectorAll('.tab-button');
+  let tabContents = document.querySelectorAll('.tab-content');
   
   // 画面向き切り替え要素を取得
-  const orientationButtons = document.querySelectorAll('.orientation-button');
+  let orientationButtons = document.querySelectorAll('.orientation-button');
   
   // テーマオプションを取得
-  const themeOptions = document.querySelectorAll('.theme-option');
+  let themeOptions = document.querySelectorAll('.theme-option');
   
   // アクションボタンを取得
-  const saveButton = document.getElementById('save-button');
-  const cancelButton = document.getElementById('cancel-button');
-  const resetButton = document.getElementById('reset-button');
+  let saveButton = document.getElementById('loading-save-button');
+  let cancelButton = document.getElementById('loading-cancel-button');
+  let resetButton = document.getElementById('loading-reset-button');
   
-  // 編集中の設定を保持する変数
-  let currentSettings = { ...defaultSettings };
-  let logoFile = null;
-  let customAnimationFile = null;
-  
+  // ローディングマネージャーの初期化
+  const initializeLoadingManager = async () => {
+    try {
+      const { initLoadingManager } = await import('../utils/loadingManager.js');
+      loadingManager = await initLoadingManager('loading-screen-editor-container');
+      console.log('Loading manager initialized for editor');
+    } catch (error) {
+      console.error('Failed to initialize loading manager:', error);
+    }
+  };
+
   // 初期設定をロード
   loadSettings();
 
@@ -472,75 +612,137 @@ export default function showLoadingScreenEditor(container) {
   // ドラッグ&ドロップ機能を設定
   setupDragAndDrop();
 
+  // CSSスタイルの更新も必要なので、style要素を追加
+  const style = document.createElement('style');
+  style.textContent = `
+    .smartphone-frame.landscape {
+      transform: rotate(90deg);
+      margin: 140px 0;
+    }
+
+    .loading-screen-editor .fixed-footer .cancel-button {
+      background-color: var(--background-color-light, #2a2a2a);
+      color: var(--text-color, #fff);
+      transition: all 0.2s;
+    }
+
+    .loading-screen-editor .fixed-footer .cancel-button:hover {
+      background-color: var(--background-color-lighter, #3a3a3a);
+    }
+  `;
+  document.head.appendChild(style);
+
   /**
    * 保存済みの設定を読み込む
    */
   async function loadSettings() {
     try {
-      // API接続に失敗した場合はモックデータを使用
-      console.log('モックAPIを使用します');
+      console.log('ローカルストレージから設定を読み込みます');
       const mockSettings = await mockAPI.getSettings();
       currentSettings = { ...defaultSettings, ...mockSettings };
+      console.log('設定を読み込みました:', currentSettings);
     } catch (error) {
       console.error('設定の読み込み中にエラーが発生しました:', error);
       currentSettings = { ...defaultSettings };
     }
     
-    // フォームに値を設定
     updateFormValues();
-    
-    // プレビューを更新
-    updatePreview();
+    updatePreviewStyles(); // 設定読み込み後にプレビューを更新
   }
   
   /**
    * フォームの値を更新する
    */
   function updateFormValues() {
-    brandNameInput.value = currentSettings.name || '';
-    subTitleInput.value = currentSettings.subTitle || '';
-    loadingMessageInput.value = currentSettings.loadingMessage || '';
-    bgColorInput.value = currentSettings.bgColor || '';
-    textColorInput.value = currentSettings.textColor || '';
-    accentColorInput.value = currentSettings.accentColor || '';
-    animationTypeSelect.value = currentSettings.animationType || 'fade';
-    animationSpeedSelect.value = currentSettings.animationSpeed || 'normal';
-    fontScaleSlider.value = currentSettings.fontScale || 1.0;
-    fontScaleValue.textContent = `${Math.round(currentSettings.fontScale * 100)}%`;
-    
-    // カラーピッカーの値を更新（可能な場合）
+    // 各要素が存在するか確認してから値を設定
+    if(brandNameInput) brandNameInput.value = currentSettings.name || '';
+    if(subTitleInput) subTitleInput.value = currentSettings.subTitle || '';
+    if(loadingMessageInput) loadingMessageInput.value = currentSettings.loadingMessage || '';
+    if(bgColorTextInput) bgColorTextInput.value = currentSettings.bgColor || '';
+    if(textColorTextInput) textColorTextInput.value = currentSettings.textColor || '';
+    if(progressColorTextInput) progressColorTextInput.value = currentSettings.accentColor || '';
+    if(animationTypeSelect) animationTypeSelect.value = currentSettings.animationType || 'none'; // Default to none if not set
+    if(animationSpeedSelect) animationSpeedSelect.value = currentSettings.animationSpeed || 'normal';
+    if(fontScaleSlider) fontScaleSlider.value = currentSettings.fontScale || 1.0;
+    if(fontScaleValue) fontScaleValue.textContent = `${Math.round((currentSettings.fontScale || 1.0) * 100)}%`;
+
     try {
-      // 色変換関数を使用
-      bgColorPicker.value = convertToHexColor(currentSettings.bgColor || '#000000');
-      textColorPicker.value = convertToHexColor(currentSettings.textColor || '#ffffff');
-      accentColorPicker.value = convertToHexColor(currentSettings.accentColor || '#00a8ff');
+      // Pickerにも値を反映 (Hex形式に変換)
+      if(bgColorPicker) bgColorPicker.value = convertToHexColor(currentSettings.bgColor || '#000000');
+      if(textColorPicker) textColorPicker.value = convertToHexColor(currentSettings.textColor || '#ffffff');
+      if(progressColorPicker) progressColorPicker.value = convertToHexColor(currentSettings.accentColor || '#00a8ff');
     } catch (e) {
       console.warn('カラーピッカーの値設定に失敗しました:', e);
     }
     
     // ロゴプレビューを更新
-    if (currentSettings.logo) {
-      logoPreview.innerHTML = `<img src="${currentSettings.logo}" alt="ロゴ">`;
-      logoPreview.classList.remove('empty');
-    } else {
-      logoPreview.innerHTML = `<span>ロゴ画像をアップロード</span><small>ここにファイルをドラッグ＆ドロップするか、下のボタンをクリック</small>`;
-      logoPreview.classList.add('empty');
+    if (logoPreview) {
+      if (currentSettings.logo) {
+        // Check if it's a Data URL or a path (basic check)
+        if (currentSettings.logo.startsWith('data:image')) {
+          logoPreview.innerHTML = `<img src="${currentSettings.logo}" alt="ロゴプレビュー">`;
+        } else {
+          // Assume it's a path - might need adjustments based on actual storage
+          logoPreview.innerHTML = `<img src="${currentSettings.logo}" alt="ロゴプレビュー">`;
+          // Consider adding error handling for image paths: img.onerror = ...
+        }
+        logoPreview.classList.remove('empty');
+      } else {
+        logoPreview.innerHTML = `<span>ロゴ画像をアップロード</span><small>ここにファイルをドラッグ＆ドロップするか、下のボタンをクリック</small>`;
+        logoPreview.classList.add('empty');
+      }
     }
     
     // カスタムアニメーションプレビューを更新
-    if (currentSettings.customAnimation) {
-      const fileExt = currentSettings.customAnimation.split('.').pop().toLowerCase();
-      if (fileExt === 'json') {
-        animationPreview.innerHTML = `<span>Lottieアニメーション</span>`;
-      } else if (fileExt === 'gif') {
-        animationPreview.innerHTML = `<img src="${currentSettings.customAnimation}" alt="アニメーション">`;
-      } else if (fileExt === 'svg') {
-        animationPreview.innerHTML = `<img src="${currentSettings.customAnimation}" alt="アニメーション">`;
-      }
-      animationPreview.classList.remove('empty');
-    } else {
-      animationPreview.innerHTML = `<span>アニメーションファイルをアップロード</span><small>対応形式: JSON (Lottie), GIF, SVG</small>`;
-      animationPreview.classList.add('empty');
+    if (animationPreview && animationTypeSelect) {
+        let hasCustomAnim = false;
+        let customAnimDisplay = '';
+
+        if (currentSettings.customAnimation) {
+            hasCustomAnim = true;
+            // Determine display based on stored data type (Data URL or path)
+            if (currentSettings.customAnimation.startsWith('data:')) {
+                 const mimeType = currentSettings.customAnimation.split(';')[0].split(':')[1];
+                 if (mimeType === 'application/json') customAnimDisplay = `<span>Lottie アニメーション (読み込み済)</span>`;
+                 else if (mimeType === 'image/gif' || mimeType === 'image/svg+xml') customAnimDisplay = `<img src="${currentSettings.customAnimation}" alt="カスタムアニメーションプレビュー">`;
+                 else customAnimDisplay = `<span>カスタムアニメーション (不明なData URL)</span>`;
+            } else {
+                // Assume it's a path
+                const fileExt = currentSettings.customAnimation.split('.').pop().toLowerCase();
+                if (fileExt === 'json') customAnimDisplay = `<span>Lottie: ${currentSettings.customAnimation}</span>`;
+                else if (fileExt === 'gif' || fileExt === 'svg') customAnimDisplay = `<img src="${currentSettings.customAnimation}" alt="カスタムアニメーションプレビュー">`;
+                else customAnimDisplay = `<span>カスタムアニメーション: ${currentSettings.customAnimation}</span>`;
+                 // Add error handling for image path if needed
+            }
+        }
+
+        if (hasCustomAnim) {
+            animationPreview.innerHTML = customAnimDisplay;
+            animationPreview.classList.remove('empty');
+            // Ensure 'custom' option exists and is selected
+            let customOption = animationTypeSelect.querySelector('option[value="custom"]');
+            if (!customOption) {
+                customOption = document.createElement('option');
+                customOption.value = 'custom';
+                customOption.textContent = 'カスタム';
+                animationTypeSelect.appendChild(customOption);
+            }
+            // Only select 'custom' if the *saved* type is also custom
+            if (currentSettings.animationType === 'custom') {
+                 animationTypeSelect.value = 'custom';
+            }
+        } else {
+            animationPreview.innerHTML = `<span>アニメーションファイルをアップロード</span><small>対応形式: JSON (Lottie), GIF, SVG</small>`;
+            animationPreview.classList.add('empty');
+            // Remove 'custom' option if it exists
+            const customOption = animationTypeSelect.querySelector('option[value="custom"]');
+            if (customOption) customOption.remove();
+            // If the current type was 'custom' but there's no file, switch to 'none'
+            if (currentSettings.animationType === 'custom') {
+                animationTypeSelect.value = 'none';
+                currentSettings.animationType = 'none'; // Update state
+            }
+        }
     }
   }
   
@@ -550,617 +752,838 @@ export default function showLoadingScreenEditor(container) {
    * @returns {string} 16進数形式の色
    */
   function convertToHexColor(color) {
-    // nullやundefinedの場合
-    if (!color) return '#000000';
-    
-    // すでに16進数形式なら変換不要
-    if (color.match(/^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/)) {
-      // 3桁の16進数の場合は6桁に拡張
-      if (color.length === 4) {
-        return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
-      }
-      return color;
+    if (!color) return '#000000'; // Default to black if color is null/undefined
+
+    // Create a temporary element to leverage the browser's color parsing
+    const tempElem = document.createElement('div');
+    tempElem.style.color = color;
+    document.body.appendChild(tempElem); // Append to body to compute style
+
+    // Get the computed style (which should be in rgb or rgba format)
+    const computedColor = window.getComputedStyle(tempElem).color;
+    document.body.removeChild(tempElem); // Clean up the temporary element
+
+    // Parse the computed RGB(A) string
+    const match = computedColor.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)$/);
+
+    if (match) {
+        const r = parseInt(match[1]).toString(16).padStart(2, '0');
+        const g = parseInt(match[2]).toString(16).padStart(2, '0');
+        const b = parseInt(match[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+    } else {
+        console.warn('convertToHexColor: Failed to parse color:', color, 'Computed:', computedColor);
+        return '#000000'; // Fallback to black if parsing fails
     }
-    
-    // 色名の場合は対応する16進数を返す
-    if (typeof color === 'string' && color.toLowerCase() in colorNameToHex) {
-      return colorNameToHex[color.toLowerCase()];
-    }
-    
-    // rgb()形式の場合
-    const rgbMatch = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/);
-    if (rgbMatch) {
-      return `#${parseInt(rgbMatch[1]).toString(16).padStart(2, '0')}${parseInt(rgbMatch[2]).toString(16).padStart(2, '0')}${parseInt(rgbMatch[3]).toString(16).padStart(2, '0')}`;
-    }
-    
-    // rgba()形式の場合（透明度は無視して16進数に）
-    const rgbaMatch = color.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*[\d.]+\s*\)$/);
-    if (rgbaMatch) {
-      return `#${parseInt(rgbaMatch[1]).toString(16).padStart(2, '0')}${parseInt(rgbaMatch[2]).toString(16).padStart(2, '0')}${parseInt(rgbaMatch[3]).toString(16).padStart(2, '0')}`;
-    }
-    
-    // 変換できない場合はデフォルトの黒を返す
-    console.warn('変換できない色形式:', color);
-    return '#000000';
   }
   
   /**
    * プレビューを更新する
+   * @param {number} progress - 進捗率（0-100）
+   * @param {string|null} message - 表示するメッセージ（nullの場合はデフォルトメッセージを使用）
    */
-  function updatePreview() {
-    // ブランド名を更新
-    previewBrand.textContent = currentSettings.name || 'miru-WebAR';
+  function updatePreview(progress = 0, message = null) {
+    console.log('プレビュー更新開始:', currentSettings);
     
-    // サブタイトルを更新
-    previewSubtitle.textContent = currentSettings.subTitle || 'WebARエクスペリエンス';
+    // プレビュー要素
+    const previewScreen = document.querySelector('.smartphone-screen');
+    const previewBrand = document.getElementById('preview-brand');
+    const previewSubtitle = document.getElementById('preview-subtitle');
+    const previewText = document.querySelector('.preview-text');
+    const previewBar = document.querySelector('.preview-bar');
     
-    // ローディングテキストを更新
-    previewText.textContent = currentSettings.loadingMessage || 'モデルを読み込んでいます...';
+    // デバッグ: 各要素の存在確認
+    console.log('プレビュー要素:', {
+      screen: !!previewScreen,
+      brand: !!previewBrand,
+      subtitle: !!previewSubtitle,
+      text: !!previewText,
+      bar: !!previewBar
+    });
     
-    // ロゴを更新
-    if (currentSettings.logo) {
-      previewLogo.src = currentSettings.logo;
-      previewLogo.style.display = 'block';
-    } else {
-      previewLogo.style.display = 'none';
+    // 背景色を設定
+    if (previewScreen) {
+      previewScreen.style.backgroundColor = currentSettings.bgColor || 'rgba(0, 0, 0, 0.85)';
+      console.log('背景色を設定:', currentSettings.bgColor);
     }
     
-    // スタイルを更新
-    previewScreen.style.backgroundColor = currentSettings.bgColor || 'rgba(0, 0, 0, 0.85)';
-    previewBrand.style.color = currentSettings.textColor || '#ffffff';
-    previewSubtitle.style.color = currentSettings.textColor || '#ffffff';
-    previewText.style.color = currentSettings.textColor || '#ffffff';
-    previewBar.style.backgroundColor = currentSettings.accentColor || '#00a8ff';
+    // テキスト色を設定
+    if (previewBrand) {
+      previewBrand.style.color = currentSettings.textColor || 'white';
+      previewBrand.textContent = currentSettings.name || 'miru-WebAR';
+    }
     
-    // フォントスケールを適用
-    const fontScale = currentSettings.fontScale || 1.0;
-    previewBrand.style.fontSize = `${24 * fontScale}px`;
-    previewSubtitle.style.fontSize = `${16 * fontScale}px`;
-    previewText.style.fontSize = `${14 * fontScale}px`;
+    if (previewSubtitle) {
+      previewSubtitle.style.color = currentSettings.textColor || 'white';
+      previewSubtitle.textContent = currentSettings.subTitle || 'WebARエクスペリエンス';
+    }
     
-    // テキストの中央揃えを強制
-    previewBrand.style.textAlign = 'center';
-    previewBrand.style.width = '100%';
-    previewSubtitle.style.textAlign = 'center';
-    previewSubtitle.style.width = '100%';
-    previewText.style.textAlign = 'center';
-    previewText.style.width = '100%';
-
-    // プレビュー要素の中央配置を強化
-    previewScreen.style.display = 'flex';
-    previewScreen.style.flexDirection = 'column';
-    previewScreen.style.justifyContent = 'center';
-    previewScreen.style.alignItems = 'center';
+    if (previewText) {
+      previewText.style.color = currentSettings.textColor || 'white';
+      const loadingMsg = message || currentSettings.loadingMessage || 'モデルを読み込んでいます...';
+      previewText.textContent = `${loadingMsg} (${progress}%)`;
+    }
     
-    // アニメーション速度クラスを適用
-    previewScreen.classList.remove('animation-slow', 'animation-normal', 'animation-fast');
-    previewScreen.classList.add(`animation-${currentSettings.animationSpeed || 'normal'}`);
+    // プログレスバーの色と幅を設定
+    if (previewBar) {
+      previewBar.style.backgroundColor = currentSettings.accentColor || '#00a8ff';
+      previewBar.style.width = `${progress}%`;
+    }
+    
+    console.log('プレビュー更新完了');
   }
-  
+
+  // プログレスバーのテスト用関数
+  function simulateLoading() {
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += Math.random() * 15;
+      if (progress > 100) {
+        progress = 100;
+        clearInterval(interval);
+      }
+      updatePreview(progress);
+    }, 500);
+  }
+
+  // プレビューボタンクリック時の処理を更新
+  document.querySelector('.preview-button')?.addEventListener('click', () => {
+    simulateLoading();
+  });
+
   // フォームでのドラッグアンドドロップ処理を設定
   function setupDragAndDrop() {
-    // ロゴ画像エリア
-    const logoPreview = document.getElementById('logo-preview');
-    
-    // ドラッグ&ドロップイベント (ロゴ)
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      logoPreview.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    function preventDefaults(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-      logoPreview.addEventListener(eventName, () => {
-        logoPreview.classList.add('highlight');
-      }, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-      logoPreview.addEventListener(eventName, () => {
-        logoPreview.classList.remove('highlight');
-      }, false);
-    });
-    
-    logoPreview.addEventListener('drop', (e) => {
-      const dt = e.dataTransfer;
-      const file = dt.files[0];
-      if (file && file.type.match('image.*')) {
-        handleLogoFile(file);
-        
-        // 視覚的フィードバック
-        logoPreview.classList.add('success');
-        setTimeout(() => {
-          logoPreview.classList.remove('success');
-        }, 1000);
-      } else {
-        // エラーフィードバック
-        logoPreview.classList.add('error');
-        setTimeout(() => {
-          logoPreview.classList.remove('error');
-        }, 1000);
-      }
-    });
-    
-    // アニメーションファイルエリア
-    const animationPreview = document.getElementById('animation-preview');
-    
-    // ドラッグ&ドロップイベント (アニメーション)
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      animationPreview.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    ['dragenter', 'dragover'].forEach(eventName => {
-      animationPreview.addEventListener(eventName, () => {
-        animationPreview.classList.add('highlight');
-      }, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-      animationPreview.addEventListener(eventName, () => {
-        animationPreview.classList.remove('highlight');
-      }, false);
-    });
-    
-    animationPreview.addEventListener('drop', (e) => {
-      const dt = e.dataTransfer;
-      const file = dt.files[0];
-      if (file) {
-        const fileExt = file.name.split('.').pop().toLowerCase();
-        if (fileExt === 'json' || fileExt === 'gif' || fileExt === 'svg') {
-          handleAnimationFile(file);
-        }
-      }
-    });
+    // Logo Drag & Drop Listeners
+    addListener(logoPreview, 'dragenter', preventDefaults, false);
+    addListener(logoPreview, 'dragover', preventDefaults, false);
+    addListener(logoPreview, 'dragleave', preventDefaults, false);
+    addListener(logoPreview, 'drop', preventDefaults, false);
+    addListener(logoPreview, 'dragenter', highlight(logoPreview), false);
+    addListener(logoPreview, 'dragover', highlight(logoPreview), false);
+    addListener(logoPreview, 'dragleave', unhighlight(logoPreview), false);
+    // Drop event implicitly unhighlights via handleLogoDrop calling unhighlight
+    addListener(logoPreview, 'drop', handleLogoDrop);
+
+    // Animation Drag & Drop Listeners
+    addListener(animationPreview, 'dragenter', preventDefaults, false);
+    addListener(animationPreview, 'dragover', preventDefaults, false);
+    addListener(animationPreview, 'dragleave', preventDefaults, false);
+    addListener(animationPreview, 'drop', preventDefaults, false);
+    addListener(animationPreview, 'dragenter', highlight(animationPreview), false);
+    addListener(animationPreview, 'dragover', highlight(animationPreview), false);
+    addListener(animationPreview, 'dragleave', unhighlight(animationPreview), false);
+    // Drop event implicitly unhighlights via handleAnimationDrop calling unhighlight
+    addListener(animationPreview, 'drop', handleAnimationDrop);
   }
   
   // ロゴファイル処理関数
   function handleLogoFile(file) {
-    logoFile = file;
+    logoFile = file; // Store the File object for potential upload
     const reader = new FileReader();
     reader.onload = (e) => {
-      logoPreview.innerHTML = `<img src="${e.target.result}" alt="ロゴ">`;
-      logoPreview.classList.remove('empty');
-      
-      // プレビューも更新
-      previewLogo.src = e.target.result;
-      previewLogo.style.display = 'block';
-      
-      // 設定も更新
-      currentSettings.logo = e.target.result;
+      const dataUrl = e.target.result;
+      if (logoPreview) {
+        logoPreview.innerHTML = `<img src="${dataUrl}" alt="ロゴプレビュー">`;
+        logoPreview.classList.remove('empty');
+      }
+      // Update setting immediately with Data URL for preview
+      currentSettings.logo = dataUrl;
+      updatePreview(); // Refresh preview to show the new logo
+    };
+    reader.onerror = (e) => {
+         console.error("FileReader error reading logo:", e);
+         if (logoPreview) {
+             logoPreview.innerHTML = '<span>ロゴ読込エラー</span>';
+             logoPreview.classList.add('error');
+         }
     };
     reader.readAsDataURL(file);
   }
   
   // アニメーションファイル処理関数
   function handleAnimationFile(file) {
-    customAnimationFile = file;
+    customAnimationFile = file; // Store File object
     const reader = new FileReader();
+    const fileExt = file.name.split('.').pop().toLowerCase();
+
     reader.onload = (e) => {
-      const fileExt = file.name.split('.').pop().toLowerCase();
-      
-      if (fileExt === 'json') {
-        animationPreview.innerHTML = `<span>Lottieアニメーション: ${file.name}</span>`;
-      } else if (fileExt === 'gif' || fileExt === 'svg') {
-        animationPreview.innerHTML = `<img src="${e.target.result}" alt="アニメーション">`;
+      const dataUrl = e.target.result;
+      if (animationPreview) {
+        if (fileExt === 'json') {
+          animationPreview.innerHTML = `<span>Lottie: ${file.name}</span>`;
+        } else if (fileExt === 'gif' || fileExt === 'svg') {
+          animationPreview.innerHTML = `<img src="${dataUrl}" alt="${file.name}">`;
+        } else {
+            animationPreview.innerHTML = `<span>ファイル: ${file.name}</span>`; // Fallback
+        }
+        animationPreview.classList.remove('empty');
       }
-      
-      animationPreview.classList.remove('empty');
-      
-      // 設定も更新
-      currentSettings.customAnimation = e.target.result;
+
+      // Update setting with Data URL for preview/state
+      currentSettings.customAnimation = dataUrl;
       currentSettings.animationType = 'custom';
-      
-      // アニメーションタイプを「カスタム」に設定
-      if (!animationTypeSelect.querySelector('option[value="custom"]')) {
-        const customOption = document.createElement('option');
-        customOption.value = 'custom';
-        customOption.textContent = 'カスタム';
-        animationTypeSelect.appendChild(customOption);
+
+      // Update the animation type dropdown
+      if (animationTypeSelect) {
+         let customOption = animationTypeSelect.querySelector('option[value="custom"]');
+         if (!customOption) {
+            customOption = document.createElement('option');
+            customOption.value = 'custom';
+            customOption.textContent = 'カスタム';
+            animationTypeSelect.appendChild(customOption);
+         }
+         animationTypeSelect.value = 'custom';
       }
-      animationTypeSelect.value = 'custom';
+       updatePreview(); // Update preview (might affect animation classes)
+    };
+     reader.onerror = (e) => {
+         console.error("FileReader error reading animation:", e);
+         if (animationPreview) {
+             animationPreview.innerHTML = '<span>ファイル読込エラー</span>';
+             animationPreview.classList.add('error');
+         }
     };
     reader.readAsDataURL(file);
   }
+
+  // イベントリスナー登録用のヘルパー関数
+  function addListener(element, eventName, handler, options = false) {
+    if (!element) {
+      console.warn(`addListener: 要素が存在しません (${eventName})`);
+      return;
+    }
+    
+    // 直接 addEventListener を使用
+    element.addEventListener(eventName, handler, options);
+    
+    // registeredListeners 配列が存在していれば登録情報を追加
+    if (typeof registeredListeners !== 'undefined' && Array.isArray(registeredListeners)) {
+      registeredListeners.push({ element, eventName, handler, options });
+    } else {
+      console.warn('registeredListeners が存在しないか、配列ではありません');
+    }
+  }
+
+  // グローバルに関数を公開
+  window.addListener = addListener;
 
   /**
    * イベントリスナーを設定する
    */
   function setupEventListeners() {
-    // タブ切り替え
+    // タブ切り替えイベント
+    const tabButtons = document.querySelectorAll('.tab-button');
     tabButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const tab = button.getAttribute('data-tab');
-        
-        // アクティブクラスを全てのタブから削除
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
-        
-        // クリックされたタブにアクティブクラスを追加
-        button.classList.add('active');
-        document.querySelector(`.tab-content[data-tab="${tab}"]`).classList.add('active');
-      });
+      button.addEventListener('click', eventHandlers.handleTabClick);
     });
-    
-    // 画面向き切り替え
+
+    // 画面向き切り替えの処理
+    const orientationButtons = document.querySelectorAll('.orientation-button');
     orientationButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const orientation = button.getAttribute('data-orientation');
-        
-        // アクティブクラスを全てのボタンから削除
-        orientationButtons.forEach(btn => btn.classList.remove('active'));
-        
-        // クリックされたボタンにアクティブクラスを追加
-        button.classList.add('active');
-        
-        // プレビューフレームのクラスを変更
-        previewFrame.classList.remove('portrait', 'landscape');
-        previewFrame.classList.add(orientation);
-      });
+      button.addEventListener('click', eventHandlers.handleOrientationClick);
     });
-    
-    // フォントサイズプリセット
-    document.querySelectorAll('.font-size-presets span').forEach(preset => {
-      preset.addEventListener('click', () => {
-        const scale = parseFloat(preset.getAttribute('data-scale'));
-        fontScaleSlider.value = scale;
-        currentSettings.fontScale = scale;
-        fontScaleValue.textContent = `${Math.round(scale * 100)}%`;
-        updatePreview();
-      });
-    });
-    
-    // テーマプリセット選択
+
+    // テーマオプションの処理
+    const themeOptions = document.querySelectorAll('.theme-option');
     themeOptions.forEach(option => {
-      option.addEventListener('click', () => {
-        const theme = option.getAttribute('data-theme');
-        
-        // アクティブクラスを全てのオプションから削除
-        themeOptions.forEach(opt => opt.classList.remove('active'));
-        
-        // クリックされたオプションにアクティブクラスを追加
-        option.classList.add('active');
-        
-        // テーマに応じた設定を適用
-        applyThemePreset(theme);
-      });
+      option.addEventListener('click', eventHandlers.handleThemeOptionClick);
     });
+
+    // フォーム関連
+    const form = document.querySelector('#loading-screen-form');
+    const saveButton = document.querySelector('#loading-save-button');
+    const cancelButton = document.querySelector('#loading-cancel-button');
+    const resetButton = document.querySelector('#loading-reset-button');
+
+    if (form) form.addEventListener('submit', eventHandlers.handleFormSubmit);
+    if (saveButton) saveButton.addEventListener('click', eventHandlers.handleSaveClick);
+    if (cancelButton) cancelButton.addEventListener('click', eventHandlers.handleCancelClick);
+    if (resetButton) resetButton.addEventListener('click', eventHandlers.handleResetClick);
+
+    // 最初のタブをアクティブにする
+    const firstTab = document.querySelector('.tab-button');
+    if (firstTab) {
+      firstTab.click();
+    }
     
-    // 保存ボタンのイベント
-    saveButton.addEventListener('click', async () => {
-      saveSettings();
-    });
-    
-    // フォーム送信時の処理
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      saveSettings();
-    });
-    
-    // キャンセルボタンのイベント
-    cancelButton.addEventListener('click', () => {
-      window.location.hash = '#/projects';
-    });
-    
-    // リセットボタンのイベント
-    resetButton.addEventListener('click', () => {
-      if (confirm('設定をデフォルトに戻しますか？')) {
-        currentSettings = { ...defaultSettings };
-        updateFormValues();
-        updatePreview();
-      }
-    });
-    
-    // ロゴ画像アップロード時の処理
-    logoUpload.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        handleLogoFile(file);
-      }
-    });
-    
-    // カスタムアニメーションアップロード時の処理
-    customAnimationUpload.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        handleAnimationFile(file);
-      }
-    });
-    
-    // カラーピッカーと入力フィールドの連動
-    bgColorPicker.addEventListener('input', (e) => {
-      const color = e.target.value;
-      bgColorInput.value = color;
-      currentSettings.bgColor = color;
-      updatePreview();
-    });
-    
-    bgColorInput.addEventListener('input', (e) => {
-      const color = e.target.value;
-      currentSettings.bgColor = color;
-      try {
-        if (color.startsWith('#') || colorNameToHex[color.toLowerCase()]) {
-          bgColorPicker.value = convertToHexColor(color);
-        }
-      } catch (e) {}
-      updatePreview();
-    });
-    
-    textColorPicker.addEventListener('input', (e) => {
-      const color = e.target.value;
-      textColorInput.value = color;
-      currentSettings.textColor = color;
-      updatePreview();
-    });
-    
-    textColorInput.addEventListener('input', (e) => {
-      const color = e.target.value;
-      currentSettings.textColor = color;
-      try {
-        if (color.startsWith('#') || colorNameToHex[color.toLowerCase()]) {
-          textColorPicker.value = convertToHexColor(color);
-        }
-      } catch (e) {}
-      updatePreview();
-    });
-    
-    accentColorPicker.addEventListener('input', (e) => {
-      const color = e.target.value;
-      accentColorInput.value = color;
-      currentSettings.accentColor = color;
-      updatePreview();
-    });
-    
-    accentColorInput.addEventListener('input', (e) => {
-      const color = e.target.value;
-      currentSettings.accentColor = color;
-      try {
-        if (color.startsWith('#') || colorNameToHex[color.toLowerCase()]) {
-          accentColorPicker.value = convertToHexColor(color);
-        }
-      } catch (e) {}
-      updatePreview();
-    });
-    
-    // ブランド名変更時の処理
-    brandNameInput.addEventListener('input', (e) => {
-      const name = e.target.value;
-      currentSettings.name = name;
-      updatePreview();
-    });
-    
-    // サブタイトル変更時の処理
-    subTitleInput.addEventListener('input', (e) => {
-      const subTitle = e.target.value;
-      currentSettings.subTitle = subTitle;
-      updatePreview();
-    });
-    
-    // ローディングメッセージ変更時の処理
-    loadingMessageInput.addEventListener('input', (e) => {
-      const message = e.target.value;
-      currentSettings.loadingMessage = message;
-      updatePreview();
-    });
-    
-    // フォントスケール変更時の処理
-    fontScaleSlider.addEventListener('input', (e) => {
-      const scale = parseFloat(e.target.value);
-      currentSettings.fontScale = scale;
-      fontScaleValue.textContent = `${Math.round(scale * 100)}%`;
-      updatePreview();
-    });
-    
-    // アニメーションタイプ変更時の処理
-    animationTypeSelect.addEventListener('change', (e) => {
-      const animationType = e.target.value;
-      currentSettings.animationType = animationType;
-    });
-    
-    // アニメーション速度変更時の処理
-    animationSpeedSelect.addEventListener('change', (e) => {
-      const animationSpeed = e.target.value;
-      currentSettings.animationSpeed = animationSpeed;
-      updatePreview();
-    });
-    
-    // アニメーションプレビューボタンのイベント
-    previewAnimationButton.addEventListener('click', () => {
-      // 現在のアニメーションクラスをすべて削除
-      const allAnimationClasses = [
-        'fade-animation', 
-        'slide-animation', 
-        'zoom-animation', 
-        'pulse-animation', 
-        'bounce-animation', 
-        'spin-animation',
-        'wave-animation',
-        'custom-animation'
-      ];
-      
-      previewScreen.classList.remove(...allAnimationClasses);
-      
-      // アニメーションを一時停止してから再適用するためのトリック
-      void previewScreen.offsetWidth; // リフロー強制
-      
-      // アニメーションを適用
-      const animationType = animationTypeSelect.value;
-      if (animationType === 'custom' && currentSettings.customAnimation) {
-        // カスタムアニメーションの場合
-        previewScreen.classList.add('custom-animation');
-        
-        // カスタムアニメーションの種類に応じた処理
-        const fileExt = currentSettings.customAnimation.split(';')[0].split('/').pop();
-        if (fileExt === 'json') {
-          // Lottieアニメーションの処理（実装が必要）
-          alert('Lottieアニメーションのプレビューは実装中です');
-        }
-      } else if (animationPresets[animationType]) {
-        // プリセットアニメーションの場合
-        previewScreen.classList.add(`${animationType}-animation`);
-        
-        // スピンアニメーションの場合、ロゴも回転させる
-        if (animationType === 'spin') {
-          previewLogo.style.animation = `spinAnimation ${currentSettings.animationSpeed || 'normal'} infinite linear`;
-        } else {
-          previewLogo.style.animation = '';
-        }
-      }
-      
-      // アニメーションボタンに視覚的フィードバック
-      previewAnimationButton.classList.add('active');
-      previewAnimationButton.textContent = 'アニメーション再生中...';
-      
-      // 少し時間をおいてボタンを元に戻す
-      setTimeout(() => {
-        previewAnimationButton.classList.remove('active');
-        previewAnimationButton.textContent = 'アニメーションをプレビュー';
-      }, 2000);
-    });
+    // 設定値変更の監視
+    setupColorInputs();
   }
-  
+
+  /**
+   * 色設定の入力イベントを処理する
+   */
+  function setupColorInputs() {
+    const colorInputs = [
+      {
+        picker: document.querySelector('#bg-color-picker'),
+        text: document.querySelector('#bg-color-text'),
+        setting: 'bgColor',
+        defaultColor: 'rgba(0, 0, 0, 0.85)'
+      },
+      {
+        picker: document.querySelector('#text-color-picker'),
+        text: document.querySelector('#text-color-text'),
+        setting: 'textColor',
+        defaultColor: 'white'
+      },
+      {
+        picker: document.querySelector('#progress-color-picker'),
+        text: document.querySelector('#progress-color-text'),
+        setting: 'accentColor',
+        defaultColor: '#00a8ff'
+      }
+    ];
+
+    colorInputs.forEach(({ picker, text, setting, defaultColor }) => {
+      if (picker) {
+        picker.addEventListener('input', function() {
+          const newColor = this.value;
+          console.log(`Color picker changed for ${setting}:`, newColor);
+          
+          if (text) text.value = newColor;
+          currentSettings[setting] = newColor;
+          updatePreviewStyles();
+        });
+      }
+
+      if (text) {
+        text.addEventListener('input', function() {
+          const newColor = this.value;
+          console.log(`Text input changed for ${setting}:`, newColor);
+          
+          if (isValidColor(newColor)) {
+            try {
+              const hexColor = convertToHexColor(newColor);
+              if (picker) picker.value = hexColor;
+              currentSettings[setting] = newColor;
+              updatePreviewStyles();
+            } catch (err) {
+              console.warn(`Failed to convert color for ${setting}:`, err);
+              currentSettings[setting] = defaultColor;
+              updatePreviewStyles();
+            }
+          }
+        });
+
+        // 初期値を設定
+        text.value = currentSettings[setting] || defaultColor;
+        if (picker) {
+          try {
+            picker.value = convertToHexColor(currentSettings[setting] || defaultColor);
+          } catch (err) {
+            console.warn(`Failed to set initial picker value for ${setting}:`, err);
+          }
+        }
+      }
+    });
+
+    console.log('Color input handlers have been set up');
+  }
+
+  /**
+   * プレビューのスタイルを更新する関数
+   */
+  function updatePreviewStyles() {
+    // currentSettings の存在チェック
+    if (typeof currentSettings === 'undefined' || !currentSettings) {
+      console.error("updatePreviewStyles Error: currentSettings is not accessible!");
+      return;
+    }
+    console.log('プレビュースタイルを更新:', currentSettings); // デバッグ用ログ
+
+    const previewContainer = document.querySelector('.loading-screen-preview');
+    const previewBrandEl = document.getElementById('preview-brand');
+    const previewSubtitleEl = document.getElementById('preview-subtitle');
+    const previewTextEl = document.getElementById('preview-text');
+    const previewBarEl = document.querySelector('.preview-bar');
+
+    // 背景色 (loading-screen-preview に適用)
+    if (previewContainer) {
+      previewContainer.style.backgroundColor = currentSettings.bgColor || 'rgba(0,0,0,0.85)';
+    }
+
+    // テキスト要素の色 (個別に指定)
+    [previewBrandEl, previewSubtitleEl, previewTextEl].forEach(el => {
+      if (el) {
+        el.style.color = currentSettings.textColor || 'white';
+        console.log(`Applied text color to ${el.id}:`, el.style.color);
+      }
+    });
+
+    // アクセントカラー (プログレスバーに適用)
+    if (previewBarEl) {
+      previewBarEl.style.backgroundColor = currentSettings.accentColor || '#00a8ff';
+      console.log('Applied accent color to progress bar:', previewBarEl.style.backgroundColor);
+    }
+
+    // フォントスケールの適用
+    const rootFontSize = 16;
+    const scale = currentSettings.fontScale || 1.0;
+    if (previewBrandEl) previewBrandEl.style.fontSize = `clamp(18px, 4vw, ${rootFontSize * 1.5 * scale}px)`;
+    if (previewSubtitleEl) previewSubtitleEl.style.fontSize = `clamp(14px, 3vw, ${rootFontSize * 1.0 * scale}px)`;
+    if (previewTextEl) previewTextEl.style.fontSize = `${rootFontSize * 0.875 * scale}px`;
+  }
+
   /**
    * テーマプリセットを適用する
-   * @param {string} theme - テーマ名
    */
   function applyThemePreset(theme) {
+    console.log('Applying theme preset:', theme);
+    
+    let bg, text, accent;
+    
     switch(theme) {
       case 'dark':
-        bgColorInput.value = 'rgba(0, 0, 0, 0.9)';
-        textColorInput.value = '#ffffff';
-        accentColorInput.value = '#00a8ff';
+        bg = 'rgba(0, 0, 0, 0.85)';
+        text = '#ffffff';
+        accent = '#00a8ff';
         break;
       case 'light':
-        bgColorInput.value = 'rgba(255, 255, 255, 0.9)';
-        textColorInput.value = '#333333';
-        accentColorInput.value = '#0066cc';
+        bg = 'rgba(255, 255, 255, 0.9)';
+        text = '#000000';
+        accent = '#0066cc';
         break;
       case 'blue':
-        bgColorInput.value = 'rgba(10, 30, 60, 0.9)';
-        textColorInput.value = '#ffffff';
-        accentColorInput.value = '#00ffcc';
+        bg = 'rgba(0, 32, 96, 0.9)';
+        text = '#ffffff';
+        accent = '#00a8ff';
         break;
       case 'vibrant':
-        bgColorInput.value = 'rgba(120, 20, 180, 0.9)';
-        textColorInput.value = '#ffffff';
-        accentColorInput.value = '#ff9500';
+        bg = 'rgba(128, 0, 128, 0.85)';
+        text = '#ffffff';
+        accent = '#00ff00';
         break;
+      default:
+        console.warn('Unknown theme:', theme);
+        return;
     }
-    
-    // カラーピッカーの値も更新
-    try {
-      bgColorPicker.value = convertToHexColor(bgColorInput.value);
-      textColorPicker.value = convertToHexColor(textColorInput.value);
-      accentColorPicker.value = convertToHexColor(accentColorInput.value);
-    } catch (e) {}
-    
+
     // 設定を更新
-    currentSettings.bgColor = bgColorInput.value;
-    currentSettings.textColor = textColorInput.value;
-    currentSettings.accentColor = accentColorInput.value;
+    currentSettings.bgColor = bg;
+    currentSettings.textColor = text;
+    currentSettings.accentColor = accent;
+
+    console.log('Theme colors set:', { bg, text, accent });
+
+    // フォームの値を更新
+    updateFormValues();
     
     // プレビューを更新
-    updatePreview();
+    updatePreviewStyles();
   }
-  
-  /**
-   * 設定を保存する
-   */
-  async function saveSettings() {
-    // 保存中の表示
-    saveButton.textContent = '保存中...';
-    saveButton.disabled = true;
-    
+
+  // --- クリーンアップ関数 ---
+  const cleanup = async () => {
     try {
-      // フォームデータをオブジェクトに変換（色を適切に変換）
-      const formData = new FormData(form);
-      
-      // ロゴ画像を追加（存在する場合）
-      if (logoFile) {
-        formData.set('logo', logoFile);
-      }
-      
-      // カスタムアニメーションを追加（存在する場合）
-      if (customAnimationFile) {
-        formData.set('customAnimation', customAnimationFile);
-      }
-      
-      const formDataObj = {};
-      
-      formData.forEach((value, key) => {
-        if (value instanceof File) {
-          // ファイル以外の値を保存
-          return;
-        }
-        
-        // 色の場合は16進数形式に変換
-        if (key === 'textColor' || key === 'bgColor' || key === 'accentColor') {
-          formDataObj[key] = value;
-        } else if (key === 'fontScale') {
-          formDataObj[key] = parseFloat(value);
-        } else {
-          formDataObj[key] = value;
+      console.log("ローディング画面エディタのクリーンアップを実行します。");
+
+      // ★★★ 登録されたすべてのイベントリスナーを解除 ★★★
+      registeredListeners.forEach(({ element, eventName, handler, options }) => {
+        if (element) {
+          try {
+              element.removeEventListener(eventName, handler, options);
+          } catch (e) {
+              // Log error but continue cleanup
+              console.warn(`Error removing listener for ${eventName} on`, element, e);
+          }
         }
       });
-      
-      let savedSettings;
-      
-      // API接続に失敗した場合はモックAPIを使用
-      console.log('モックAPIを使用して保存します', formDataObj);
-      savedSettings = await mockAPI.saveSettings(formDataObj);
-      
-      // ロゴ画像がある場合はDataURLを使用（モック用）
-      if (logoFile) {
-        try {
-          const reader = new FileReader();
-          const dataUrl = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(logoFile);
-          });
-          
-          savedSettings.logo = dataUrl;
-        } catch (e) {
-          console.error('画像の読み込みエラー:', e);
-        }
+      registeredListeners.length = 0; // 配列をクリアしてメモリ解放
+
+      // 不要なDOM削除コードは削除済み
+
+      // DOM要素の参照をクリア (ガベージコレクションを助けるため)
+      form = null;
+      brandNameInput = null;
+      subTitleInput = null;
+      loadingMessageInput = null;
+      logoUploadInput = null;
+      logoUploadTrigger = null;
+      logoPreview = null;
+      bgColorTextInput = null;
+      bgColorPicker = null;
+      textColorTextInput = null;
+      textColorPicker = null;
+      progressColorTextInput = null;
+      progressColorPicker = null;
+      animationTypeSelect = null;
+      animationSpeedSelect = null;
+      fontScaleSlider = null;
+      fontScaleValue = null;
+      customAnimationInput = null;
+      customAnimationTrigger = null;
+      animationPreview = null;
+      previewFrame = null;
+      previewScreen = null;
+      previewLogo = null;
+      previewBrand = null;
+      previewSubtitle = null;
+      previewText = null;
+      previewBar = null;
+      previewAnimationButton = null;
+      tabButtons = null; // NodeList もクリア
+      tabContents = null; // NodeList もクリア
+      orientationButtons = null; // NodeList もクリア
+      themeOptions = null; // NodeList もクリア
+      fontSizePresets = null; // NodeList もクリア
+      saveButton = null;
+      cancelButton = null;
+      resetButton = null;
+      currentSettings = null; // 設定オブジェクトへの参照もクリア
+      logoFile = null; // ファイル参照もクリア
+      customAnimationFile = null; // ファイル参照もクリア
+      container = null; // コンテナ要素への参照もクリア
+
+      // ローディングマネージャーのクリーンアップ
+      if (loadingManager && typeof loadingManager.cleanup === 'function') {
+        await loadingManager.cleanup();
       }
-      
-      // カスタムアニメーションがある場合はDataURLを使用（モック用）
-      if (customAnimationFile) {
-        try {
-          const reader = new FileReader();
-          const dataUrl = await new Promise((resolve, reject) => {
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(customAnimationFile);
+
+      // DOM要素のクリーンアップ
+      const cleanupElements = () => {
+        const selectors = [
+          '.loading-screen',
+          '.loading-screen-preview',
+          '.loading-screen-editor',
+          '[class*="loading-"]'
+        ];
+        
+        selectors.forEach(selector => {
+          document.querySelectorAll(selector).forEach(el => {
+            if (el && el.parentNode) {
+              el.style.transition = 'none';
+              el.style.opacity = '0';
+              el.style.visibility = 'hidden';
+              
+              try {
+                el.parentNode.removeChild(el);
+                console.log(`Removed editor element: ${selector}`);
+              } catch (e) {
+                console.warn(`Failed to remove editor element ${selector}:`, e);
+              }
+            }
           });
-          
-          savedSettings.customAnimation = dataUrl;
-        } catch (e) {
-          console.error('アニメーション読み込みエラー:', e);
-        }
-      }
-      
-      // 保存した設定を反映
-      currentSettings = { ...currentSettings, ...savedSettings };
-      
-      // 成功メッセージを表示
-      alert('設定を保存しました。');
-      
-      // フォームに値を再設定
-      updateFormValues();
-      
-      // プレビューを更新
-      updatePreview();
+        });
+      };
+
+      // 即時実行とタイムアウトでの再実行
+      cleanupElements();
+      setTimeout(cleanupElements, 100);
+
+      loadingManager = null;
+      console.log("ローディング画面エディタのクリーンアップが完了しました。");
     } catch (error) {
-      console.error('設定の保存中にエラーが発生しました:', error);
-      alert('設定の保存中にエラーが発生しました。');
-    } finally {
-      // ボタンを元に戻す
-      saveButton.textContent = '保存';
-      saveButton.disabled = false;
+      console.error('Error during editor cleanup:', error);
+    }
+  };
+
+  // --- 初期化 ---
+  async function initializeEditor() {
+    try {
+      await initializeLoadingManager();
+      console.log('ローディングマネージャーの初期化が完了しました');
+
+      // DOM要素の取得と検証
+      const requiredElements = {
+        form: 'loading-screen-form',
+        brandName: 'brand-name',
+        subTitle: 'sub-title',
+        loadingMessage: 'loading-message',
+        logoUpload: 'logo-upload',
+        logoUploadTrigger: 'logo-upload-trigger',
+        logoPreview: 'logo-preview',
+        bgColorText: 'bg-color-text',
+        bgColorPicker: 'bg-color-picker',
+        textColorText: 'text-color-text',
+        textColorPicker: 'text-color-picker',
+        progressColorText: 'progress-color-text',
+        progressColorPicker: 'progress-color-picker',
+        fontScale: 'font-scale',
+        fontScaleValue: '.font-size-value',
+        saveButton: 'loading-save-button',
+        cancelButton: 'loading-cancel-button',
+        resetButton: 'loading-reset-button'
+      };
+
+      // 必須要素の存在チェック
+      const missingElements = [];
+      const elements = {};
+
+      for (const [key, id] of Object.entries(requiredElements)) {
+        const element = id.startsWith('.') 
+          ? document.querySelector(id)
+          : document.getElementById(id);
+        
+        if (!element) {
+          missingElements.push(id);
+        }
+        elements[key] = element;
+      }
+
+      if (missingElements.length > 0) {
+        throw new Error(`必須要素が見つかりません: ${missingElements.join(', ')}`);
+      }
+
+      // グローバル変数に代入
+      form = elements.form;
+      brandNameInput = elements.brandName;
+      subTitleInput = elements.subTitle;
+      loadingMessageInput = elements.loadingMessage;
+      logoUploadInput = elements.logoUpload;
+      logoUploadTrigger = elements.logoUploadTrigger;
+      logoPreview = elements.logoPreview;
+      bgColorTextInput = elements.bgColorText;
+      bgColorPicker = elements.bgColorPicker;
+      textColorTextInput = elements.textColorText;
+      textColorPicker = elements.textColorPicker;
+      progressColorTextInput = elements.progressColorText;
+      progressColorPicker = elements.progressColorPicker;
+      fontScaleSlider = elements.fontScale;
+      fontScaleValue = elements.fontScaleValue;
+      saveButton = elements.saveButton;
+      cancelButton = elements.cancelButton;
+      resetButton = elements.resetButton;
+
+      // コンテナ要素から要素を取得
+      if (!container) throw new Error('コンテナ要素が見つかりません');
+      
+      // NodeListの取得
+      tabButtons = container.querySelectorAll('.tab-button');
+      tabContents = container.querySelectorAll('.tab-content');
+      orientationButtons = container.querySelectorAll('.orientation-button');
+      themeOptions = container.querySelectorAll('.theme-option');
+
+      // フォントサイズプリセットの初期化
+      const fontSizePresetElements = container.querySelectorAll('.font-size-presets span');
+      if (fontSizePresetElements.length > 0) {
+        fontSizePresets = Array.from(fontSizePresetElements).reduce((acc, el) => {
+          const scale = parseFloat(el.dataset.scale);
+          if (!isNaN(scale)) {
+            acc[el.textContent.toLowerCase()] = scale;
+          }
+          return acc;
+        }, {});
+      }
+
+      console.log('DOM要素の初期化が完了しました');
+
+      // 保存済み設定の読み込みと初期化
+      await loadSettings();
+      console.log('設定の読み込みが完了しました');
+
+      // 明示的な初期プレビュー更新
+      console.log('初期プレビューを更新します');
+      updatePreview(0);
+
+      // イベントリスナーの設定
+      setupEventListeners();
+      setupDragAndDrop();
+
+      // プレビューを明示的に更新
+      updatePreviewStyles();
+
+    } catch (error) {
+      console.error('エディタの初期化中にエラーが発生しました:', error);
+      
+      // エラーメッセージの表示
+      if (container) {
+        container.innerHTML = `
+          <div class="error-message">
+            <h3>エディタの初期化に失敗しました</h3>
+            <p>${error.message}</p>
+            <button onclick="location.reload()">再読み込み</button>
+          </div>
+        `;
+      }
+
+      // エラー発生時のクリーンアップ
+      try {
+        if (typeof cleanup === 'function') {
+          await cleanup();
+        }
+      } catch (cleanupError) {
+        console.error('クリーンアップ中にエラーが発生しました:', cleanupError);
+      }
     }
   }
+
+  // 初期化の実行
+  initializeEditor().catch(error => {
+    console.error('エディタの初期化に致命的なエラーが発生しました:', error);
+  });
+
+  return cleanup; // クリーンアップ関数を返す
 } 
+
+// 向き切り替えの処理を改善
+function handleOrientationChange(isLandscape) {
+  const smartphoneFrame = document.querySelector('.smartphone-frame');
+  const previewContent = document.querySelector('.loading-screen-preview');
+  
+  if (!smartphoneFrame || !previewContent) return;
+  
+  // 向きに応じてクラスを切り替え
+  smartphoneFrame.classList.remove('portrait', 'landscape');
+  smartphoneFrame.classList.add(isLandscape ? 'landscape' : 'portrait');
+  
+  // フレームのサイズと位置を調整
+  requestAnimationFrame(() => {
+    initializePreview();
+  });
+}
+
+// 向き切り替えボタンのイベントハンドラ
+function setupOrientationToggle() {
+  const portraitButton = document.querySelector('.orientation-button[data-orientation="portrait"]');
+  const landscapeButton = document.querySelector('.orientation-button[data-orientation="landscape"]');
+
+  if (portraitButton && landscapeButton) {
+    portraitButton.addEventListener('click', () => {
+      portraitButton.classList.add('active');
+      landscapeButton.classList.remove('active');
+      handleOrientationChange(false);
+    });
+
+    landscapeButton.addEventListener('click', () => {
+      landscapeButton.classList.add('active');
+      portraitButton.classList.remove('active');
+      handleOrientationChange(true);
+    });
+
+    // デフォルトで縦向きを選択
+    portraitButton.classList.add('active');
+    handleOrientationChange(false);
+  }
+}
+
+// プレビュー要素の作成を改善
+function createPreviewElements() {
+  const previewContainer = document.createElement('div');
+  previewContainer.className = 'preview-container';
+
+  const smartphoneFrame = document.createElement('div');
+  smartphoneFrame.className = 'smartphone-frame portrait';
+
+  const smartphoneScreen = document.createElement('div');
+  smartphoneScreen.className = 'smartphone-screen';
+
+  const previewContentWrapper = document.createElement('div');
+  previewContentWrapper.className = 'preview-content-wrapper';
+
+  const previewContent = document.createElement('div');
+  previewContent.className = 'loading-screen-preview';
+
+  // プレビューコンテンツの構造を設定
+  previewContent.innerHTML = `
+    <img class="preview-logo" src="${currentSettings.logo || ''}" ${currentSettings.showLogo ? '' : 'style="display:none;"'}>
+    <div class="preview-brand" ${currentSettings.showBrand ? '' : 'style="display:none;"'}>${currentSettings.name || 'My App'}</div>
+    <div class="preview-subtitle" ${currentSettings.showSubtitle ? '' : 'style="display:none;"'}>${currentSettings.subTitle || 'Loading...'}</div>
+    <div class="preview-progress" ${currentSettings.showProgressBar ? '' : 'style="display:none;"'}><div class="preview-bar"></div></div>
+    <div class="preview-text">${currentSettings.loadingMessage || 'Please wait...'}</div>
+  `;
+
+  // 要素を組み立て
+  previewContentWrapper.appendChild(previewContent);
+  smartphoneScreen.appendChild(previewContentWrapper);
+  smartphoneFrame.appendChild(smartphoneScreen);
+  previewContainer.appendChild(smartphoneFrame);
+
+  return previewContainer;
+}
+
+// 初期化時にプレビュー要素をセットアップ
+function initializePreview() {
+  const previewPanel = document.querySelector('.preview-panel');
+  if (!previewPanel) return;
+  
+  // 向き切り替えボタンの強制表示
+  const orientationToggle = previewPanel.querySelector('.preview-orientation');
+  if (orientationToggle) {
+    orientationToggle.style.display = 'flex';
+  }
+  
+  // スマホフレームの位置調整
+  const previewContainer = previewPanel.querySelector('.preview-container');
+  const smartphoneFrame = previewPanel.querySelector('.smartphone-frame');
+  
+  if (previewContainer && smartphoneFrame) {
+    // コンテナ内でフレームが中央に表示されるように調整
+    requestAnimationFrame(() => {
+      const containerHeight = previewContainer.clientHeight;
+      const frameHeight = smartphoneFrame.clientHeight;
+      
+      if (frameHeight > containerHeight) {
+        // フレームサイズを縮小して収める
+        const scale = Math.min(0.9, (containerHeight / frameHeight));
+        smartphoneFrame.style.transform = `scale(${scale})`;
+      } else {
+        // 中央寄せ
+        smartphoneFrame.style.margin = 'auto';
+      }
+    });
+  }
+  
+  // スマホフレームの位置安定化を追加
+  stabilizePhonePosition();
+}
+
+// ウィンドウサイズ変更時にもプレビュー表示を調整
+window.addEventListener('resize', () => {
+  initializePreview();
+  updatePreviewScale();
+});
+
+// タブ切替時にも調整
+document.querySelectorAll('.tab-button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setTimeout(initializePreview, 100);
+  });
+});
+
+/**
+ * プレビューパネルの背景を固定
+ */
+const fixPreviewBackground = () => {
+  const previewPanel = document.querySelector('.preview-panel');
+  const settingsPanel = document.querySelector('.settings-panel');
+  
+  if (previewPanel && settingsPanel) {
+    const height = Math.max(settingsPanel.offsetHeight, window.innerHeight * 0.7);
+    previewPanel.style.minHeight = `${height}px`;
+  }
+};
+
+// ページ読み込み直後にスマホフレームを安定した位置に配置
+function stabilizePhonePosition() {
+  const smartphoneFrame = document.querySelector('.smartphone-frame');
+  if (!smartphoneFrame) return;
+  
+  // 初期位置を即座に固定（アニメーションなし）
+  smartphoneFrame.style.transition = 'none';
+  
+  // 向きに応じた適切な位置を設定
+  if (smartphoneFrame.classList.contains('portrait')) {
+    smartphoneFrame.style.transform = 'scale(0.9)';
+  } else {
+    smartphoneFrame.style.transform = 'rotate(0deg) scale(0.9)';
+  }
+  
+  // トランジションを元に戻す（少し遅延させる）
+  setTimeout(() => {
+    smartphoneFrame.style.transition = 'transform 0.3s ease, width 0.3s ease, height 0.3s ease';
+  }, 300);
+}
+
+// DOM読み込み完了時に実行
+document.addEventListener('DOMContentLoaded', () => {
+  // 初期表示時の位置を安定化
+  stabilizePhonePosition();
+});
+
+// 色形式バリデーション関数
+function isValidColor(strColor) {
+  const s = new Option().style;
+  s.color = strColor;
+  return s.color !== '';
+}

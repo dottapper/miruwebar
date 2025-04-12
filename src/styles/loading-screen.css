@@ -1,3 +1,188 @@
+/* アプリケーション全体のローディング画面 */
+.app-loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  color: white;
+  transition: opacity 0.05s ease, visibility 0.05s !important;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 80%;
+  text-align: center;
+}
+
+.loading-logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 20px;
+  background-image: url('/assets/logo.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.loading-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.loading-subtitle {
+  font-size: 16px;
+  margin-bottom: 20px;
+  opacity: 0.8;
+}
+
+.loading-progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.loading-progress-inner {
+  width: 0%;
+  height: 100%;
+  background: #00a8ff;
+  transition: width 0.3s ease;
+}
+
+.loading-message {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.app-loading-screen.hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.app-loading-logo {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 20px;
+  background-image: url('/assets/logo.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.app-loading-brand {
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+.app-loading-subtitle {
+  font-size: 16px;
+  color: #cccccc;
+  margin-bottom: 30px;
+}
+
+.app-loading-progress {
+  width: 80%;
+  max-width: 400px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.app-loading-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--progress, 0%);
+  background: #ffffff;
+  transition: width 0.3s ease;
+}
+
+.app-loading-text {
+  font-size: 14px;
+  color: #ffffff;
+  text-align: center;
+}
+
+/* エディタ用のローディングプレビュー */
+.editor-loading-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.editor-loading-preview .app-loading-logo {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 10px;
+}
+
+.editor-loading-preview .app-loading-brand {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.editor-loading-preview .app-loading-subtitle {
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.editor-loading-preview .app-loading-progress {
+  width: 60%;
+  max-width: 300px;
+  height: 3px;
+  margin-bottom: 10px;
+}
+
+.editor-loading-preview .app-loading-text {
+  font-size: 12px;
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.fade-out {
+  animation: fadeOut 0.3s ease forwards;
+}
+
 /* ローディング画面のスタイル */
 .loading-screen {
   position: fixed;
@@ -10,17 +195,22 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
-  transition: opacity 0.5s ease;
+  z-index: 2147483647; /* 最大のz-indexを設定 */
   padding: 20px;
   text-align: center;
+  transition: all 0.3s ease;
+  transform: translateZ(0); /* GPUアクセラレーション有効化 */
+  will-change: opacity, transform; /* パフォーマンス最適化 */
+  backface-visibility: hidden; /* レンダリング最適化 */
 }
 
-.loading-logo {
-  width: 120px;
-  height: 120px;
-  object-fit: contain;
-  margin-bottom: 20px;
+/* ベンダープレフィックスを追加 */
+@supports (-webkit-backdrop-filter: none) or (backdrop-filter: none) {
+  .loading-screen {
+    -webkit-backdrop-filter: blur(5px);
+    backdrop-filter: blur(5px);
+    background-color: rgba(0, 0, 0, 0.75);
+  }
 }
 
 .loading-brand {
@@ -28,13 +218,6 @@
   font-size: 24px;
   margin-bottom: 5px;
   font-weight: bold;
-}
-
-.loading-subtitle {
-  color: white;
-  font-size: 16px;
-  margin-bottom: 25px;
-  opacity: 0.9;
 }
 
 .loading-progress {
@@ -61,9 +244,12 @@
   opacity: 0.8;
 }
 
-.hidden {
-  opacity: 0;
-  pointer-events: none;
+.hidden,
+.loading-hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
 }
 
 /* アニメーション速度クラス */
@@ -146,4 +332,44 @@
   50% { transform: translateY(0); }
   75% { transform: translateY(10px); }
   100% { transform: translateY(0); }
+}
+
+/* アニメーション最適化 */
+.loading-screen * {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* ローディング画面の非表示時のトランジションを高速化 */
+.loading-screen, 
+[class*="loading-"], 
+.app-loading-screen,
+[class*="miru-"] {
+  transition: opacity 0.05s ease, visibility 0.05s !important; /* 50ms に短縮 */
+}
+
+/* ローディング要素の即時非表示 */
+.loading-screen-preview,
+.loading-screen {
+  transition: opacity 0.05s ease, visibility 0.05s !important;
+}
+
+.loading-screen-preview.hidden,
+.loading-screen.hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* ローディング要素の即時削除 */
+[class*="loading-"] {
+  transition: opacity 0.05s ease, visibility 0.05s !important;
+}
+
+[class*="loading-"].hidden {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  display: none !important;
+  pointer-events: none !important;
 } 

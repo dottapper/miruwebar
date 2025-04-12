@@ -1,7 +1,4 @@
 import './styles/style.css'
-import javascriptLogo from './javascript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.js'
 import './styles/editor.css'
 import './styles/login.css';
 import './styles/select-ar.css';
@@ -10,38 +7,16 @@ import './styles/version-info.css';
 import './styles/loading-screen-editor.css'; // ローディング画面エディタ用のスタイルを追加
 import './styles/loading-screen.css'; // ローディング画面のスタイルをインポート
 
-// QRCode ライブラリを読み込み (グローバルに利用できるようにwindowに設定)
+// QRCode ライブラリを読み込み
 import QRCode from 'qrcode'
-window.QRCode = QRCode;
-
-document.querySelector('#app').innerHTML = `
-  <div>
-    <a href="https://vite.dev" target="_blank">
-      <img src="${viteLogo}" class="logo" alt="Vite logo" />
-    </a>
-    <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-      <img src="${javascriptLogo}" class="logo vanilla" alt="JavaScript logo" />
-    </a>
-    <h1>Hello Vite!</h1>
-    <div class="card">
-      <button id="counter" type="button"></button>
-    </div>
-    <p class="read-the-docs">
-      Click on the Vite logo to learn more
-    </p>
-  </div>
-`
-
-setupCounter(document.querySelector('#counter'))
 
 // ページごとのJSファイルをインポート
-// ここで修正：editor.jsからnamed exportをインポートする場合は中括弧を使用
 import showLogin from './views/login.js';
 import showSelectAR from './views/select-ar.js';
 import showProjects from './views/projects.js';
-import { showEditor } from './views/editor.js';  // デフォルトエクスポートでない場合
+import { showEditor } from './views/editor.js';  // named importに修正
 import showQRCode from './views/qr-code.js';
-import showLoadingScreenEditor from './views/loading-screen-editor.js'; // ローディング画面エディタを追加
+import showLoadingScreenEditor from './views/loading-screen-editor.js';
 
 // ルートに対応する表示関数のマップ
 const routes = {
@@ -50,29 +25,56 @@ const routes = {
   '#/projects': showProjects,
   '#/editor': showEditor,
   '#/qr-code': showQRCode,
-  '#/loading-screen': showLoadingScreenEditor, // ローディング画面エディタのルートを追加
+  '#/loading-screen': showLoadingScreenEditor  // パスを修正
 };
 
-// アプリ表示エリア
-const app = document.querySelector('#app');
-
-// 表示切り替え
-function render() {
-  // URLハッシュ全体を取得
-  const fullRoute = window.location.hash || '#/login';
-  
-  // ベースルート（パラメータ部分を除く）を抽出
-  const baseRoute = fullRoute.split('?')[0];
-  
-  console.log('現在のルート:', fullRoute, 'ベースルート:', baseRoute);
-  
-  // ベースルートに対応する表示関数を選択
-  const renderFunc = routes[baseRoute] || showLogin;
-  
-  app.innerHTML = ''; // 表示を初期化
-  renderFunc(app);     // 選ばれた関数にappを渡して表示
+// アプリケーションのメインコンテナ
+const app = document.getElementById('app');
+if (!app) {
+  console.error('アプリケーションコンテナが見つかりません');
+  throw new Error('アプリケーションコンテナが見つかりません');
 }
 
-// イベントリスナー
+// 現在のビューのクリーンアップ関数
+let currentCleanup = null;
+
+// ルーティング処理
+function render() {
+  try {
+    // 現在のビューをクリーンアップ
+    if (typeof currentCleanup === 'function') {
+      currentCleanup();
+      currentCleanup = null;
+    }
+
+    // DOMをクリア
+    while (app.firstChild) {
+      app.removeChild(app.firstChild);
+    }
+
+    // 現在のハッシュを取得
+    let hash = window.location.hash || '#/login';
+    
+    // ハッシュにクエリパラメータがある場合は分離
+    const [baseHash] = hash.split('?');
+    
+    // 対応するビュー関数を取得
+    const view = routes[baseHash];
+    
+    if (view) {
+      console.log(`ルート "${baseHash}" のビューを表示します`);
+      currentCleanup = view(app);
+    } else {
+      console.warn(`未定義のルート: ${baseHash}`);
+      window.location.hash = '#/login';
+    }
+  } catch (error) {
+    console.error('ビューのレンダリング中にエラーが発生しました:', error);
+  }
+}
+
+// ハッシュ変更時のルーティング
 window.addEventListener('hashchange', render);
-window.addEventListener('load', render);
+
+// 初期表示
+render();

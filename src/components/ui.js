@@ -1,6 +1,7 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
+import QRCode from 'qrcode';
 
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
@@ -280,7 +281,9 @@ export function showNewProjectModal() {
             </div>
             <div class="form-group" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center;">
                 <label style="display: block; margin-bottom: 0.5rem;">QRコード</label>
-                <div id="qrcode-container" style="background: white; padding: 1rem; margin-bottom: 1rem;"></div>
+                <div id="qrcode-container" style="background: white; padding: 1rem; margin-bottom: 1rem;">
+                    <canvas id="qrcode-canvas" width="200" height="200"></canvas>
+                </div>
                 <button id="download-qrcode" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
                     QRコードをダウンロード
                 </button>
@@ -295,60 +298,60 @@ export function showNewProjectModal() {
     
     document.body.appendChild(modalOverlay);
 
-    // QRコード生成（qrcode ライブラリが必要）
-    try {
-        // QRCodeのキャンバスを生成するためのコンテナ
-        const qrcodeContainer = document.getElementById('qrcode-container');
-        
-        // キャンバス要素を作成してからQRCodeを描画
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 200;
-        
-        // 先にコンテナに追加
-        qrcodeContainer.appendChild(canvas);
-        
-        // QRCodeライブラリを使用してキャンバスにQRコードを描画
-        QRCode.toCanvas(canvas, arViewerUrl, {
-            width: 200,
-            margin: 1,
-            color: {
-                dark: '#000000',
-                light: '#FFFFFF'
+    // QRコード生成
+    const generateQRCode = async () => {
+        try {
+            const canvas = document.getElementById('qrcode-canvas');
+            if (!canvas) {
+                throw new Error('Canvas element not found');
             }
-        }, function(error) {
-            if (error) {
-                console.error('QRコード生成エラー:', error);
-                qrcodeContainer.innerHTML = `
-                    <p style="color: red;">QRコードの生成に失敗しました。</p>
-                    <p>URL: ${arViewerUrl}</p>
-                `;
-                return;
-            }
-            
+
+            await QRCode.toCanvas(canvas, arViewerUrl, {
+                width: 200,
+                margin: 1,
+                color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                }
+            });
+
             // QRコードのダウンロード処理
             document.getElementById('download-qrcode').addEventListener('click', () => {
-                const image = canvas.toDataURL("image/png");
-                const link = document.createElement('a');
-                link.href = image;
-                link.download = `${modelId}-qrcode.png`;
-                link.click();
+                try {
+                    const image = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = image;
+                    link.download = `${modelId}-qrcode.png`;
+                    link.click();
+                } catch (error) {
+                    console.error('QRコードのダウンロードに失敗しました:', error);
+                    alert('QRコードのダウンロードに失敗しました。');
+                }
             });
-        });
-    } catch (error) {
-        console.error('QRコード生成エラー:', error);
-        document.getElementById('qrcode-container').innerHTML = `
-            <p style="color: red;">QRコードの生成に失敗しました。</p>
-            <p>URL: ${arViewerUrl}</p>
-        `;
-    }
+
+        } catch (error) {
+            console.error('QRコード生成エラー:', error);
+            const container = document.getElementById('qrcode-container');
+            if (container) {
+                container.innerHTML = `
+                    <div style="color: red; text-align: center;">
+                        <p>QRコードの生成に失敗しました。</p>
+                        <p style="font-size: 0.9em;">URL: ${arViewerUrl}</p>
+                    </div>
+                `;
+            }
+        }
+    };
+
+    // QRコードを生成
+    generateQRCode();
 
     // 閉じるボタンイベント
     document.getElementById('close-qrcode-modal').addEventListener('click', () => {
         document.body.removeChild(modalOverlay);
     });
     
-    // モーダル背景をクリックした時にも閉じるようにする
+    // モーダル背景をクリックした時にも閉じる
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
             document.body.removeChild(modalOverlay);

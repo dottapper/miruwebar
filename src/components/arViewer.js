@@ -2,10 +2,26 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
-import { initLoadingManager, showLoadingScreen, hideLoadingScreen, updateProgress } from '../utils/loadingManager.js';
 
+// ローディング関連の関数をスタブとして実装
+const loadingStub = {
+  showLoadingScreen: (msg) => {
+    console.log('Loading (disabled):', msg);
+    return 'stub-loader-id';
+  },
+  hideLoadingScreen: (id) => console.log('Hide loading (disabled):', id),
+  updateProgress: (percent, message) => console.log('Progress (disabled):', percent, message),
+  cleanup: () => console.log('Cleanup (disabled)'),
+  getLoadingState: () => 'hidden'
+};
 
-export function initARViewer(containerId, options = {}) {
+// エクスポートする関数
+const showLoading = loadingStub.showLoadingScreen;
+const hideLoading = loadingStub.hideLoadingScreen;
+const updateLoadingProgress = loadingStub.updateProgress;
+const cleanupLoading = loadingStub.cleanup;
+
+export async function initARViewer(containerId, options = {}) {
   const container = document.getElementById(containerId);
   if (!container) {
     console.error(`ARViewer: コンテナID "${containerId}" が見つかりません`);
@@ -21,8 +37,82 @@ export function initARViewer(containerId, options = {}) {
   };
 
   // ローディングマネージャーの初期化（コンテナIDを渡す）
-  const loadingManager = initLoadingManager(containerId);
-  
+  const loadingManager = {
+    showLoadingScreen: showLoading,
+    hideLoadingScreen: hideLoading,
+    updateProgress: updateLoadingProgress,
+    getLoadingState: () => 'hidden'
+  };
+
+  // Three.jsのローディングマネージャーを作成
+  const threeLoadingManager = new THREE.LoadingManager(
+    // onLoad
+    () => {
+      console.log('Loading complete - cleaning up loading screens');
+      
+      // 即時非表示のための強化処理
+      if (loadingManager && typeof loadingManager.hideLoadingScreen === 'function') {
+        loadingManager.hideLoadingScreen();
+      }
+      
+      // 直接DOMからも削除する緊急対策
+      const cleanupLoadingElements = () => {
+        const selectors = [
+          '.loading-screen',
+          '.loading-screen-preview',
+          '.app-loading-screen',
+          '[class*="loading-"]',
+          '[class*="miru-"]'
+        ];
+        
+        selectors.forEach(selector => {
+          document.querySelectorAll(selector).forEach(el => {
+            if (el && el.parentNode) {
+              // まず非表示にする
+              el.style.transition = 'none';
+              el.style.opacity = '0';
+              el.style.visibility = 'hidden';
+              el.style.display = 'none';
+              el.style.pointerEvents = 'none';
+              
+              // 即時削除
+              try {
+                el.parentNode.removeChild(el);
+                console.log(`Removed loading element: ${selector}`);
+              } catch (e) {
+                console.warn(`Failed to remove loading element ${selector}:`, e);
+              }
+            }
+          });
+        });
+      };
+
+      // 即時実行
+      cleanupLoadingElements();
+      
+      // 100ms後に再度実行して確実に削除
+      setTimeout(cleanupLoadingElements, 100);
+    },
+    // onProgress
+    (url, itemsLoaded, itemsTotal) => {
+      const progressPercent = (itemsLoaded / itemsTotal) * 100;
+      if (loadingManager && typeof loadingManager.updateProgress === 'function') {
+        loadingManager.updateProgress(progressPercent, `モデルを読み込んでいます... ${Math.floor(progressPercent)}%`);
+      }
+      console.log(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files.`);
+    },
+    // onError
+    (url) => {
+      if (loadingManager && typeof loadingManager.hideLoadingScreen === 'function') {
+        loadingManager.hideLoadingScreen();
+      }
+      console.error(`Error loading: ${url}`);
+    }
+  );
+
+  // GLTFLoaderにThree.jsのローディングマネージャーを設定
+  const loader = new GLTFLoader(threeLoadingManager);
+
   // シーン・カメラ・レンダラーの初期化
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(config.backgroundColor);
@@ -226,39 +316,6 @@ export function initARViewer(containerId, options = {}) {
   // 選択オブジェクト表示用のBoxHelper
   let boundingBox = null;
 
-  // Three.jsのローディングマネージャーを作成
-  const threeLoadingManager = new THREE.LoadingManager();
-  
-  // ロード開始時の処理
-  threeLoadingManager.onStart = (url, itemsLoaded, itemsTotal) => {
-    loadingManager.showLoadingScreen();
-    console.log(`Started loading: ${url}`);
-  };
-  
-  // ロード中の処理（進捗更新）
-  threeLoadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
-    const progressPercent = (itemsLoaded / itemsTotal) * 100;
-    loadingManager.updateProgress(progressPercent, `モデルを読み込んでいます... ${Math.floor(progressPercent)}%`);
-    console.log(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files.`);
-  };
-  
-  // ロード完了時の処理
-  threeLoadingManager.onLoad = () => {
-    setTimeout(() => {
-      loadingManager.hideLoadingScreen();
-    }, 500);
-    console.log('Loading complete!');
-  };
-  
-  // ロードエラー時の処理
-  threeLoadingManager.onError = (url) => {
-    loadingManager.updateProgress(100, 'エラーが発生しました。再読み込みしてください。');
-    console.error(`Error loading: ${url}`);
-  };
-  
-  // GLTFLoaderにローディングマネージャーを設定
-  const loader = new GLTFLoader(threeLoadingManager);
-
   function createModelData(model, objectUrl, fileName, fileSize) {
     return {
       model,
@@ -296,86 +353,103 @@ export function initARViewer(containerId, options = {}) {
     });
   }
 
-  // モデル読み込み関数
-  function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0) {
-    return new Promise((resolve, reject) => {
-      // ローディング画面を表示
-      loadingManager.showLoadingScreen();
-      
-      let createdObjectUrl = null;
+  // モデル読み込み関数を更新
+  async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0) {
+    let createdObjectUrl = null;
+    const loaderId = showLoading({
+      message: `モデル "${fileName}" を読み込んでいます...`,
+      container: container
+    });
+    
+    try {
+      // モデルのURLを準備
       if (modelUrl instanceof Blob || modelUrl instanceof File) {
         createdObjectUrl = URL.createObjectURL(modelUrl);
         modelUrl = createdObjectUrl;
       }
-      const isBlobUrl = modelUrl.startsWith('blob:');
-      loader.load(modelUrl, gltf => {
-        try {
-          const model = gltf.scene;
-          let storedObjectUrl = null;
-          if (isBlobUrl) {
-            storedObjectUrl = modelUrl;
-            objectUrls.set(model, storedObjectUrl);
-          }
-          model.traverse(child => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
-          // バウンディングボックス計算とスケール・位置調整
-          let box = new THREE.Box3().setFromObject(model);
-          let size = new THREE.Vector3();
-          box.getSize(size);
-          let center = new THREE.Vector3();
-          box.getCenter(center);
-          if (config.onModelLoaded) config.onModelLoaded(size);
-          const maxSize = Math.max(size.x, size.y, size.z);
-          let scale = 1.0;
-          if (isFinite(maxSize) && maxSize > 1e-6) {
-            let targetSize = config.markerMode ? 0.5 : 2.0;
-            scale = targetSize / maxSize;
-            if (!isFinite(scale)) scale = 1.0;
-          } else {
-            scale = 1.0;
-          }
-          scale = Math.max(0.01, Math.min(100, scale));
-          model.scale.set(scale, scale, scale);
-          box.setFromObject(model);
-          box.getCenter(center);
-          if (center && isFinite(center.x) && isFinite(center.y) && isFinite(center.z) &&
-              box && box.min && isFinite(box.min.y)) {
-            model.position.sub(center);
-            model.position.y -= box.min.y;
-          } else {
-            model.position.set(0, 0, 0);
-          }
-          const modelData = createModelData(model, storedObjectUrl, fileName, fileSize);
-          modelData.position.copy(model.position);
-          modelData.rotation.copy(model.rotation);
-          modelData.scale.copy(model.scale);
-          modelList.push(modelData);
-          resolve(modelList.length - 1);
-        } catch (innerError) {
-          if (isBlobUrl) {
-            URL.revokeObjectURL(modelUrl);
-            objectUrls.delete(gltf.scene);
-          }
-          reject(innerError);
+      
+      // モデルを読み込む
+      updateLoadingProgress(loaderId, 20, 'モデルデータを解析中...');
+      const gltf = await loader.loadAsync(modelUrl);
+      const model = gltf.scene;
+      
+      let storedObjectUrl = null;
+      if (modelUrl.startsWith('blob:')) {
+        storedObjectUrl = modelUrl;
+        objectUrls.set(model, storedObjectUrl);
+      }
+      
+      // モデルの設定
+      updateLoadingProgress(loaderId, 40, 'モデルを設定中...');
+      model.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
-      }, xhr => {
-        // 進捗状況の更新
-        if (xhr.lengthComputable) {
-          const progressPercent = (xhr.loaded / xhr.total) * 100;
-          loadingManager.updateProgress(progressPercent, `${fileName}: ${progressPercent.toFixed(0)}% ロード完了`);
-        }
-        console.log(`${fileName}: ${(xhr.loaded / xhr.total * 100).toFixed(0)}% ロード完了`);
-      }, error => {
-        // エラー時の処理
-        loadingManager.updateProgress(100, 'エラーが発生しました。再読み込みしてください。');
-        if (isBlobUrl) URL.revokeObjectURL(modelUrl);
-        reject(error);
       });
-    });
+
+      // バウンディングボックス計算とスケール・位置調整
+      updateLoadingProgress(loaderId, 60, 'モデルのサイズを調整中...');
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      
+      if (config.onModelLoaded) {
+        config.onModelLoaded(size);
+      }
+
+      const maxSize = Math.max(size.x, size.y, size.z);
+      let scale = 1.0;
+      if (isFinite(maxSize) && maxSize > 1e-6) {
+        const targetSize = config.markerMode ? 0.5 : 2.0;
+        scale = targetSize / maxSize;
+        scale = isFinite(scale) ? scale : 1.0;
+      }
+      
+      scale = Math.max(0.01, Math.min(100, scale));
+      model.scale.set(scale, scale, scale);
+
+      // モデルの位置を調整
+      box.setFromObject(model);
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      
+      if (center && isFinite(center.x) && isFinite(center.y) && isFinite(center.z) &&
+          box && box.min && isFinite(box.min.y)) {
+        model.position.sub(center);
+        model.position.y -= box.min.y;
+      } else {
+        model.position.set(0, 0, 0);
+      }
+
+      const modelData = createModelData(model, storedObjectUrl, fileName, fileSize);
+      modelData.position.copy(model.position);
+      modelData.rotation.copy(model.rotation);
+      modelData.scale.copy(model.scale);
+      modelList.push(modelData);
+
+      updateLoadingProgress(loaderId, 80, 'モデルを配置中...');
+      scene.add(model);
+      
+      // ローディング完了 - 即時非表示
+      updateLoadingProgress(loaderId, 100, 'モデルの読み込みが完了しました');
+      hideLoading(loaderId, 0); // 遅延なしで非表示
+      
+      return modelList.length - 1;
+    } catch (error) {
+      console.error('モデル読み込みエラー:', error);
+      
+      // エラー時のクリーンアップ
+      if (createdObjectUrl) {
+        URL.revokeObjectURL(createdObjectUrl);
+      }
+      
+      // エラーメッセージを表示
+      updateLoadingProgress(loaderId, 0, `エラーが発生しました: ${error.message}`);
+      hideLoading(loaderId, 0); // エラー時も即時非表示
+      
+      throw error;
+    }
   }
 
   // モデルの表示・非表示制御
@@ -658,11 +732,15 @@ export function initARViewer(containerId, options = {}) {
   const modelControls = {
     loadNewModel: async (modelSource, fileName, fileSize) => {
       try {
+        loadingManager.showLoadingScreen();
         const index = await loadModel(modelSource, fileName, fileSize);
         setActiveModel(index);
         return index;
       } catch (error) {
+        console.error("モデル読み込み失敗:", error);
         throw error;
+      } finally {
+        loadingManager.hideLoadingScreen();
       }
     },
     switchToModel: (index) => setActiveModel(index),
@@ -902,15 +980,18 @@ export function initARViewer(containerId, options = {}) {
       if (renderer.domElement && container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
+      
+      // ローディング画面のクリーンアップを追加
+      cleanupLoading();
     },
     // 正面ビューにリセットするメソッドを追加
     resetToFrontView: () => {
       resetCameraToFrontView();
     },
     // ローディング画面の手動制御用関数を追加
-    showLoadingScreen: loadingManager.showLoadingScreen,
-    hideLoadingScreen: loadingManager.hideLoadingScreen,
-    updateLoadingProgress: loadingManager.updateProgress
+    showLoadingScreen: () => loadingManager.showLoadingScreen(),
+    hideLoadingScreen: () => loadingManager.hideLoadingScreen(),
+    updateLoadingProgress: (percent, message) => loadingManager.updateProgress(percent, message)
   };
 
   return {

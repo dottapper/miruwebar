@@ -1,0 +1,154 @@
+/* プレビュー領域の修正 */
+.loading-screen-editor .preview-panel {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--background-color-dark, #1a1a1a);
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 600px; /* プレビューパネルの最小高さを設定 */
+}
+
+/* プレビューヘッダー */
+.loading-screen-editor .preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0; /* マージンを削除して余分なスペースを防ぐ */
+  flex-shrink: 0;
+  min-height: 58px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color, #333);
+}
+
+.loading-screen-editor .preview-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-color, #fff);
+}
+
+/* 向き設定エリア */
+.loading-screen-editor .preview-orientation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.loading-screen-editor .orientation-toggle {
+  display: flex;
+  gap: 8px;
+  background-color: var(--background-color-light, #2a2a2a);
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.loading-screen-editor .orientation-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-color, #fff);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loading-screen-editor .orientation-button.active {
+  background-color: var(--background-color-lighter, #3a3a3a);
+}
+
+.loading-screen-editor .orientation-button:hover {
+  background-color: var(--background-color-lighter, #3a3a3a);
+}
+
+.loading-screen-editor .orientation-button svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0.8;
+}
+
+/* プレビューコンテナ自体の余白と位置調整 */
+.loading-screen-editor .preview-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 450px;
+  padding: 20px;
+  box-sizing: border-box;
+  background-color: var(--background-color-light, #2a2a2a);
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* スマホフレームの基本スタイル */
+.loading-screen-editor .smartphone-frame {
+  position: relative;
+  transform-origin: center center;
+  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+  /* margin: auto を削除 - Flexboxによる中央揃えを使用 */
+}
+
+/* 縦向きスマホの安定した位置決め */
+.loading-screen-editor .smartphone-frame.portrait {
+  width: 280px;
+  height: 560px;
+  transform: scale(0.9);
+}
+
+/* 横向きスマホの安定した位置決め */
+.loading-screen-editor .smartphone-frame.landscape {
+  width: 560px;
+  height: 280px;
+  transform: rotate(90deg) scale(0.9);
+  margin: 140px 0; /* 回転時の余白調整は維持 */
+}
+
+/* フッターボタンの改善 */
+.loading-screen-editor .fixed-footer {
+  padding: 16px 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  background-color: var(--background-color, #1f1f1f);
+  border-top: 1px solid var(--border-color, #333);
+  position: sticky;
+  bottom: 0;
+}
+
+.loading-screen-editor .fixed-footer button {
+  padding: 10px 24px;
+  min-width: 100px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+/* 戻るボタン */
+.loading-screen-editor .fixed-footer .cancel-button {
+  background-color: var(--background-color-light, #2a2a2a);
+  color: var(--text-color, #fff);
+}
+
+.loading-screen-editor .fixed-footer .cancel-button:hover {
+  background-color: var(--background-color-lighter, #3a3a3a);
+}
+
+/* 保存ボタン */
+.loading-screen-editor .fixed-footer .save-button {
+  background-color: var(--accent-color, #7856ff);
+  color: white;
+}
+
+.loading-screen-editor .fixed-footer .save-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+} 

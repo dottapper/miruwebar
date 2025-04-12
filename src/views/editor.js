@@ -189,36 +189,36 @@ export function showEditor(container) {
           </div></div></div></div>`;
 
   // --- DOM要素取得 (HTML生成後に行う) ---
-  const modelFileInput = document.getElementById('model-file-input');
-  const uploadButton = document.getElementById('upload-model');
-  const uploadArea = document.getElementById('model-upload-area');
-  const fileListContainer = document.querySelector('.file-list'); // ファイル一覧表示エリア
-  const totalFileSizeElement = document.getElementById('total-file-size');
-  const markerThumbnail = document.getElementById('marker-thumbnail'); // マーカーモード時のみ存在
-  const changeMarkerButton = document.getElementById('change-marker'); // マーカーモード時のみ存在
-  const backButton = document.getElementById('back-to-projects');
-  const saveButton = document.getElementById('save-button');
-  const shareButton = document.getElementById('share-button');
-  const previewButton = document.getElementById('preview-button');
-  const qrcodeButton = document.getElementById('qrcode-button');
-  const scaleSlider = document.getElementById('scale-slider');
-  const scaleValue = document.getElementById('scale-value');
-  const scaleSizeLabel = document.getElementById('scale-size-label');
-  const resetScaleButton = document.getElementById('reset-scale-button');
-  const rotationSlider = document.getElementById('rotation-slider');
-  const rotationValue = document.getElementById('rotation-value');
-  const positionXSlider = document.getElementById('position-x');
-  const positionYSlider = document.getElementById('position-y');
-  const positionZSlider = document.getElementById('position-z');
-  const positionXValue = document.getElementById('position-x-value');
-  const positionYValue = document.getElementById('position-y-value');
-  const positionZValue = document.getElementById('position-z-value');
-  const arScaleSlider = document.getElementById('ar-scale');
-  const arScaleValue = document.getElementById('ar-scale-value');
-  const translateButton = document.querySelector('button[data-mode="translate"]');
-  const rotateButton = document.querySelector('button[data-mode="rotate"]');
-  const scaleButton = document.querySelector('button[data-mode="scale"]');
-  const arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
+  let modelFileInput = document.getElementById('model-file-input');
+  let uploadButton = document.getElementById('upload-model');
+  let uploadArea = document.getElementById('model-upload-area');
+  let fileListContainer = document.querySelector('.file-list'); // ファイル一覧表示エリア
+  let totalFileSizeElement = document.getElementById('total-file-size');
+  let markerThumbnail = document.getElementById('marker-thumbnail'); // マーカーモード時のみ存在
+  let changeMarkerButton = document.getElementById('change-marker'); // マーカーモード時のみ存在
+  let backButton = document.getElementById('back-to-projects');
+  let saveButton = document.getElementById('save-button');
+  let shareButton = document.getElementById('share-button');
+  let previewButton = document.getElementById('preview-button');
+  let qrcodeButton = document.getElementById('qrcode-button');
+  let scaleSlider = document.getElementById('scale-slider');
+  let scaleValue = document.getElementById('scale-value');
+  let scaleSizeLabel = document.getElementById('scale-size-label');
+  let resetScaleButton = document.getElementById('reset-scale-button');
+  let rotationSlider = document.getElementById('rotation-slider');
+  let rotationValue = document.getElementById('rotation-value');
+  let positionXSlider = document.getElementById('position-x');
+  let positionYSlider = document.getElementById('position-y');
+  let positionZSlider = document.getElementById('position-z');
+  let positionXValue = document.getElementById('position-x-value');
+  let positionYValue = document.getElementById('position-y-value');
+  let positionZValue = document.getElementById('position-z-value');
+  let arScaleSlider = document.getElementById('ar-scale');
+  let arScaleValue = document.getElementById('ar-scale-value');
+  let translateButton = document.querySelector('button[data-mode="translate"]');
+  let rotateButton = document.querySelector('button[data-mode="rotate"]');
+  let scaleButton = document.querySelector('button[data-mode="scale"]');
+  let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
 
   // --- 状態管理変数 ---
   let totalFileSize = 0;
@@ -226,16 +226,146 @@ export function showEditor(container) {
   let originalModelSize = { width: 0, height: 0, depth: 0 }; // モデルの元サイズ
 
   // --- ARビューアー初期化 ---
-  const viewerInstance = initARViewer('ar-viewer', {
-    markerMode: isMarkerMode,
-    showGrid: true,
-    onModelLoaded: (size) => {
-      originalModelSize = { width: size.x, height: size.y, depth: size.z };
-      // モデルロード時に現在のスライダー値でサイズ表示を更新
-      const currentScale = scaleSlider ? parseFloat(scaleSlider.value) : 1.0;
-      updateRealSizeDisplay(currentScale);
+  let viewerInstance = null;
+  
+  (async () => {
+    try {
+      viewerInstance = await initARViewer('ar-viewer', {
+        markerMode: isMarkerMode,
+        showGrid: true,
+        onModelLoaded: (size) => {
+          originalModelSize = { width: size.x, height: size.y, depth: size.z };
+          // モデルロード時に現在のスライダー値でサイズ表示を更新
+          const currentScale = scaleSlider ? parseFloat(scaleSlider.value) : 1.0;
+          updateRealSizeDisplay(currentScale);
+        }
+      });
+  
+      // ビューアーの初期化が完了したら、イベントリスナーを設定
+      setupEventListeners();
+    } catch (error) {
+      console.error('ARビューアーの初期化に失敗しました:', error);
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'error-message';
+      errorMessage.textContent = 'ARビューアーの初期化に失敗しました。ページを再読み込みしてください。';
+      if (arViewerContainer) {
+        arViewerContainer.appendChild(errorMessage);
+      }
     }
-  });
+  })();
+
+  // アップロードボタンのクリックハンドラ
+  function handleUploadButtonClick() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.glb,.gltf';
+    fileInput.style.display = 'none';
+    
+    fileInput.onchange = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      try {
+        // ファイルサイズを取得（MB単位）
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        
+        // モデルを読み込む
+        const modelIndex = await viewerInstance.controls.loadNewModel(file, file.name, fileSizeMB);
+        
+        // ファイルリストに追加
+        const objectUrl = URL.createObjectURL(file);
+        const fileItem = createFileListItem(file, objectUrl, modelIndex);
+        
+        // 空のメッセージを削除
+        const emptyText = fileListContainer.querySelector('.empty-text');
+        if (emptyText) {
+          emptyText.remove();
+        }
+        
+        // ファイルリストに追加
+        fileListContainer.appendChild(fileItem);
+        
+        // 合計ファイルサイズを更新
+        totalFileSize += file.size;
+        updateTotalFileSizeDisplay();
+        
+        console.log(`モデル "${file.name}" (${fileSizeMB}MB) を読み込みました`);
+      } catch (error) {
+        console.error('モデルのアップロードに失敗しました:', error);
+        alert('モデルのアップロードに失敗しました: ' + error.message);
+      }
+    };
+    
+    fileInput.click();
+  }
+
+  // イベントリスナーのセットアップを関数にまとめる
+  function setupEventListeners() {
+    // マーカー画像設定 (マーカーモード時)
+    if (isMarkerMode && markerThumbnail) {
+      const markerImageUrl = localStorage.getItem('markerImageUrl');
+      if (markerImageUrl) {
+        markerThumbnail.src = markerImageUrl;
+        // ビューアにも反映
+        if (viewerInstance?.controls?.setMarkerTexture) {
+           viewerInstance.controls.setMarkerTexture(markerImageUrl);
+        }
+      }
+      // マーカー変更ボタンのリスナー設定
+      if (changeMarkerButton) {
+          changeMarkerButton.addEventListener('click', () => {
+            showMarkerUpload();
+            window.addEventListener('markerUploaded', handleMarkerUploaded, { once: true });
+          });
+      }
+    }
+
+    // GLBモデルアップロード (ファイル選択ボタン)
+    if (uploadButton && modelFileInput) {
+      uploadButton.addEventListener('click', handleUploadButtonClick);
+    }
+
+    // GLBモデルアップロード (ドラッグ＆ドロップ)
+    if (uploadArea) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.addEventListener(eventName, handleDragEvent);
+      });
+      uploadArea.addEventListener('dragenter', handleDragEnter);
+      uploadArea.addEventListener('dragleave', handleDragLeave);
+      uploadArea.addEventListener('drop', handleDrop);
+    }
+
+    // スケール・回転・位置スライダー
+    if (scaleSlider) scaleSlider.addEventListener('input', handleScaleChange);
+    if (resetScaleButton) resetScaleButton.addEventListener('click', handleScaleReset);
+    if (rotationSlider) rotationSlider.addEventListener('input', handleRotationChange);
+    if (arScaleSlider) arScaleSlider.addEventListener('input', handleArScaleChange);
+    if (positionXSlider) positionXSlider.addEventListener('input', updatePosition);
+    if (positionYSlider) positionYSlider.addEventListener('input', updatePosition);
+    if (positionZSlider) positionZSlider.addEventListener('input', updatePosition);
+
+    // 変形モードボタン
+    setupTransformControls();
+
+    // 正面ビューリセットボタン
+    const resetFrontViewButton = document.getElementById('reset-front-view-button');
+    if (resetFrontViewButton) resetFrontViewButton.addEventListener('click', handleResetFrontView);
+
+    // バックボタン
+    if (backButton) {
+      backButton.addEventListener('click', () => {
+        window.location.hash = '#/projects';
+      });
+    }
+
+    // QRコードボタン
+    if (qrcodeButton) qrcodeButton.addEventListener('click', handleQRCodeButtonClick);
+
+    // 保存ボタン
+    if (saveButton) {
+      // ... existing code for save button ...
+    }
+  }
 
   // --- 関数定義 ---
 
@@ -266,9 +396,7 @@ export function showEditor(container) {
       // リセット後、再度ファイル選択ボタンにリスナーを設定する必要がある
       const newUploadButton = document.getElementById('upload-model');
       if (newUploadButton && modelFileInput) {
-        newUploadButton.addEventListener('click', () => {
-          modelFileInput.click();
-        });
+        newUploadButton.addEventListener('click', handleUploadButtonClick);
       }
     }
   }
@@ -443,423 +571,357 @@ export function showEditor(container) {
       if (activeButton) activeButton.classList.add('active');
     };
 
-    transformButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const mode = button.dataset.mode;
-            if (mode && viewerInstance.controls.setTransformMode(mode)) {
-                setActiveButton(button);
-                console.log(`Transform mode set to: ${mode}`);
-            }
-        });
-    });
+    // イベントハンドラー関数を保持する変数を定義
+    const handleTranslateClick = () => {
+      if (viewerInstance?.controls?.setTransformMode('translate')) {
+        setActiveButton(translateButton);
+        console.log('Transform mode set to: translate');
+      }
+    };
+
+    const handleRotateClick = () => {
+      if (viewerInstance?.controls?.setTransformMode('rotate')) {
+        setActiveButton(rotateButton);
+        console.log('Transform mode set to: rotate');
+      }
+    };
+
+    const handleScaleClick = () => {
+      if (viewerInstance?.controls?.setTransformMode('scale')) {
+        setActiveButton(scaleButton);
+        console.log('Transform mode set to: scale');
+      }
+    };
+
+    // イベントリスナーを設定
+    translateButton.addEventListener('click', handleTranslateClick);
+    rotateButton.addEventListener('click', handleRotateClick);
+    scaleButton.addEventListener('click', handleScaleClick);
+
+    // クリーンアップ用に関数を保存
+    translateButton._cleanup = handleTranslateClick;
+    rotateButton._cleanup = handleRotateClick;
+    scaleButton._cleanup = handleScaleClick;
 
     // 初期状態
     viewerInstance.controls.setTransformMode('translate');
     setActiveButton(translateButton);
   }
 
-  // --- イベントリスナー設定 ---
+  // モデルファイル変更ハンドラ
+  const handleModelFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-  // マーカー画像設定 (マーカーモード時)
-  if (isMarkerMode && markerThumbnail) {
-    const markerImageUrl = localStorage.getItem('markerImageUrl');
-    if (markerImageUrl) {
-      markerThumbnail.src = markerImageUrl;
-      // ビューアにも反映
-      if (viewerInstance?.controls?.setMarkerTexture) {
-         viewerInstance.controls.setMarkerTexture(markerImageUrl);
-      }
+    // ファイルサイズチェック (50MB制限)
+    const maxSize = 50 * 1024 * 1024; // 50MB in bytes
+    if (file.size > maxSize) {
+      alert('ファイルサイズが大きすぎます。50MB以下のファイルを選択してください。');
+      resetUploadArea();
+      return;
     }
-    // マーカー変更ボタンのリスナー設定
-    if (changeMarkerButton) {
-        changeMarkerButton.addEventListener('click', () => {
-          showMarkerUpload(); // モーダル表示
 
-          // マーカーがアップロードされたらサムネイルとビューアを更新するイベントリスナー
-          // (showMarkerUpload側で 'markerUploaded' イベントを発火させる想定)
-          window.addEventListener('markerUploaded', (event) => {
-            if (event.detail && event.detail.markerImageUrl) {
-                 const newMarkerUrl = event.detail.markerImageUrl;
-                 if (markerThumbnail) {
-                     markerThumbnail.src = newMarkerUrl;
-                 }
-                 if (viewerInstance?.controls?.setMarkerTexture) {
-                     viewerInstance.controls.setMarkerTexture(newMarkerUrl);
-                 }
-                 // localStorageにも保存（オプション）
-                 // localStorage.setItem('markerImageUrl', newMarkerUrl);
-            }
-          }, { once: true }); // 一度だけ実行
+    // ファイル形式チェック
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      alert('GLB形式のファイルのみアップロード可能です。');
+      resetUploadArea();
+      return;
+    }
+
+    try {
+      // ローディング表示
+      uploadArea.classList.add('loading');
+      
+      // ファイルをARビューワーに読み込む
+      const modelIndex = await viewerInstance.controls.loadNewModel(URL.createObjectURL(file), file.name, file.size);
+      
+      if (modelIndex !== undefined) {
+        // ファイルリストに追加
+        const objectUrl = URL.createObjectURL(file);
+        const fileItem = createFileListItem(file, objectUrl, modelIndex);
+        fileListContainer.appendChild(fileItem);
+        
+        // 合計ファイルサイズ表示を更新
+        totalFileSize += file.size;
+        updateTotalFileSizeDisplay();
+        
+        // アップロードエリアをリセット
+        resetUploadArea();
+        
+        // 新しいファイルをアクティブに
+        fileListContainer.querySelectorAll('.file-item.active').forEach(activeItem => {
+          activeItem.classList.remove('active');
         });
+        fileItem.classList.add('active');
+      }
+    } catch (error) {
+      console.error('モデル読み込みエラー:', error);
+      alert('モデルの読み込み中にエラーが発生しました。');
+      resetUploadArea();
+    } finally {
+      // ローディング表示を解除
+      uploadArea.classList.remove('loading');
+      // 入力をリセット
+      event.target.value = '';
     }
-  }
+  };
 
-  // GLBモデルアップロード (ファイル選択ボタン)
-  if (uploadButton && modelFileInput) {
-    uploadButton.addEventListener('click', () => {
-      modelFileInput.click(); // input type="file" をクリックさせる
-    });
-  }
+  const handleDragEvent = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
 
-  // GLBモデルアップロード (ファイルが選択された時)
-  if (modelFileInput && viewerInstance?.controls?.loadNewModel && fileListContainer) {
-    modelFileInput.addEventListener('change', async (event) => { // asyncキーワードを追加
-      if (event.target.files && event.target.files.length > 0) {
-        const file = event.target.files[0];
+  const handleDragEnter = () => uploadArea.classList.add('highlight');
+  const handleDragLeave = () => uploadArea.classList.remove('highlight');
 
-        if (file.name.endsWith('.glb')) {
-          // ファイルサイズチェック
-          if (totalFileSize + file.size > MAX_TOTAL_SIZE) {
-            alert('合計ファイルサイズが50MBを超えています。');
-            modelFileInput.value = ''; // 選択をリセット
-            return;
-          }
-
-          const objectUrl = URL.createObjectURL(file); // ファイルからURLを生成
-
-          try {
-             // ★★★ モデルを非同期でロードし、完了後にインデックスを取得 ★★★
-             const modelIndex = await viewerInstance.controls.loadNewModel(objectUrl, file.name, file.size);
-             console.log(`モデル "${file.name}" をインデックス ${modelIndex} でロードしました`);
-
-             // ファイル一覧の既存の空テキストを削除 (あれば)
-             const emptyText = fileListContainer.querySelector('.empty-text');
-             if (emptyText) {
-               emptyText.remove();
-             }
-
-             // ★★★ ファイル一覧アイテムを作成し、DOMに追加＆リスナー設定 ★★★
-             const fileItem = createFileListItem(file, objectUrl, modelIndex);
-             fileListContainer.appendChild(fileItem);
-
-             // 合計ファイルサイズを更新して表示
-             totalFileSize += file.size;
-             updateTotalFileSizeDisplay();
-
-             // アップロードエリアを初期状態に戻す
-             resetUploadArea();
-
-             // 他のアイテムのアクティブ状態を解除し、新しいアイテムをアクティブに
-             fileListContainer.querySelectorAll('.file-item.active').forEach(activeItem => {
-                 activeItem.classList.remove('active');
-             });
-             fileItem.classList.add('active'); // 新しく追加したものをアクティブに
-
-             // ビューアのカメラを調整（オプション）
-             // if (viewerInstance.controls.resetCamera) viewerInstance.controls.resetCamera();
-
-
-          } catch (error) {
-             // モデルロードやDOM操作中にエラーが発生した場合
-             console.error("モデルのロードまたはファイルリストへの追加中にエラー:", error);
-             alert(`モデル「${file.name}」の読み込みに失敗しました。`);
-             URL.revokeObjectURL(objectUrl); // エラー時は生成したURLを解放
-          } finally {
-             // 処理後（成功・失敗問わず）inputの選択をリセット
-             modelFileInput.value = '';
-          }
-
-        } else {
-          // GLBファイル以外が選択された場合
-          alert('GLB形式のファイルを選択してください。');
-          modelFileInput.value = ''; // 選択をリセット
+  const handleDrop = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const dropArea = event.currentTarget;
+    dropArea.classList.remove('dragover');
+    
+    if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+      const file = event.dataTransfer.files[0];
+      if (file.name.endsWith('.glb')) {
+        // ファイルサイズチェック
+        if (totalFileSize + file.size > MAX_TOTAL_SIZE) {
+          alert(`合計ファイルサイズが50MBを超えています。\n現在の使用量: ${(totalFileSize / (1024 * 1024)).toFixed(2)}MB\n追加しようとしたファイル: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+          return;
         }
-      }
-    }); // modelFileInput change listener の終わり
-  } // if (modelFileInput...) の終わり
 
+        const objectUrl = URL.createObjectURL(file);
+        let modelIndex = null;
 
-  // GLBモデルアップロード (ドラッグ＆ドロップ)
-  if (uploadArea && modelFileInput) {
-      // ドラッグイベントのデフォルト動作をキャンセル
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }, false);
-      });
-      // ドラッグ中に入ったらハイライト
-      ['dragenter', 'dragover'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => uploadArea.classList.add('highlight'));
-      });
-      // ドラッグが離れたらハイライト解除
-      ['dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('highlight'));
-      });
-      // ドロップされた時の処理
-      uploadArea.addEventListener('drop', (e) => {
-        const file = e.dataTransfer?.files[0]; // ドロップされたファイルを取得
-        if (file) {
-          // ファイル選択時の処理を再利用
-          try {
-             // input要素にドロップされたファイルを設定
-             const dataTransfer = new DataTransfer();
-             dataTransfer.items.add(file);
-             modelFileInput.files = dataTransfer.files;
-             // changeイベントを手動で発火させる
-             const changeEvent = new Event('change', { bubbles: true });
-             modelFileInput.dispatchEvent(changeEvent);
-          } catch (error) {
-              console.error("ドラッグ&ドロップでのファイル処理中にエラー:", error);
-              alert('ファイルの処理中にエラーが発生しました。');
-          }
-        } else {
-            console.warn("ドロップされたファイルが見つかりません。");
-        }
-      });
-  } // if (uploadArea...) の終わり
-
-
-  // --- その他のイベントリスナー ---
-
-  // ヘッダーのボタン
-  if (backButton) {
-    backButton.addEventListener('click', () => window.location.hash = '#/projects');
-  }
-  
-  // QRコードボタン
-  if (qrcodeButton) {
-    qrcodeButton.addEventListener('click', () => {
-      // 選択中のモデル名を取得
-      let selectedModelName = 'sample';
-      
-      if (viewerInstance?.controls?.getActiveModelInfo) {
-        const activeModel = viewerInstance.controls.getActiveModelInfo();
-        if (activeModel) {
-          selectedModelName = activeModel.fileName || 'model';
-        }
-      }
-      
-      // QRコードモーダルを表示
-      showQRCodeModal({
-        modelName: selectedModelName
-      });
-    });
-  }
-  
-  if (saveButton) {
-    saveButton.addEventListener('click', () => {
-      // URLからプロジェクトIDを取得（編集モードかどうか判断するため）
-      const projectId = urlParams.get('id');
-      let currentProjectName = '';
-      let currentProjectDesc = '';
-      
-      // 編集モードの場合、既存のプロジェクト情報を取得
-      if (projectId) {
-        const existingProject = getProject(projectId);
-        if (existingProject) {
-          currentProjectName = existingProject.name;
-          currentProjectDesc = existingProject.description;
-        }
-      }
-      
-      // 保存モーダルを表示
-      showSaveProjectModal({
-        isEdit: !!projectId,
-        projectId: projectId,
-        currentName: currentProjectName,
-        currentDescription: currentProjectDesc
-      }, (projectData) => {
         try {
-          // 現在のARタイプと設定を取得
-          const arScale = arScaleSlider ? parseFloat(arScaleSlider.value) : 1.0;
-          
-          // マーカー画像情報（マーカーモードの場合のみ）
-          const markerImage = isMarkerMode && markerThumbnail ? markerThumbnail.src : null;
-          
-          // 保存するデータを構築
-          const saveData = {
-            ...projectData,
-            type: arType,
-            arScale: arScale,
-            markerImage: markerImage
-          };
-          
-          // プロジェクトを保存
-          const savedProject = saveProject(saveData, viewerInstance);
-          
-          // 保存成功通知を表示
-          const notification = document.createElement('div');
-          notification.className = 'notification success';
-          notification.textContent = 'プロジェクトを保存しました';
-          document.body.appendChild(notification);
-          
-          // 通知は自動的にアニメーションで消えるが、念のためタイマーでも削除
-          setTimeout(() => {
-            if (document.body.contains(notification)) {
-              document.body.removeChild(notification);
-            }
-          }, 3000);
-          
-          // 保存後はプロジェクト一覧画面に遷移
-          setTimeout(() => {
-            window.location.hash = '#/projects';
-          }, 1000);
-          
+          // ドロップ時のローディングインジケータを表示
+          const loadingIndicator = document.createElement('div');
+          loadingIndicator.className = 'loading-indicator';
+          loadingIndicator.textContent = 'モデルを読み込んでいます...';
+          fileListContainer.appendChild(loadingIndicator);
+
+          modelIndex = await viewerInstance.controls.loadNewModel(objectUrl, file.name, file.size);
+          console.log(`モデル "${file.name}" をインデックス ${modelIndex} でロードしました`);
+
+          const emptyText = fileListContainer.querySelector('.empty-text');
+          if (emptyText) {
+            emptyText.remove();
+          }
+
+          const fileItem = createFileListItem(file, objectUrl, modelIndex);
+          fileListContainer.appendChild(fileItem);
+
+          totalFileSize += file.size;
+          updateTotalFileSizeDisplay();
+
+          resetUploadArea();
+
+          fileListContainer.querySelectorAll('.file-item.active').forEach(activeItem => {
+            activeItem.classList.remove('active');
+          });
+          fileItem.classList.add('active');
+
         } catch (error) {
-          console.error('プロジェクト保存エラー:', error);
+          console.error("モデルのロードまたはファイルリストへの追加中にエラー:", error);
           
-          // エラー通知を表示
-          const notification = document.createElement('div');
-          notification.className = 'notification error';
-          notification.textContent = 'プロジェクトの保存に失敗しました';
-          document.body.appendChild(notification);
+          // エラーの種類に応じて異なるメッセージを表示
+          let errorMessage = 'モデルの読み込みに失敗しました。';
+          if (error.message.includes('format')) {
+            errorMessage = 'ファイル形式が正しくないか、破損している可能性があります。';
+          } else if (error.message.includes('memory')) {
+            errorMessage = 'メモリ不足のため、モデルを読み込めませんでした。';
+          }
           
-          setTimeout(() => {
-            if (document.body.contains(notification)) {
-              document.body.removeChild(notification);
+          alert(`モデル「${file.name}」の読み込みに失敗しました。\n${errorMessage}\n詳細: ${error.message}`);
+          
+          // エラーが発生した場合のクリーンアップ
+          if (modelIndex !== null && viewerInstance?.controls?.removeModel) {
+            try {
+              viewerInstance.controls.removeModel(modelIndex);
+            } catch (cleanupError) {
+              console.error("モデル削除中のエラー:", cleanupError);
             }
-          }, 3000);
+          }
+          URL.revokeObjectURL(objectUrl);
+        } finally {
+          // ローディングインジケータを削除
+          const loadingIndicator = fileListContainer.querySelector('.loading-indicator');
+          if (loadingIndicator) {
+            loadingIndicator.remove();
+          }
         }
-      });
-    });
-  }
-  if (shareButton) {
-    shareButton.addEventListener('click', () => {
-      // 選択中のモデル名を取得
-      let selectedModelName = 'sample';
-      
-      if (viewerInstance?.controls?.getActiveModelInfo) {
-        const activeModel = viewerInstance.controls.getActiveModelInfo();
-        if (activeModel) {
-          selectedModelName = activeModel.fileName || 'model';
-        }
+      } else {
+        alert('GLB形式のファイルをドロップしてください。\n現在のファイル形式: ' + file.name.split('.').pop());
       }
-      
-      // QRコードモーダルを表示
-      showQRCodeModal({
-        modelName: selectedModelName
-      });
-    });
-  }
-  if (previewButton) {
-    previewButton.addEventListener('click', () => {
-        // プレビュー用のURLを生成して新しいタブで開くなどの処理
-        alert('ARプレビュー機能（要実装）');
-    });
-  }
-
-  // TransformControls (ビューア) からの変更イベントを購読
-  if (arViewerContainer) {
-    arViewerContainer.addEventListener('transformChanged', (e) => {
-      if (!e.detail) return;
-      const { position, rotation, scale } = e.detail; // ビューアから送られてくるデータ
-
-      // スケール関連UI更新
-      if (scaleSlider && scaleValue) {
-        // スライダーには平均スケールなどを反映させるか、XYZ個別に持つか設計による
-        const avgScale = (scale.x + scale.y + scale.z) / 3;
-        scaleSlider.value = avgScale.toFixed(1);
-        scaleValue.textContent = avgScale.toFixed(1);
-        updateRealSizeDisplay(avgScale); // 実寸表示も更新
-      }
-      // XYZ個別表示の更新
-      const scaleXVal = document.getElementById('scale-x-value');
-      const scaleYVal = document.getElementById('scale-y-value');
-      const scaleZVal = document.getElementById('scale-z-value');
-      if(scaleXVal) scaleXVal.textContent = scale.x.toFixed(2);
-      if(scaleYVal) scaleYVal.textContent = scale.y.toFixed(2);
-      if(scaleZVal) scaleZVal.textContent = scale.z.toFixed(2);
-
-      // 回転関連UI更新 (Y軸のみ)
-      if (rotationSlider && rotationValue) {
-        const yRotDeg = rotation.y; // arViewer.js が度(degree)で返す前提
-        const normalizedRot = Math.round(yRotDeg + 360) % 360; // 0-359の範囲に正規化
-        rotationSlider.value = normalizedRot;
-        rotationValue.textContent = `${normalizedRot}°`;
-      }
-
-      // 位置関連UI更新
-      if (positionXSlider && positionXValue) {
-        positionXSlider.value = position.x.toFixed(1);
-        positionXValue.textContent = position.x.toFixed(1);
-      }
-      if (positionYSlider && positionYValue) {
-        positionYSlider.value = position.y.toFixed(1);
-        positionYValue.textContent = position.y.toFixed(1);
-      }
-      if (positionZSlider && positionZValue) {
-        positionZSlider.value = position.z.toFixed(1);
-        positionZValue.textContent = position.z.toFixed(1);
-      }
-    });
-  } // if (arViewerContainer) の終わり
-
-  // --- モデル調整UIからのイベントリスナー ---
-
-  // スケールスライダー
-  if (scaleSlider) {
-    scaleSlider.addEventListener('input', () => {
-      if (!viewerInstance?.controls?.setScale) return;
-      const value = parseFloat(scaleSlider.value);
-      if (scaleValue) scaleValue.textContent = value.toFixed(1);
-      viewerInstance.controls.setScale(value); // ビューアに変更を通知
-      updateRealSizeDisplay(value); // 実寸表示も更新
-    });
-  }
-  // スケールリセットボタン
-  if (resetScaleButton) {
-    resetScaleButton.addEventListener('click', () => {
-      if (viewerInstance?.controls?.resetScaleRatio) {
-        viewerInstance.controls.resetScaleRatio(); // ビューアにリセットを依頼
-        console.log('スケール比率をリセットしました。');
-        // transformChanged イベント経由でUIが更新されるはず
-      }
-    });
-  }
-  // 回転スライダー
-  if (rotationSlider) {
-    rotationSlider.addEventListener('input', () => {
-      if (!viewerInstance?.controls?.setRotationY) return;
-      const value = parseInt(rotationSlider.value, 10);
-      if (rotationValue) rotationValue.textContent = `${value}°`;
-      viewerInstance.controls.setRotationY(value); // ビューアに変更を通知
-    });
-  }
-  // 位置スライダー (共通関数 updatePosition を使用)
-  if (positionXSlider) positionXSlider.addEventListener('input', updatePosition);
-  if (positionYSlider) positionYSlider.addEventListener('input', updatePosition);
-  if (positionZSlider) positionZSlider.addEventListener('input', updatePosition);
-
-  // AR設定スライダー
-  if (arScaleSlider && arScaleValue) {
-    arScaleSlider.addEventListener('input', () => {
-      const value = parseFloat(arScaleSlider.value).toFixed(1);
-      arScaleValue.textContent = value;
-      localStorage.setItem('arScale', value); // プレビュー用にlocalStorageに保存
-    });
-    // 初期値をlocalStorageから読み込む（オプション）
-    const savedArScale = localStorage.getItem('arScale');
-    if (savedArScale) {
-        arScaleSlider.value = savedArScale;
-        arScaleValue.textContent = parseFloat(savedArScale).toFixed(1);
     }
-  }
+  };
 
-  // 正面ビューボタンのイベントリスナー
-  if (document.getElementById('reset-front-view-button')) {
-    document.getElementById('reset-front-view-button').addEventListener('click', () => {
-      if (viewerInstance?.controls?.resetToFrontView) {
-        viewerInstance.controls.resetToFrontView();
+  const handleScaleChange = () => {
+    if (!viewerInstance?.controls?.setScale) return;
+    const value = parseFloat(scaleSlider.value);
+    if (scaleValue) scaleValue.textContent = value.toFixed(1);
+    viewerInstance.controls.setScale(value);
+    updateRealSizeDisplay(value);
+  };
+
+  const handleScaleReset = () => {
+    if (viewerInstance?.controls?.resetScaleRatio) {
+      viewerInstance.controls.resetScaleRatio();
+      console.log('スケール比率をリセットしました。');
+    }
+  };
+
+  const handleRotationChange = () => {
+    if (!viewerInstance?.controls?.setRotationY) return;
+    const value = parseInt(rotationSlider.value, 10);
+    if (rotationValue) rotationValue.textContent = `${value}°`;
+    viewerInstance.controls.setRotationY(value);
+  };
+
+  const handleArScaleChange = () => {
+    const value = parseFloat(arScaleSlider.value).toFixed(1);
+    if (arScaleValue) arScaleValue.textContent = value;
+    localStorage.setItem('arScale', value);
+  };
+
+  const handleResetFrontView = () => {
+    if (viewerInstance?.controls?.resetToFrontView) {
+      viewerInstance.controls.resetToFrontView();
+    }
+  };
+
+  const handleMarkerUploaded = (event) => {
+    if (event.detail && event.detail.markerImageUrl) {
+      const newMarkerUrl = event.detail.markerImageUrl;
+      if (markerThumbnail) {
+        markerThumbnail.src = newMarkerUrl;
       }
-    });
-  }
+      if (viewerInstance?.controls?.setMarkerTexture) {
+        viewerInstance.controls.setMarkerTexture(newMarkerUrl);
+      }
+    }
+  };
+
+  const handleQRCodeButtonClick = () => {
+    let selectedModelName = 'sample';
+    if (viewerInstance?.controls?.getActiveModelInfo) {
+      const activeModel = viewerInstance.controls.getActiveModelInfo();
+      if (activeModel) {
+        selectedModelName = activeModel.fileName || 'model';
+      }
+    }
+    showQRCodeModal({ modelName: selectedModelName });
+  };
 
   // --- 初期化処理 ---
-  setupTransformControls(); // 操作モードボタンの初期設定
   updateTotalFileSizeDisplay(); // 初期ファイルサイズ表示 (0MBのはず)
 
   // --- クリーンアップ関数 ---
   // このビューが表示されなくなったときに呼ばれるべき関数を返す
   return () => {
     console.log("エディタービューのクリーンアップを実行します。");
+    
+    // ARビューアのリソースを解放
     if (viewerInstance && viewerInstance.dispose) {
-      viewerInstance.dispose(); // Three.js関連のリソースを解放
+      try {
+        viewerInstance.dispose();
+        console.log("ARビューアのリソースを解放しました。");
+      } catch (error) {
+        console.error("ARビューアのリソース解放中にエラー:", error);
+      }
     }
-    // ここで、この関数内で追加した他のイベントリスナーも解除することが望ましい
-    // 例: window.removeEventListener('markerUploaded', ...);
-    // 例: 各ボタンの removeEventListener など
-    // (ただし、要素ごとDOMから削除されるなら不要な場合も多い)
+
+    // ファイルリストの各アイテムのObjectURLを解放
+    if (fileListContainer) {
+      fileListContainer.querySelectorAll('.file-item').forEach(fileItem => {
+        const objectUrl = fileItem.dataset.objectUrl;
+        if (objectUrl && objectUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
+      });
+    }
+
+    // イベントリスナーを解除
+    if (uploadButton && modelFileInput) {
+      uploadButton.removeEventListener('click', handleUploadButtonClick);
+    }
+
+    if (uploadArea) {
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        uploadArea.removeEventListener(eventName, handleDragEvent);
+      });
+      uploadArea.removeEventListener('dragenter', handleDragEnter);
+      uploadArea.removeEventListener('dragleave', handleDragLeave);
+      uploadArea.removeEventListener('drop', handleDrop);
+    }
+
+    if (scaleSlider) {
+      scaleSlider.removeEventListener('input', handleScaleChange);
+    }
+
+    if (resetScaleButton) {
+      resetScaleButton.removeEventListener('click', handleScaleReset);
+    }
+
+    if (rotationSlider) {
+      rotationSlider.removeEventListener('input', handleRotationChange);
+    }
+
+    if (positionXSlider) positionXSlider.removeEventListener('input', updatePosition);
+    if (positionYSlider) positionYSlider.removeEventListener('input', updatePosition);
+    if (positionZSlider) positionZSlider.removeEventListener('input', updatePosition);
+
+    if (arScaleSlider) {
+      arScaleSlider.removeEventListener('input', handleArScaleChange);
+    }
+
+    const resetFrontViewButton = document.getElementById('reset-front-view-button');
+    if (resetFrontViewButton) {
+      resetFrontViewButton.removeEventListener('click', handleResetFrontView);
+    }
+
+    // 変換モードボタンのイベントリスナーを正しく解除
+    if (translateButton && translateButton._cleanup) {
+      translateButton.removeEventListener('click', translateButton._cleanup);
+    }
+    if (rotateButton && rotateButton._cleanup) {
+      rotateButton.removeEventListener('click', rotateButton._cleanup);
+    }
+    if (scaleButton && scaleButton._cleanup) {
+      scaleButton.removeEventListener('click', scaleButton._cleanup);
+    }
+
+    // DOM要素の参照をクリア
+    modelFileInput = null;
+    uploadArea = null;
+    fileListContainer = null;
+    totalFileSizeElement = null;
+    markerThumbnail = null;
+    changeMarkerButton = null;
+    backButton = null;
+    saveButton = null;
+    shareButton = null;
+    previewButton = null;
+    scaleSlider = null;
+    scaleValue = null;
+    scaleSizeLabel = null;
+    resetScaleButton = null;
+    rotationSlider = null;
+    rotationValue = null;
+    positionXSlider = null;
+    positionYSlider = null;
+    positionZSlider = null;
+    positionXValue = null;
+    positionYValue = null;
+    positionZValue = null;
+    arScaleSlider = null;
+    arScaleValue = null;
+    translateButton = null;
+    rotateButton = null;
+    scaleButton = null;
+    arViewerContainer = null;
+
+    console.log("エディタービューのクリーンアップが完了しました。");
   };
 
 } // export function showEditor の終わり
