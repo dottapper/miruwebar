@@ -216,200 +216,159 @@
   color: var(--text-color, #fff);
 }
 
-/* プレビューパネル */
-.loading-screen-editor .preview-panel {
-  display: flex;
-  flex-direction: column;
-  padding: 20px;
-  height: 100%;
-  overflow-y: auto;
-  background-color: var(--background-color-light, #2a2a2a);
-  border-radius: 12px;
-}
-
-.loading-screen-editor .preview-orientation {
+/* プレビューヘッダー部分の固定 */
+.loading-screen-editor__preview-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--background-color-dark);
+  padding: 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.loading-screen-editor .preview-container {
+/* 向き切替ボタンのコンテナを横並びに固定 */
+.loading-screen-editor__orientation-toggle {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* 向き切替ボタンのスタイル改善 */
+.loading-screen-editor__orientation-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--background-color-light);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  font-weight: 500;
+  min-width: 110px;
+  justify-content: center;
+  will-change: transform, opacity, background-color;
+}
+
+.loading-screen-editor__orientation-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  background-color: var(--background-color-lighter);
+}
+
+.loading-screen-editor__orientation-button:active {
+  transform: translateY(0);
+}
+
+.loading-screen-editor__orientation-button--active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #ffffff;
+}
+
+/* スマホフレームコンテナの修正 */
+.loading-screen-editor__phone-container {
   flex: 1;
   display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  min-height: 450px;
-  background-color: var(--background-color-light, #2a2a2a);
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 16px;
-}
-
-.loading-screen-editor .preview-panel h2 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text-color, #fff);
-  flex-shrink: 0;
-}
-
-.loading-screen-editor .preview-orientation label {
-  font-size: 14px;
-  color: var(--text-color-secondary, #999);
-}
-
-.loading-screen-editor .orientation-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.loading-screen-editor .orientation-button {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  border: none;
-  border-radius: 6px;
-  background-color: var(--background-color, #1f1f1f);
-  color: var(--text-color, #ffffff);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.loading-screen-editor .orientation-button.active {
-  background-color: var(--primary-color, #6366f1);
-}
-
-.loading-screen-editor .orientation-button:hover {
-  opacity: 0.9;
-}
-
-/* スマートフォンフレーム */
-.loading-screen-editor .smartphone-frame {
+  padding: 24px;
+  background-color: var(--background-color-darkest);
+  height: 570px;
+  min-height: 570px;
+  overflow: hidden;
   position: relative;
-  background-color: #222;
-  border-radius: 36px;
-  padding: 8px;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
-  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
-  margin: 0 auto;
-  transform-origin: center center;
+  transition: all var(--transition-normal);
+  will-change: transform;
 }
 
-.loading-screen-editor .smartphone-frame.portrait {
+/* 横向きスマホフレームのスタイル */
+.loading-screen-editor__phone-frame {
   width: 280px;
   height: 560px;
-  transform: rotate(0deg) scale(1);
-}
-
-.loading-screen-editor .smartphone-frame.landscape {
-  width: 560px;
-  height: 280px;
-  transform: rotate(0deg) scale(1);
-}
-
-/* スマートフォン画面 */
-.loading-screen-editor .smartphone-screen {
-  width: 100%;
-  height: 100%;
   background-color: #000;
-  border-radius: 32px;
+  border-radius: 36px;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+  border: 8px solid #1e1e1e;
+  transition: all var(--transition-smooth);
+  transform-origin: center center;
+  will-change: transform, width, height;
 }
 
-/* プレビューコンテンツラッパー */
-.loading-screen-editor .preview-content-wrapper {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
+.loading-screen-editor__phone-frame--landscape {
+  width: 560px;
+  height: 280px;
+  transform: rotate(0deg);
 }
 
-/* プレビューコンテンツ */
-.loading-screen-editor .loading-screen-preview {
-  position: absolute;
-  top: 0;
-  left: 0;
+/* プレビュー画面のコンテンツ */
+.loading-screen-editor__preview-screen {
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   padding: 20px;
   box-sizing: border-box;
-  text-align: center;
-}
-
-/* プレビューコンテンツのスタイル */
-.loading-screen-editor .preview-logo {
-  max-width: 80px;
-  max-height: 80px;
-  width: auto;
-  height: auto;
-  margin-bottom: 20px;
-  object-fit: contain;
-}
-
-.loading-screen-editor .preview-brand {
-  font-size: clamp(18px, 4vw, 24px);
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.loading-screen-editor .preview-subtitle {
-  font-size: clamp(14px, 3vw, 16px);
-  margin-bottom: 24px;
-  opacity: 0.8;
-}
-
-.loading-screen-editor .preview-progress {
-  width: min(200px, 80%);
-  height: 4px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 16px;
+  transition: all var(--transition-smooth);
   position: relative;
+  transform: rotate(0deg) !important;
+  will-change: transform, opacity;
+  opacity: 1;
 }
 
-.loading-screen-editor .preview-bar {
-  height: 100%;
-  width: 0%;
-  background-color: var(--accent-color, #7856ff);
-  transition: width 0.3s ease;
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-
-.loading-screen-editor .preview-text {
-  font-size: 14px;
-  opacity: 0.9;
-  transition: all 0.3s ease;
-}
-
-/* フッター */
-.loading-screen-editor .fixed-footer {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin-top: auto;
-  padding: 16px 0;
-  border-top: 1px solid var(--border-color, #333);
+/* 横向きモード時のコンテンツスタイル調整 */
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-screen {
+  transform: rotate(0deg) !important;
   display: flex;
-  justify-content: flex-end;
-  gap: 16px;
-  background-color: var(--background-color, #1f1f1f);
-  z-index: 100;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px;
+  gap: 32px;
 }
 
-.loading-screen-editor .fixed-footer button {
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-title,
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-subtitle,
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-message {
+  transform: rotate(0deg) !important;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-progress {
+  transform: rotate(0deg) !important;
+  width: 100%;
+}
+
+/* エラーメッセージの非表示 */
+.loading-screen-editor .runtime-error {
+  display: none !important;
+}
+
+/* ボタンスタイルの改善 */
+.loading-screen-editor__button {
   padding: 12px 24px;
   min-width: 120px;
   border: none;
@@ -417,343 +376,82 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all var(--transition-normal);
   text-align: center;
-  margin: 0 4px;
 }
 
-.loading-screen-editor .fixed-footer .cancel-button {
-  background-color: var(--background-color-light, #2a2a2a);
-  color: var(--text-color, #fff);
+/* プライマリーボタン */
+.loading-screen-editor__button--primary {
+  background-color: var(--accent-color);
+  color: #ffffff;
 }
 
-.loading-screen-editor .fixed-footer .reset-button {
-  background-color: var(--background-color-light, #2a2a2a);
-  color: var(--text-color, #fff);
+.loading-screen-editor__button--primary:hover {
+  background-color: #5b4dd1;
 }
 
-.loading-screen-editor .fixed-footer .save-button {
-  background-color: var(--accent-color, #7856ff);
-  color: white;
+/* セカンダリーボタン */
+.loading-screen-editor__button--secondary {
+  background-color: var(--background-color-light);
+  color: var(--text-color);
 }
 
-.loading-screen-editor .fixed-footer button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+.loading-screen-editor__button--secondary:hover {
+  background-color: var(--background-color-lighter);
 }
 
-.loading-screen-editor .fixed-footer button:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-
-/* レスポンシブ対応 */
-@media (max-width: 1024px) {
-  .loading-screen-editor {
-    margin: 0;
-    min-height: 100vh;
-    border-radius: 0;
-    padding: 16px;
-  }
-
-  .loading-screen-editor .editor-container {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .loading-screen-editor .preview-panel,
-  .loading-screen-editor .settings-panel {
-    max-height: none;
-    height: auto;
-  }
-  
-  .loading-screen-editor .smartphone-frame.portrait {
-    width: 240px;
-    height: 480px;
-  }
-  
-  .loading-screen-editor .smartphone-frame.landscape {
-    width: 480px;
-    height: 240px;
-  }
-}
-
-@media (max-width: 768px) {
-  .loading-screen-editor {
-    padding: 12px;
-  }
-  
-  .loading-screen-editor .settings-panel,
-  .loading-screen-editor .preview-panel {
-    padding: 16px;
-  }
-  
-  .loading-screen-editor .fixed-footer {
-    padding: 12px 0 0;
-    gap: 12px;
-  }
-  
-  .loading-screen-editor .fixed-footer button {
-    padding: 10px 16px;
-    min-width: 100px;
-  }
-  
-  .loading-screen-editor .smartphone-frame.portrait {
-    width: 200px;
-    height: 400px;
-  }
-  
-  .loading-screen-editor .smartphone-frame.landscape {
-    width: 400px;
-    height: 200px;
-  }
-  
-  .loading-screen-editor .preview-container {
-    min-height: 350px;
-  }
-}
-
-/* ダークモード対応 */
-@media (prefers-color-scheme: dark) {
-  .loading-screen-editor {
-    --background-color: #1f1f1f;
-    --background-color-light: #2a2a2a;
-    --text-color: #ffffff;
-    --border-color: #333;
-  }
-}
-
-/* スクロールバーのスタイル */
-.loading-screen-editor ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.loading-screen-editor ::-webkit-scrollbar-track {
-  background: var(--background-color, #1f1f1f);
+/* アウトラインボタン */
+.loading-screen-editor__button--outline {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 8px 16px;
   border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.loading-screen-editor ::-webkit-scrollbar-thumb {
-  background: var(--border-color, #333);
-  border-radius: 4px;
+.loading-screen-editor__button--outline:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
 }
 
-.loading-screen-editor ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-color-secondary, #999);
-}
-
-/* アニメーション速度クラス */
-.loading-screen-editor .animation-slow {
-  --animation-speed: 2s;
-}
-
-.loading-screen-editor .animation-normal {
-  --animation-speed: 1s;
-}
-
-.loading-screen-editor .animation-fast {
-  --animation-speed: 0.5s;
-}
-
-/* アニメーションプレビュー用のクラス */
-.loading-screen-editor .fade-animation {
-  animation: fadeAnimation var(--animation-speed, 1s) ease;
-}
-
-.loading-screen-editor .slide-animation {
-  animation: slideAnimation var(--animation-speed, 1s) ease;
-}
-
-.loading-screen-editor .zoom-animation {
-  animation: zoomAnimation var(--animation-speed, 1s) ease;
-}
-
-.loading-screen-editor .pulse-animation {
-  animation: pulseAnimation var(--animation-speed, 1s) infinite;
-}
-
-.loading-screen-editor .bounce-animation {
-  animation: bounceAnimation var(--animation-speed, 1s) infinite;
-}
-
-.loading-screen-editor .spin-animation .preview-logo {
-  animation: spinAnimation var(--animation-speed, 1s) infinite linear;
-}
-
-.loading-screen-editor .wave-animation {
-  animation: waveAnimation var(--animation-speed, 1s) infinite;
-}
-
-@keyframes fadeAnimation {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
-@keyframes slideAnimation {
-  0% { transform: translateY(30px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes zoomAnimation {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-@keyframes pulseAnimation {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-@keyframes bounceAnimation {
-  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-20px); }
-  60% { transform: translateY(-10px); }
-}
-
-@keyframes spinAnimation {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes waveAnimation {
-  0% { transform: translateY(0); }
-  25% { transform: translateY(-10px); }
-  50% { transform: translateY(0); }
-  75% { transform: translateY(10px); }
-  100% { transform: translateY(0); }
-}
-
-/* アニメーションプレビューボタンコンテナ */
-.loading-screen-editor .animation-preview-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 0 20px;
-  flex-wrap: wrap;
-}
-
-.loading-screen-editor .animation-preview-buttons button {
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  background-color: var(--background-color, #fff);
-  color: var(--text-color, #333);
-  border: 1px solid var(--border-color, #e0e0e0);
-  height: 40px;
-  min-width: 100px;
-  transition: all 0.2s;
-}
-
-.loading-screen-editor .animation-preview-buttons button:hover {
-  background-color: #f0f0f0;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-}
-
-.loading-screen-editor .animation-preview-buttons button.active {
-  background-color: var(--accent-color, #7856ff);
-  color: white;
-  border-color: var(--accent-color, #7856ff);
-}
-
-.editor-loading-preview {
+/* フッターの改善 */
+.loading-screen-editor__fixed-footer {
   position: relative;
-  width: 100%;
-  height: 100%;
-  min-height: 300px;
+  z-index: 100;
+  margin-top: auto;
+  background-color: var(--background-color-dark);
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(0, 0, 0, 0.85);
-  color: white;
-  border-radius: 8px;
-  overflow: hidden;
+  justify-content: flex-end;
+  gap: 16px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.editor-preview-logo {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
-  margin-bottom: 20px;
-}
-
-.editor-preview-brand {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 10px;
-  text-align: center;
-}
-
-.editor-preview-subtitle {
-  font-size: 16px;
-  margin-bottom: 20px;
-  opacity: 0.8;
-  text-align: center;
-}
-
-.editor-preview-progress {
-  width: 200px;
-  height: 4px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 15px;
-}
-
-.editor-preview-bar {
-  width: 70%;
-  height: 100%;
-  background-color: #00a8ff;
-  transition: width 0.3s ease;
-}
-
-.editor-preview-text {
-  font-size: 14px;
-  opacity: 0.9;
-  text-align: center;
-}
-
-/* アニメーション */
-.loading-screen-editor .smartphone-frame {
-  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease, margin 0.3s ease;
-}
-
-.loading-screen-editor .smartphone-frame.transition-complete {
-  transition: none;
-}
-
-/* プレビューコンテナのアニメーション */
-.loading-screen-editor .preview-container {
-  transition: all 0.3s ease;
-}
-
-/* 方向切り替えアニメーション */
-.loading-screen-editor .smartphone-frame {
-  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease, margin 0.3s ease;
-}
-
-/* プレビュー要素のレスポンシブ調整 */
-.loading-screen-editor .preview-logo {
-  max-width: 80px;
-  max-height: 80px;
-  width: auto;
-  height: auto;
-}
-
-.loading-screen-editor .preview-brand {
-  font-size: clamp(18px, 4vw, 24px);
-}
-
-.loading-screen-editor .preview-subtitle {
-  font-size: clamp(14px, 3vw, 16px);
-}
-
-.loading-screen-editor .preview-progress {
-  width: min(200px, 80%);
+/* モバイル対応の強化 */
+@media (max-width: 768px) {
+  .loading-screen-editor__content-container {
+    height: auto;
+    max-height: 60vh;
+  }
+  
+  .loading-screen-editor__main-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  
+  .loading-screen-editor__main-tab {
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+  
+  .loading-screen-editor__form-group {
+    margin-bottom: 16px;
+  }
 }
 
 /* ローディング完了時のスタイル */
@@ -779,4 +477,884 @@
 
 .loading-screen-editor .loading-screen-preview.loading-complete .preview-bar {
   animation: none;
+}
+
+/* ローディング画面エディタのスタイル定義 */
+
+:root {
+  /* カラーパレット */
+  --background-color-darkest: #121212;
+  --background-color-dark: #1a1a1a;
+  --background-color-light: #2a2a2a;
+  --background-color-lighter: #3a3a3a;
+  --text-color: #ffffff;
+  --text-color-muted: #aaaaaa;
+  --border-color: #333333;
+  --accent-color: #6c5ce7;
+  --error-color: #dc3545;
+  --success-color: #28a745;
+
+  /* スペーシング */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* トランジション */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+  --transition-smooth: 500ms cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* その他 */
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+
+  --editor-primary-color: #4a90e2;
+  --editor-secondary-color: #f5f5f5;
+  --editor-border-color: #e0e0e0;
+  --editor-text-color: #333;
+  --editor-hover-color: #357abd;
+  --editor-transition: all 0.3s ease;
+}
+
+/* ベースコンテナ */
+.loading-screen-editor {
+  background-color: var(--background-color-darkest);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ヘッダー */
+.loading-screen-editor__header {
+  padding: 16px 24px;
+  font-size: 20px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--background-color-dark);
+}
+
+/* メインコンテナ */
+.loading-screen-editor__container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) 2fr;
+  gap: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 992px) {
+  .loading-screen-editor__container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+}
+
+/* 設定パネル */
+.loading-screen-editor__settings-panel {
+  flex: 0 0 400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-color);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.loading-screen-editor__settings-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.loading-screen-editor__settings-panel::-webkit-scrollbar-track {
+  background: var(--background-color-dark);
+}
+
+.loading-screen-editor__settings-panel::-webkit-scrollbar-thumb {
+  background-color: var(--background-color-lighter);
+  border-radius: 4px;
+}
+
+/* メインタブ */
+.loading-screen-editor__main-tabs {
+  display: flex;
+  background: var(--surface-color-light);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__main-tab {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__main-tab:hover {
+  color: var(--accent-color);
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+.loading-screen-editor__main-tab--active {
+  color: var(--accent-color);
+  border-bottom: 3px solid var(--accent-color);
+  background-color: transparent;
+}
+
+/* サブタブ */
+.loading-screen-editor__sub-tabs {
+  display: flex;
+  padding: 8px;
+  gap: 8px;
+  background: var(--surface-color-light);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__sub-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__sub-tab:hover {
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+.loading-screen-editor__sub-tab--active {
+  color: var(--accent-color);
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+/* コンテンツエリア */
+.loading-screen-editor__content-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.loading-screen-editor__main-content {
+  display: none;
+}
+
+.loading-screen-editor__main-content--active {
+  display: block;
+}
+
+.loading-screen-editor__sub-content {
+  display: none;
+}
+
+.loading-screen-editor__sub-content--active {
+  display: block;
+}
+
+/* フォームグループのスタイル */
+.loading-screen-editor__form-group {
+  margin-bottom: 20px;
+}
+
+.loading-screen-editor__label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.loading-screen-editor__input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-color);
+  background: var(--input-background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+}
+
+/* カラー入力のスタイル */
+.loading-screen-editor__color-input {
+  display: flex;
+  gap: 8px;
+}
+
+.loading-screen-editor__color-picker {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ファイルドロップゾーンのスタイル */
+.loading-screen-editor__file-preview {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__drop-zone--dragover {
+  background-color: rgba(108, 92, 231, 0.1);
+  border-color: var(--accent-color);
+}
+
+.loading-screen-editor__drop-zone-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.loading-screen-editor__drop-zone-text {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.loading-screen-editor__drop-zone-subtext {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  margin-bottom: 8px;
+}
+
+.loading-screen-editor__supported-formats {
+  font-size: 12px;
+  color: var(--text-color-tertiary);
+}
+
+.loading-screen-editor__remove-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-color);
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__remove-button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* プレビューパネルのスタイル */
+.loading-screen-editor__preview-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-color);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.loading-screen-editor__preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__preview-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.loading-screen-editor__orientation-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.loading-screen-editor__orientation-button {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: var(--text-color-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__orientation-button:hover {
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.loading-screen-editor__orientation-button--active {
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+  background: rgba(108, 92, 231, 0.1);
+}
+
+/* プレビュー画面のスタイル */
+.loading-screen-editor__phone-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+.loading-screen-editor__phone-frame {
+  position: relative;
+  width: 360px;
+  height: 640px;
+  background: #000;
+  border-radius: 32px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.loading-screen-editor__phone-frame--landscape {
+  width: 640px;
+  height: 360px;
+}
+
+.loading-screen-editor__phone-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.loading-screen-editor__preview-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+/* フッターのスタイル */
+.loading-screen-editor__fixed-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  background: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.loading-screen-editor__button--primary {
+  color: #fff;
+  background: var(--accent-color);
+}
+
+.loading-screen-editor__button--primary:hover {
+  background: var(--accent-color-dark);
+}
+
+.loading-screen-editor__button--secondary {
+  color: var(--text-color);
+  background: transparent;
+  border: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__button--secondary:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* CSS変数の定義 */
+:root {
+  --background-color: #121212;
+  --surface-color: #1E1E1E;
+  --surface-color-light: #2D2D2D;
+  --text-color: #FFFFFF;
+  --text-color-secondary: rgba(255, 255, 255, 0.7);
+  --text-color-tertiary: rgba(255, 255, 255, 0.5);
+  --accent-color: #6c5ce7;
+  --accent-color-dark: #5849c4;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --input-background: #2D2D2D;
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loading-screen-editor__main-content--active,
+.loading-screen-editor__sub-content--active {
+  animation: fadeIn 0.3s ease;
+}
+
+/* レスポンシブ対応の改善 */
+@media (max-width: 1400px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: rotate(90deg) scale(0.85);
+  }
+}
+
+@media (max-width: 1200px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: scale(0.9);
+  }
+}
+
+@media (max-width: 992px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 768px) {
+  .loading-screen-editor__container {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+  }
+  
+  .loading-screen-editor__settings-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    max-height: 50vh;
+  }
+  
+  .loading-screen-editor__phone-container {
+    min-height: 400px;
+  }
+  
+  .loading-screen-editor__phone-frame {
+    width: 240px;
+    height: 480px;
+    border-radius: 24px;
+    border-width: 6px;
+  }
+  
+  .loading-screen-editor__phone-frame--landscape {
+    width: 480px;
+    height: 240px;
+    transform: scale(0.7);
+  }
+  
+  .loading-screen-editor__preview-column--left {
+    padding-right: 8px;
+  }
+  
+  .loading-screen-editor__preview-column--right {
+    padding-left: 8px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .loading-screen-editor {
+    --background-color: #1a1a1a;
+    --background-color-light: #2a2a2a;
+    --text-color: #ffffff;
+    --border-color: #666666;
+  }
+}
+
+/* コンテンツコンテナの追加 */
+.loading-screen-editor__content-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  height: calc(100vh - 180px);
+}
+
+.loading-screen-editor__subcontent-container {
+  padding: 0;
+}
+
+/* プレビューエリアの修正 */
+.loading-screen-editor__preview-panel {
+  background-color: var(--background-color-dark);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-left: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__phone-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--background-color-darkest);
+  min-height: 500px;
+  overflow: hidden;
+  position: relative;
+  transition: all var(--transition-normal);
+}
+
+.loading-screen-editor__phone-frame {
+  width: 280px;
+  height: 560px;
+  background-color: #000;
+  border-radius: 36px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3);
+  border: 8px solid #1e1e1e;
+  transition: all var(--transition-smooth);
+  transform-origin: center center;
+}
+
+.loading-screen-editor__phone-frame--landscape {
+  width: 560px;
+  height: 280px;
+  transform: rotate(0deg);
+}
+
+/* プレビュー画面のコンテンツ */
+.loading-screen-editor__preview-screen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  transition: all var(--transition-smooth);
+}
+
+/* 横向きモード時のコンテンツ調整 */
+.loading-screen-editor__phone-frame--landscape .loading-screen-editor__preview-screen {
+  flex-direction: row;
+  gap: 32px;
+  padding: 32px;
+  transform: rotate(0deg) !important;
+}
+
+/* ボタンスタイルの改善 */
+.loading-screen-editor__button {
+  padding: 12px 24px;
+  min-width: 120px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  text-align: center;
+}
+
+/* プライマリーボタン */
+.loading-screen-editor__button--primary {
+  background-color: var(--accent-color);
+  color: #ffffff;
+}
+
+.loading-screen-editor__button--primary:hover {
+  background-color: #5b4dd1;
+}
+
+/* セカンダリーボタン */
+.loading-screen-editor__button--secondary {
+  background-color: var(--background-color-light);
+  color: var(--text-color);
+}
+
+.loading-screen-editor__button--secondary:hover {
+  background-color: var(--background-color-lighter);
+}
+
+/* アウトラインボタン */
+.loading-screen-editor__button--outline {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.loading-screen-editor__button--outline:hover {
+  background-color: rgba(108, 92, 231, 0.15);
+  border-color: var(--accent-color);
+}
+
+/* アイコンボタン */
+.loading-screen-editor__orientation-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--background-color-light);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.loading-screen-editor__orientation-button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  background-color: var(--background-color-lighter);
+}
+
+.loading-screen-editor__orientation-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.loading-screen-editor__orientation-button--active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #ffffff;
+}
+
+.loading-screen-editor__orientation-button--active:hover {
+  opacity: 0.95;
+  background-color: #5b4dd1;
+}
+
+/* フッターの改善 */
+.loading-screen-editor__fixed-footer {
+  position: relative;
+  z-index: 100;
+  margin-top: auto;
+  background-color: var(--background-color-dark);
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* モバイル対応の強化 */
+@media (max-width: 768px) {
+  .loading-screen-editor__content-container {
+    height: auto;
+    max-height: 60vh;
+  }
+  
+  .loading-screen-editor__main-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  
+  .loading-screen-editor__main-tab {
+    padding: 12px 8px;
+    font-size: 14px;
+  }
+  
+  .loading-screen-editor__form-group {
+    margin-bottom: 16px;
+  }
+}
+
+/* プレビューカラムのスタイル */
+.loading-screen-editor__preview-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.loading-screen-editor__preview-column--left {
+  padding-right: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.loading-screen-editor__preview-column--right {
+  padding-left: 16px;
+}
+
+/* スマホフレームの横向き表示の改善 */
+.loading-screen-editor__phone-frame {
+  transition: all var(--transition-smooth);
+  transform-origin: center center;
+  will-change: transform, width, height;
+}
+
+.loading-screen-editor__phone-frame--landscape {
+  width: 560px;
+  height: 280px;
+  transform: rotate(0deg); /* 回転をリセット */
+}
+
+/* プレビュー画面のトランジション改善 */
+.loading-screen-editor__preview-screen {
+  transition: all var(--transition-smooth);
+  will-change: transform, opacity;
+  opacity: 1;
+}
+
+/* プレビューコンテナの安定化 */
+.loading-screen-editor__phone-container {
+  height: 570px;
+  min-height: 570px;
+  transition: height var(--transition-normal);
+  will-change: height;
+}
+
+/* レスポンシブ対応の強化 */
+@media (max-width: 1200px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: scale(0.9);
+  }
+}
+
+@media (max-width: 992px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 768px) {
+  .loading-screen-editor__phone-frame--landscape {
+    transform: scale(0.7);
+  }
+  
+  .loading-screen-editor__preview-column--left {
+    padding-right: 8px;
+  }
+  
+  .loading-screen-editor__preview-column--right {
+    padding-left: 8px;
+  }
+}
+
+/* リセットボタンコンテナの改善 */
+.loading-screen-editor__reset-container {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px;
+  background-color: var(--background-color-dark);
+  border-top: 1px solid var(--border-color);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: auto;
+}
+
+/* プレビューカラムのスタイル */
+.preview-column-left,
+.preview-column-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.preview-column-left {
+  padding-right: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-column-right {
+  padding-left: 16px;
+}
+
+/* プレビュー要素のスタイル改善 */
+.loading-screen-editor__preview-title,
+.loading-screen-editor__preview-subtitle,
+.loading-screen-editor__preview-message {
+  width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  padding: 0;
+}
+
+.loading-screen-editor__preview-title {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.loading-screen-editor__preview-subtitle {
+  font-size: 16px;
+  opacity: 0.8;
+}
+
+.loading-screen-editor__preview-message {
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+/* コンテンツセクションの調整 */
+.loading-screen-editor__content-section {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 200px);
+  padding-bottom: 70px;
+}
+
+/* タブコンテンツのスクロール調整 */
+.loading-screen-editor__main-content,
+.loading-screen-editor__sub-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  position: relative;
+}
+
+/* フォームグループの間隔調整 */
+.loading-screen-editor__form-group {
+  margin-bottom: 24px;
+}
+
+/* 最後のフォームグループの下マージンを削除 */
+.loading-screen-editor__form-group:last-child {
+  margin-bottom: 0;
 } 

@@ -1,0 +1,673 @@
+/**
+ * ローディング画面エディタコンポーネント
+ */
+
+export default function showLoadingScreenEditor(container) {
+  // コンテナにベースクラスを追加
+  container.classList.add('loading-screen-editor');
+
+  // === 定数定義 ===
+  const defaultSettings = {
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    textColor: '#ffffff',
+    accentColor: '#007aff',
+    logo: null,
+    brandName: 'miru-WebAR',
+    subTitle: 'WebARエクスペリエンス',
+    loadingMessage: 'モデルを読み込んでいます...',
+    fontScale: 1.0,
+    startTitle: '無題のAR',
+    startButtonText: 'ARを開始',
+    startThumbnail: null,
+  };
+
+  const THUMBNAIL_FILE_LIMITS = {
+    maxSize: 2 * 1024 * 1024,
+    allowedTypes: ['image/jpeg', 'image/png'],
+    maxWidth: 1920,
+    maxHeight: 1080
+  };
+
+  // === 変数定義 ===
+  let currentSettings = { ...defaultSettings };
+  let logoFile = null;
+  let elements = {}; // DOM要素を格納するオブジェクト
+
+  // === テンプレート定義 ===
+  const startTabContent = `
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">タイトル</label>
+      <input type="text" class="loading-screen-editor__input" id="start-title" name="startTitle" placeholder="無題のAR">
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">開始ボタンテキスト</label>
+      <input type="text" class="loading-screen-editor__input" id="start-button-text" name="startButtonText" placeholder="ARを開始">
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">サムネイル画像</label>
+      <div class="loading-screen-editor__file-preview" id="start-thumbnail-preview">
+        <div class="loading-screen-editor__drop-zone">
+          <span class="loading-screen-editor__drop-zone-icon">📸</span>
+          <span class="loading-screen-editor__drop-zone-text">サムネイル画像をドロップ</span>
+          <span class="loading-screen-editor__drop-zone-subtext">または クリックしてファイルを選択</span>
+          <div class="loading-screen-editor__supported-formats">
+            対応形式: JPG, PNG (2MBまで)
+            <br>推奨サイズ: 1280x720px
+          </div>
+        </div>
+      </div>
+      <input type="file" id="start-thumbnail-upload" accept="image/jpeg,image/png" style="display: none;">
+    </div>
+  `;
+
+  const generalTabContent = `
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">背景色</label>
+      <div class="loading-screen-editor__color-group">
+        <input type="color" class="loading-screen-editor__color-picker" id="bg-color-picker" name="backgroundColor">
+        <input type="text" class="loading-screen-editor__input loading-screen-editor__color-text" id="bg-color-text" name="backgroundColorText" placeholder="rgba(0, 0, 0, 0.85)">
+      </div>
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">テキスト色</label>
+      <div class="loading-screen-editor__color-group">
+        <input type="color" class="loading-screen-editor__color-picker" id="text-color-picker" name="textColor">
+        <input type="text" class="loading-screen-editor__input loading-screen-editor__color-text" id="text-color-text" name="textColorText" placeholder="#ffffff">
+      </div>
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">アクセント色</label>
+      <div class="loading-screen-editor__color-group">
+        <input type="color" class="loading-screen-editor__color-picker" id="accent-color-picker" name="accentColor">
+        <input type="text" class="loading-screen-editor__input loading-screen-editor__color-text" id="accent-color-text" name="accentColorText" placeholder="#007aff">
+      </div>
+    </div>
+  `;
+
+  const textTabContent = `
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">ブランド名</label>
+      <input type="text" class="loading-screen-editor__input" name="brandName" placeholder="miru-WebAR">
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">サブタイトル</label>
+      <input type="text" class="loading-screen-editor__input" name="subTitle" placeholder="WebARエクスペリエンス">
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">ローディングメッセージ</label>
+      <input type="text" class="loading-screen-editor__input" name="loadingMessage" placeholder="モデルを読み込んでいます...">
+    </div>
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">フォントサイズ倍率</label>
+      <input type="range" class="loading-screen-editor__input loading-screen-editor__range" name="fontScale" min="0.5" max="2" step="0.1" value="1.0">
+      <div class="loading-screen-editor__range-value">1.0x</div>
+    </div>
+  `;
+
+  const animationTabContent = `
+    <div class="loading-screen-editor__form-group">
+      <label class="loading-screen-editor__label">アニメーション</label>
+      <select class="loading-screen-editor__input loading-screen-editor__select" name="animation">
+        <option value="fade">フェード</option>
+        <option value="slide">スライド</option>
+        <option value="zoom">ズーム</option>
+      </select>
+    </div>
+  `;
+
+  // === プレビューテンプレート定義 ===
+  const loadingPreviewTemplate = `
+    <div class="loading-screen-editor__loading-preview">
+      <div class="loading-screen-editor__logo">
+        <img src="" alt="Logo" class="loading-screen-editor__logo-image" style="display: none;">
+      </div>
+      <div class="loading-screen-editor__preview-text loading-screen-editor__brand-name"></div>
+      <div class="loading-screen-editor__preview-text loading-screen-editor__subtitle"></div>
+      <div class="loading-screen-editor__progress">
+        <div class="loading-screen-editor__progress-bar"></div>
+      </div>
+      <div class="loading-screen-editor__preview-text loading-screen-editor__loading-message"></div>
+    </div>
+  `;
+
+  const startPreviewTemplate = `
+    <div class="loading-screen-editor__start-preview">
+      <div class="loading-screen-editor__thumbnail-wrapper">
+        <img class="loading-screen-editor__thumbnail" src="" alt="サムネイル">
+      </div>
+      <div class="loading-screen-editor__start-content">
+        <div class="loading-screen-editor__preview-text loading-screen-editor__start-title"></div>
+        <button class="loading-screen-editor__start-button"></button>
+      </div>
+    </div>
+  `;
+
+  const editorTemplate = `
+    <div class="loading-screen-editor__container">
+      <div class="loading-screen-editor__settings">
+        <div class="loading-screen-editor__tabs" role="tablist">
+          <button class="loading-screen-editor__tab loading-screen-editor__tab--active" data-tab="start" role="tab" aria-selected="true" aria-controls="start-content">
+            初期画面
+          </button>
+          <button class="loading-screen-editor__tab" data-tab="general" role="tab" aria-selected="false" aria-controls="general-content">
+            カラー設定
+          </button>
+          <button class="loading-screen-editor__tab" data-tab="text" role="tab" aria-selected="false" aria-controls="text-content">
+            テキスト設定
+          </button>
+          <button class="loading-screen-editor__tab" data-tab="animation" role="tab" aria-selected="false" aria-controls="animation-content">
+            アニメーション設定
+          </button>
+        </div>
+        <div class="loading-screen-editor__tab-contents">
+          <div class="loading-screen-editor__tab-content loading-screen-editor__tab-content--active" id="start-content" data-tab="start" role="tabpanel">
+            ${startTabContent}
+          </div>
+          <div class="loading-screen-editor__tab-content" id="general-content" data-tab="general" role="tabpanel">
+            ${generalTabContent}
+          </div>
+          <div class="loading-screen-editor__tab-content" id="text-content" data-tab="text" role="tabpanel">
+            ${textTabContent}
+          </div>
+          <div class="loading-screen-editor__tab-content" id="animation-content" data-tab="animation" role="tabpanel">
+            ${animationTabContent}
+          </div>
+        </div>
+      </div>
+      <div class="loading-screen-editor__preview">
+        <div class="loading-screen-editor__preview-screen">
+          <div class="loading-screen-editor__phone-frame">
+            <div id="preview-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // === API定義 ===
+  const mockAPI = {
+    async getSettings() {
+      const storedSettings = localStorage.getItem('loadingScreenSettings');
+      if (storedSettings) {
+        try {
+          console.log('ローカルストレージから設定を読み込みました');
+          return JSON.parse(storedSettings);
+        } catch (e) {
+          console.error('ローカルストレージのデータのパースに失敗:', e);
+        }
+      }
+      console.log('デフォルト設定を使用します');
+      return { ...defaultSettings };
+    },
+
+    async saveSettings(data) {
+      try {
+        localStorage.setItem('loadingScreenSettings', JSON.stringify(data));
+        console.log('設定をローカルストレージに保存しました');
+        return { ...data, id: 1 };
+      } catch (e) {
+        console.error('ローカルストレージへの保存に失敗:', e);
+        throw e;
+      }
+    }
+  };
+
+  // === ヘルパー関数 ===
+  function isValidColor(strColor) {
+    const s = new Option().style;
+    s.color = strColor;
+    return s.color !== '';
+  }
+
+  function convertToHexColor(color) {
+    const s = new Option().style;
+    s.color = color;
+    return s.color;
+  }
+
+  function showLogoError(message, detail = '') {
+    if (!elements.filePreview) return;
+
+    const existingError = elements.filePreview.querySelector('.loading-screen-editor__error');
+    if (existingError) existingError.remove();
+
+    elements.filePreview.classList.add('loading-screen-editor__file-preview--error');
+
+    const errorElement = document.createElement('div');
+    errorElement.className = 'loading-screen-editor__error';
+    errorElement.innerHTML = `
+      <span class="loading-screen-editor__error-icon">⚠️</span>
+      <div class="loading-screen-editor__error-content">
+        <div class="loading-screen-editor__error-title">${message}</div>
+        ${detail ? `<div class="loading-screen-editor__error-detail">${detail}</div>` : ''}
+      </div>
+    `;
+    elements.filePreview.appendChild(errorElement);
+
+    setTimeout(() => {
+      if (errorElement.parentNode === elements.filePreview) {
+        errorElement.remove();
+        elements.filePreview.classList.remove('loading-screen-editor__file-preview--error');
+      }
+    }, 3000);
+  }
+
+  function showThumbnailError(message) {
+    if (!elements.thumbnailPreview) return;
+
+    const errorElement = document.createElement('div');
+    errorElement.className = 'loading-screen-editor__error';
+    errorElement.textContent = message;
+
+    const existingError = elements.thumbnailPreview.querySelector('.loading-screen-editor__error');
+    if (existingError) existingError.remove();
+
+    elements.thumbnailPreview.classList.add('loading-screen-editor__file-preview--error');
+    elements.thumbnailPreview.appendChild(errorElement);
+
+    setTimeout(() => {
+      elements.thumbnailPreview.classList.remove('loading-screen-editor__file-preview--error');
+      errorElement.remove();
+    }, 3000);
+  }
+
+  // === UI更新関数 ===
+  function updatePreviewStyles() {
+    if (!elements.previewScreen) return;
+
+    // CSS変数を設定
+    const root = elements.previewScreen;
+    root.style.setProperty('--background-color', currentSettings.backgroundColor);
+    root.style.setProperty('--text-color', currentSettings.textColor);
+    root.style.setProperty('--accent-color', currentSettings.accentColor);
+    root.style.setProperty('--font-scale', currentSettings.fontScale);
+
+    // アニメーションクラスを更新
+    const animationClasses = ['fade', 'slide', 'zoom'];
+    animationClasses.forEach(cls => {
+      root.classList.remove(`loading-screen-editor__preview--animation-${cls}`);
+    });
+    root.classList.add(`loading-screen-editor__preview--animation-${currentSettings.animation}`);
+  }
+
+  function updatePreview() {
+    if (!elements.previewScreen) return;
+
+    const brandName = elements.previewScreen.querySelector('.loading-screen-editor__brand-name');
+    const subTitle = elements.previewScreen.querySelector('.loading-screen-editor__subtitle');
+    const loadingMessage = elements.previewScreen.querySelector('.loading-screen-editor__loading-message');
+    const logoImg = elements.previewScreen.querySelector('.loading-screen-editor__logo-image');
+
+    if (brandName) brandName.textContent = currentSettings.brandName;
+    if (subTitle) subTitle.textContent = currentSettings.subTitle;
+    if (loadingMessage) loadingMessage.textContent = currentSettings.loadingMessage;
+
+    if (logoImg) {
+      if (currentSettings.logo) {
+        logoImg.src = currentSettings.logo;
+        logoImg.style.display = 'block';
+      } else {
+        logoImg.style.display = 'none';
+      }
+    }
+
+    updatePreviewStyles();
+  }
+
+  function updateStartPreview() {
+    if (!elements.previewScreen) return;
+
+    const thumbnail = elements.previewScreen.querySelector('.loading-screen-editor__thumbnail');
+    const title = elements.previewScreen.querySelector('.loading-screen-editor__start-title');
+    const button = elements.previewScreen.querySelector('.loading-screen-editor__start-button');
+    const thumbnailWrapper = elements.previewScreen.querySelector('.loading-screen-editor__thumbnail-wrapper');
+
+    if (thumbnail && thumbnailWrapper) {
+      if (currentSettings.startThumbnail) {
+        thumbnail.src = currentSettings.startThumbnail;
+        thumbnailWrapper.style.display = 'block';
+      } else {
+        thumbnailWrapper.style.display = 'none';
+      }
+    }
+
+    if (title) title.textContent = currentSettings.startTitle || defaultSettings.startTitle;
+    if (button) button.textContent = currentSettings.startButtonText || defaultSettings.startButtonText;
+
+    updatePreviewStyles();
+  }
+
+  // === イベントハンドラー ===
+  function handleTabClick(event) {
+    const tabButton = event.target.closest('.loading-screen-editor__tab');
+    if (!tabButton) return;
+
+    // タブボタンの状態を更新
+    elements.tabButtons.forEach(btn => {
+      btn.classList.remove('loading-screen-editor__tab--active');
+      btn.setAttribute('aria-selected', 'false');
+    });
+    tabButton.classList.add('loading-screen-editor__tab--active');
+    tabButton.setAttribute('aria-selected', 'true');
+
+    // タブコンテンツの表示を更新
+    const tabName = tabButton.dataset.tab;
+    elements.tabContents.forEach(content => {
+      content.classList.remove('loading-screen-editor__tab-content--active');
+    });
+
+    const activeContent = container.querySelector(`.loading-screen-editor__tab-content[data-tab="${tabName}"]`);
+    if (activeContent) {
+      activeContent.classList.add('loading-screen-editor__tab-content--active');
+    }
+
+    // プレビューパネルを更新
+    updatePreviewPanel(tabName);
+  }
+
+  function handleThumbnailFile(file) {
+    if (!THUMBNAIL_FILE_LIMITS.allowedTypes.includes(file.type)) {
+      showThumbnailError('JPEGまたはPNG形式のファイルを選択してください');
+      return;
+    }
+
+    if (file.size > THUMBNAIL_FILE_LIMITS.maxSize) {
+      showThumbnailError('ファイルサイズは2MB以下にしてください');
+      return;
+    }
+
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.src = e.target.result;
+      img.onload = () => {
+        if (img.width > THUMBNAIL_FILE_LIMITS.maxWidth || img.height > THUMBNAIL_FILE_LIMITS.maxHeight) {
+          showThumbnailError(`画像サイズは${THUMBNAIL_FILE_LIMITS.maxWidth}x${THUMBNAIL_FILE_LIMITS.maxHeight}px以下にしてください`);
+          return;
+        }
+
+        currentSettings.startThumbnail = e.target.result;
+        updateStartPreview();
+
+        if (elements.thumbnailPreview) {
+          elements.thumbnailPreview.classList.add('has-file');
+          const dropZoneContent = elements.thumbnailPreview.querySelector('.drop-zone-content');
+          if (dropZoneContent) {
+            dropZoneContent.innerHTML = `
+              <img src="${e.target.result}" alt="サムネイル" style="max-height: 100px; max-width: 100%;">
+              <span class="sub-text">クリックして画像を変更</span>
+            `;
+          }
+        }
+      };
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  // === セットアップ関数 ===
+  function setupColorInputs() {
+    if (!elements.backgroundColorPicker || !elements.backgroundColorText ||
+        !elements.textColorPicker || !elements.textColorText ||
+        !elements.accentColorPicker || !elements.accentColorText) return;
+
+    // カラーピッカーの初期値を設定
+    elements.backgroundColorPicker.value = convertToHexColor(currentSettings.backgroundColor);
+    elements.textColorPicker.value = convertToHexColor(currentSettings.textColor);
+    elements.accentColorPicker.value = convertToHexColor(currentSettings.accentColor);
+
+    // テキスト入力の初期値を設定
+    elements.backgroundColorText.value = currentSettings.backgroundColor;
+    elements.textColorText.value = currentSettings.textColor;
+    elements.accentColorText.value = currentSettings.accentColor;
+
+    // カラーピッカーの変更イベント
+    const handleColorPickerChange = (picker, text, settingKey) => {
+      return () => {
+        const color = picker.value;
+        if (isValidColor(color)) {
+          text.value = color;
+          currentSettings[settingKey] = color;
+          updatePreviewStyles();
+        }
+      };
+    };
+
+    // テキスト入力の変更イベント
+    const handleColorTextChange = (text, picker, settingKey) => {
+      return () => {
+        const color = text.value;
+        if (isValidColor(color)) {
+          picker.value = convertToHexColor(color);
+          currentSettings[settingKey] = color;
+          updatePreviewStyles();
+        }
+      };
+    };
+
+    // イベントリスナーを設定
+    elements.backgroundColorPicker.addEventListener('input', 
+      handleColorPickerChange(elements.backgroundColorPicker, elements.backgroundColorText, 'backgroundColor'));
+    elements.textColorPicker.addEventListener('input',
+      handleColorPickerChange(elements.textColorPicker, elements.textColorText, 'textColor'));
+    elements.accentColorPicker.addEventListener('input',
+      handleColorPickerChange(elements.accentColorPicker, elements.accentColorText, 'accentColor'));
+
+    elements.backgroundColorText.addEventListener('input',
+      handleColorTextChange(elements.backgroundColorText, elements.backgroundColorPicker, 'backgroundColor'));
+    elements.textColorText.addEventListener('input',
+      handleColorTextChange(elements.textColorText, elements.textColorPicker, 'textColor'));
+    elements.accentColorText.addEventListener('input',
+      handleColorTextChange(elements.accentColorText, elements.accentColorPicker, 'accentColor'));
+  }
+
+  function setupTextInputs() {
+    if (!elements.brandNameInput || !elements.subTitleInput || 
+        !elements.loadingMessageInput || !elements.fontScaleInput) return;
+
+    // 初期値を設定
+    elements.brandNameInput.value = currentSettings.brandName;
+    elements.subTitleInput.value = currentSettings.subTitle;
+    elements.loadingMessageInput.value = currentSettings.loadingMessage;
+    elements.fontScaleInput.value = currentSettings.fontScale;
+
+    // イベントリスナーを設定
+    elements.brandNameInput.addEventListener('input', () => {
+      currentSettings.brandName = elements.brandNameInput.value;
+      updatePreview();
+    });
+
+    elements.subTitleInput.addEventListener('input', () => {
+      currentSettings.subTitle = elements.subTitleInput.value;
+      updatePreview();
+    });
+
+    elements.loadingMessageInput.addEventListener('input', () => {
+      currentSettings.loadingMessage = elements.loadingMessageInput.value;
+      updatePreview();
+    });
+
+    elements.fontScaleInput.addEventListener('input', () => {
+      currentSettings.fontScale = elements.fontScaleInput.value;
+      updatePreviewStyles();
+    });
+  }
+
+  function setupAnimationInputs() {
+    if (!elements.animationSelect) return;
+
+    // 初期値を設定
+    elements.animationSelect.value = currentSettings.animation;
+
+    // イベントリスナーを設定
+    elements.animationSelect.addEventListener('change', () => {
+      currentSettings.animation = elements.animationSelect.value;
+      updatePreviewStyles();
+    });
+  }
+
+  function setupStartScreenHandlers() {
+    if (!elements.titleInput || !elements.buttonTextInput || !elements.thumbnailPreview) return;
+
+    elements.titleInput.value = currentSettings.startTitle;
+    elements.buttonTextInput.value = currentSettings.startButtonText;
+
+    elements.titleInput.addEventListener('input', (e) => {
+      currentSettings.startTitle = e.target.value;
+      updateStartPreview();
+    });
+
+    elements.buttonTextInput.addEventListener('input', (e) => {
+      currentSettings.startButtonText = e.target.value;
+      updateStartPreview();
+    });
+
+    // サムネイルアップロード用のトリガーボタンとファイル入力設定
+    const fileInput = document.getElementById('start-thumbnail-upload');
+    if (fileInput) {
+      // クリックイベントで非表示のファイル選択ダイアログを開く
+      elements.thumbnailPreview.addEventListener('click', () => fileInput.click());
+      
+      // ドラッグ&ドロップハンドリング
+      elements.thumbnailPreview.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        elements.thumbnailPreview.classList.add('loading-screen-editor__file-preview--dragover');
+      });
+      
+      elements.thumbnailPreview.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        elements.thumbnailPreview.classList.remove('loading-screen-editor__file-preview--dragover');
+      });
+      
+      elements.thumbnailPreview.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        elements.thumbnailPreview.classList.remove('loading-screen-editor__file-preview--dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) handleThumbnailFile(file);
+      });
+      
+      // ファイル選択イベント
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleThumbnailFile(file);
+      });
+    }
+  }
+
+  // === 初期化関数 ===
+  async function initializeEditor() {
+    try {
+      // コンテナにテンプレートを追加
+      container.innerHTML = editorTemplate;
+
+      // DOM要素の参照を取得
+      elements = {
+        // タブ関連
+        tabButtons: container.querySelectorAll('.loading-screen-editor__tab'),
+        tabContents: container.querySelectorAll('.loading-screen-editor__tab-content'),
+        
+        // プレビュー関連
+        previewScreen: container.querySelector('#preview-content'),
+        
+        // カラー入力フィールド
+        backgroundColorPicker: container.querySelector('#bg-color-picker'),
+        backgroundColorText: container.querySelector('#bg-color-text'),
+        textColorPicker: container.querySelector('#text-color-picker'),
+        textColorText: container.querySelector('#text-color-text'),
+        accentColorPicker: container.querySelector('#accent-color-picker'),
+        accentColorText: container.querySelector('#accent-color-text'),
+        
+        // テキスト入力フィールド
+        brandNameInput: container.querySelector('input[name="brandName"]'),
+        subTitleInput: container.querySelector('input[name="subTitle"]'),
+        loadingMessageInput: container.querySelector('input[name="loadingMessage"]'),
+        fontScaleInput: container.querySelector('input[name="fontScale"]'),
+        animationSelect: container.querySelector('select[name="animation"]'),
+        
+        // サムネイル関連
+        titleInput: container.querySelector('#start-title'),
+        buttonTextInput: container.querySelector('#start-button-text'),
+        thumbnailPreview: container.querySelector('#start-thumbnail-preview'),
+      };
+
+      // 設定の読み込み
+      const savedSettings = await mockAPI.getSettings();
+      currentSettings = { ...defaultSettings, ...savedSettings };
+
+      // イベントハンドラーの設定
+      setupColorInputs();
+      setupTextInputs();
+      setupAnimationInputs();
+      setupStartScreenHandlers();
+
+      // タブクリックイベントの設定
+      elements.tabButtons.forEach(button => {
+        button.addEventListener('click', handleTabClick);
+      });
+
+      // 最初のタブを選択
+      const firstTab = elements.tabButtons[0];
+      if (firstTab) firstTab.click();
+
+    } catch (error) {
+      console.error('エディタの初期化中にエラーが発生しました:', error);
+    }
+  }
+
+  // === プレビューパネル更新関数 ===
+  function updatePreviewPanel(tabName) {
+    const previewContent = document.getElementById('preview-content');
+    if (!previewContent) return;
+
+    // プレビューコンテンツをクリア
+    previewContent.innerHTML = '';
+
+    if (tabName === 'start') {
+      // 初期画面プレビュー
+      previewContent.innerHTML = startPreviewTemplate;
+      updateStartPreview();
+    } else {
+      // ローディング画面プレビュー
+      previewContent.innerHTML = loadingPreviewTemplate;
+      updatePreview();
+    }
+
+    // スタイルを更新
+    updatePreviewStyles();
+  }
+
+  // === クリーンアップ関数 ===
+  function cleanup() {
+    // イベントリスナーの解除
+    if (elements.tabButtons) {
+      elements.tabButtons.forEach(button => {
+        button.removeEventListener('click', handleTabClick);
+      });
+    }
+
+    // 入力フィールドのイベントリスナーを解除
+    const inputs = container.querySelectorAll('input, select');
+    inputs.forEach(input => {
+      input.removeEventListener('input', null);
+      input.removeEventListener('change', null);
+    });
+
+    // 設定の保存
+    mockAPI.saveSettings(currentSettings).catch(error => {
+      console.error('設定の保存中にエラーが発生しました:', error);
+    });
+
+    // 要素の参照をクリア
+    elements = {};
+  }
+
+  // === 初期化処理の実行 ===
+  initializeEditor();
+
+  // === クリーンアップ関数を返す ===
+  return cleanup;
+}

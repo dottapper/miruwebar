@@ -1,0 +1,1177 @@
+/* エディタ全体のコンテナ */
+.loading-screen-editor {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  max-height: 100vh;
+  overflow: hidden;
+  background-color: var(--background-color, #1f1f1f);
+  color: var(--text-color, #ffffff);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+/* ヘッダー部分 */
+.loading-screen-editor .editor-header {
+  padding: 0 0 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-color, #333);
+  background-color: transparent;
+}
+
+.loading-screen-editor h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-color, #ffffff);
+  background-color: transparent;
+}
+
+/* メインコンテンツエリア */
+.loading-screen-editor .editor-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+/* タブ設定 */
+.loading-screen-editor .settings-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  background-color: var(--background-color, #1f1f1f);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #333);
+}
+
+.loading-screen-editor .tab-button {
+  padding: 10px 20px;
+  border: 1px solid var(--border-color, #333);
+  background: var(--background-color-light, #2a2a2a);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-color, #fff);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  flex: 1;
+  text-align: center;
+}
+
+.loading-screen-editor .tab-button:hover {
+  background-color: var(--background-color-lighter, #3a3a3a);
+}
+
+.loading-screen-editor .tab-button.active {
+  background-color: var(--accent-color, #7856ff);
+  color: white;
+  border-color: var(--accent-color, #7856ff);
+}
+
+.loading-screen-editor .tab-content {
+  display: none;
+  padding: 20px;
+}
+
+.loading-screen-editor .tab-content.active {
+  display: block;
+}
+
+/* アクセシビリティのための非表示スタイル */
+.loading-screen-editor .tab-content[aria-hidden="true"] {
+  display: none;
+}
+
+.loading-screen-editor .tab-content[aria-hidden="false"] {
+  display: block;
+}
+
+/* 設定パネル */
+.loading-screen-editor .settings-panel {
+  background-color: var(--background-color-light, #2a2a2a);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+.loading-screen-editor .settings-panel form {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 16px;
+}
+
+/* フォームグループ */
+.loading-screen-editor .form-group {
+  margin-bottom: 24px;
+}
+
+.loading-screen-editor .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-color-secondary, #999);
+}
+
+/* カラーピッカー */
+.loading-screen-editor .color-picker-container {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.loading-screen-editor .color-picker-container input[type="color"] {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: none;
+}
+
+.loading-screen-editor .color-picker-container input[type="text"] {
+  flex: 1;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  background-color: var(--background-color, #1f1f1f);
+  color: var(--text-color, #fff);
+  font-size: 14px;
+}
+
+/* プリセットテーマ */
+.loading-screen-editor .preset-themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.loading-screen-editor .theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 12px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.loading-screen-editor .theme-option:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.loading-screen-editor .theme-option.active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.loading-screen-editor .theme-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.loading-screen-editor .theme-option.active .theme-preview {
+  border-color: var(--accent-color, #7856ff);
+}
+
+.loading-screen-editor .theme-preview.dark {
+  background-color: #1f1f1f;
+}
+
+.loading-screen-editor .theme-preview.light {
+  background-color: #ffffff;
+}
+
+.loading-screen-editor .theme-preview.blue {
+  background-color: #1a3a6e;
+}
+
+.loading-screen-editor .theme-preview.vibrant {
+  background: linear-gradient(45deg, #ff6b6b, #7856ff);
+}
+
+.loading-screen-editor .theme-option span {
+  font-size: 14px;
+  color: var(--text-color-secondary, #999);
+}
+
+.loading-screen-editor .theme-option.active span {
+  color: var(--text-color, #fff);
+}
+
+/* プレビューパネル */
+.loading-screen-editor .preview-panel {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+  background-color: var(--background-color-light, #2a2a2a);
+  border-radius: 12px;
+}
+
+.loading-screen-editor .preview-orientation {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.loading-screen-editor .preview-container {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 450px;
+  background-color: var(--background-color-light, #2a2a2a);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.loading-screen-editor .preview-panel h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--text-color, #fff);
+  flex-shrink: 0;
+}
+
+.loading-screen-editor .preview-orientation label {
+  font-size: 14px;
+  color: var(--text-color-secondary, #999);
+}
+
+.loading-screen-editor .orientation-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.loading-screen-editor .orientation-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background-color: var(--background-color, #1f1f1f);
+  color: var(--text-color, #ffffff);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loading-screen-editor .orientation-button.active {
+  background-color: var(--primary-color, #6366f1);
+}
+
+.loading-screen-editor .orientation-button:hover {
+  opacity: 0.9;
+}
+
+/* スマートフォンフレーム */
+.loading-screen-editor .smartphone-frame {
+  position: relative;
+  background-color: #222;
+  border-radius: 36px;
+  padding: 8px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.05);
+  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease;
+  margin: 0 auto;
+  transform-origin: center center;
+}
+
+.loading-screen-editor .smartphone-frame.portrait {
+  width: 280px;
+  height: 560px;
+  transform: rotate(0deg) scale(1);
+}
+
+.loading-screen-editor .smartphone-frame.landscape {
+  width: 560px;
+  height: 280px;
+  transform: rotate(0deg) scale(1);
+}
+
+/* スマートフォン画面 */
+.loading-screen-editor .smartphone-screen {
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  border-radius: 32px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* プレビューコンテンツラッパー */
+.loading-screen-editor .preview-content-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* プレビューコンテンツ */
+.loading-screen-editor .loading-screen-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+/* プレビューコンテンツのスタイル */
+.loading-screen-editor .preview-logo {
+  max-width: 80px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  margin-bottom: 20px;
+  object-fit: contain;
+}
+
+.loading-screen-editor .preview-brand {
+  font-size: clamp(18px, 4vw, 24px);
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.loading-screen-editor .preview-subtitle {
+  font-size: clamp(14px, 3vw, 16px);
+  margin-bottom: 24px;
+  opacity: 0.8;
+}
+
+.loading-screen-editor .preview-progress {
+  width: min(200px, 80%);
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.loading-screen-editor .preview-bar {
+  height: 100%;
+  width: 0%;
+  background-color: var(--accent-color, #7856ff);
+  transition: width 0.3s ease;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.loading-screen-editor .preview-text {
+  font-size: 14px;
+  opacity: 0.9;
+  transition: all 0.3s ease;
+}
+
+/* フッター */
+.loading-screen-editor .fixed-footer {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin-top: auto;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-color, #333);
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  background-color: var(--background-color, #1f1f1f);
+  z-index: 100;
+}
+
+.loading-screen-editor .fixed-footer button {
+  padding: 12px 24px;
+  min-width: 120px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  margin: 0 4px;
+}
+
+.loading-screen-editor .fixed-footer .cancel-button {
+  background-color: var(--background-color-light, #2a2a2a);
+  color: var(--text-color, #fff);
+}
+
+.loading-screen-editor .fixed-footer .reset-button {
+  background-color: var(--background-color-light, #2a2a2a);
+  color: var(--text-color, #fff);
+}
+
+.loading-screen-editor .fixed-footer .save-button {
+  background-color: var(--accent-color, #7856ff);
+  color: white;
+}
+
+.loading-screen-editor .fixed-footer button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.loading-screen-editor .fixed-footer button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 1024px) {
+  .loading-screen-editor {
+    margin: 0;
+    min-height: 100vh;
+    border-radius: 0;
+    padding: 16px;
+  }
+
+  .loading-screen-editor .editor-container {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .loading-screen-editor .preview-panel,
+  .loading-screen-editor .settings-panel {
+    max-height: none;
+    height: auto;
+  }
+  
+  .loading-screen-editor .smartphone-frame.portrait {
+    width: 240px;
+    height: 480px;
+  }
+  
+  .loading-screen-editor .smartphone-frame.landscape {
+    width: 480px;
+    height: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .loading-screen-editor {
+    padding: 12px;
+  }
+  
+  .loading-screen-editor .settings-panel,
+  .loading-screen-editor .preview-panel {
+    padding: 16px;
+  }
+  
+  .loading-screen-editor .fixed-footer {
+    padding: 12px 0 0;
+    gap: 12px;
+  }
+  
+  .loading-screen-editor .fixed-footer button {
+    padding: 10px 16px;
+    min-width: 100px;
+  }
+  
+  .loading-screen-editor .smartphone-frame.portrait {
+    width: 200px;
+    height: 400px;
+  }
+  
+  .loading-screen-editor .smartphone-frame.landscape {
+    width: 400px;
+    height: 200px;
+  }
+  
+  .loading-screen-editor .preview-container {
+    min-height: 350px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .loading-screen-editor {
+    --background-color: #1f1f1f;
+    --background-color-light: #2a2a2a;
+    --text-color: #ffffff;
+    --border-color: #333;
+  }
+}
+
+/* スクロールバーのスタイル */
+.loading-screen-editor ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.loading-screen-editor ::-webkit-scrollbar-track {
+  background: var(--background-color, #1f1f1f);
+  border-radius: 4px;
+}
+
+.loading-screen-editor ::-webkit-scrollbar-thumb {
+  background: var(--border-color, #333);
+  border-radius: 4px;
+}
+
+.loading-screen-editor ::-webkit-scrollbar-thumb:hover {
+  background: var(--text-color-secondary, #999);
+}
+
+/* アニメーション速度クラス */
+.loading-screen-editor .animation-slow {
+  --animation-speed: 2s;
+}
+
+.loading-screen-editor .animation-normal {
+  --animation-speed: 1s;
+}
+
+.loading-screen-editor .animation-fast {
+  --animation-speed: 0.5s;
+}
+
+/* アニメーションプレビュー用のクラス */
+.loading-screen-editor .fade-animation {
+  animation: fadeAnimation var(--animation-speed, 1s) ease;
+}
+
+.loading-screen-editor .slide-animation {
+  animation: slideAnimation var(--animation-speed, 1s) ease;
+}
+
+.loading-screen-editor .zoom-animation {
+  animation: zoomAnimation var(--animation-speed, 1s) ease;
+}
+
+.loading-screen-editor .pulse-animation {
+  animation: pulseAnimation var(--animation-speed, 1s) infinite;
+}
+
+.loading-screen-editor .bounce-animation {
+  animation: bounceAnimation var(--animation-speed, 1s) infinite;
+}
+
+.loading-screen-editor .spin-animation .preview-logo {
+  animation: spinAnimation var(--animation-speed, 1s) infinite linear;
+}
+
+.loading-screen-editor .wave-animation {
+  animation: waveAnimation var(--animation-speed, 1s) infinite;
+}
+
+@keyframes fadeAnimation {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slideAnimation {
+  0% { transform: translateY(30px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes zoomAnimation {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulseAnimation {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes bounceAnimation {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-20px); }
+  60% { transform: translateY(-10px); }
+}
+
+@keyframes spinAnimation {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes waveAnimation {
+  0% { transform: translateY(0); }
+  25% { transform: translateY(-10px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(10px); }
+  100% { transform: translateY(0); }
+}
+
+/* アニメーションプレビューボタンコンテナ */
+.loading-screen-editor .animation-preview-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 0 20px;
+  flex-wrap: wrap;
+}
+
+.loading-screen-editor .animation-preview-buttons button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: var(--background-color, #fff);
+  color: var(--text-color, #333);
+  border: 1px solid var(--border-color, #e0e0e0);
+  height: 40px;
+  min-width: 100px;
+  transition: all 0.2s;
+}
+
+.loading-screen-editor .animation-preview-buttons button:hover {
+  background-color: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.loading-screen-editor .animation-preview-buttons button.active {
+  background-color: var(--accent-color, #7856ff);
+  color: white;
+  border-color: var(--accent-color, #7856ff);
+}
+
+.editor-loading-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.85);
+  color: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.editor-preview-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 20px;
+}
+
+.editor-preview-brand {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.editor-preview-subtitle {
+  font-size: 16px;
+  margin-bottom: 20px;
+  opacity: 0.8;
+  text-align: center;
+}
+
+.editor-preview-progress {
+  width: 200px;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.editor-preview-bar {
+  width: 70%;
+  height: 100%;
+  background-color: #00a8ff;
+  transition: width 0.3s ease;
+}
+
+.editor-preview-text {
+  font-size: 14px;
+  opacity: 0.9;
+  text-align: center;
+}
+
+/* アニメーション */
+.loading-screen-editor .smartphone-frame {
+  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease, margin 0.3s ease;
+}
+
+.loading-screen-editor .smartphone-frame.transition-complete {
+  transition: none;
+}
+
+/* プレビューコンテナのアニメーション */
+.loading-screen-editor .preview-container {
+  transition: all 0.3s ease;
+}
+
+/* 方向切り替えアニメーション */
+.loading-screen-editor .smartphone-frame {
+  transition: transform 0.3s ease, width 0.3s ease, height 0.3s ease, margin 0.3s ease;
+}
+
+/* プレビュー要素のレスポンシブ調整 */
+.loading-screen-editor .preview-logo {
+  max-width: 80px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+}
+
+.loading-screen-editor .preview-brand {
+  font-size: clamp(18px, 4vw, 24px);
+}
+
+.loading-screen-editor .preview-subtitle {
+  font-size: clamp(14px, 3vw, 16px);
+}
+
+.loading-screen-editor .preview-progress {
+  width: min(200px, 80%);
+}
+
+/* ローディング完了時のスタイル */
+.loading-screen-editor .loading-screen-preview.loading-complete .preview-bar {
+  background-color: #4CAF50;
+}
+
+.loading-screen-editor .loading-screen-preview.loading-complete .preview-text {
+  color: #4CAF50;
+  font-weight: 500;
+}
+
+/* プログレスバーのアニメーション */
+@keyframes progress-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+.loading-screen-editor .preview-bar {
+  animation: progress-pulse 1.5s infinite;
+}
+
+.loading-screen-editor .loading-screen-preview.loading-complete .preview-bar {
+  animation: none;
+}
+
+/* ローディング画面エディタのスタイル */
+
+.loading-screen-editor {
+  width: 100%;
+  height: 100%;
+  background: var(--background-color, #1a1a1a);
+  color: var(--text-color, #ffffff);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.loading-screen-editor__container {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  padding: 20px;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.loading-screen-editor__settings {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.loading-screen-editor__preview {
+  position: sticky;
+  top: 20px;
+  height: fit-content;
+}
+
+.loading-screen-editor__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color, #666);
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+.loading-screen-editor__tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+  position: relative;
+}
+
+.loading-screen-editor__tab:hover {
+  color: #fff;
+}
+
+.loading-screen-editor__tab--active {
+  color: #fff;
+}
+
+.loading-screen-editor__tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-color, #018bd0);
+}
+
+.loading-screen-editor__tab-content {
+  display: none;
+  padding: 16px;
+  background: var(--background-color-light, #2a2a2a);
+  border-radius: 8px;
+}
+
+.loading-screen-editor__tab-content--active {
+  display: block;
+}
+
+.loading-screen-editor__form-group {
+  margin-bottom: 16px;
+}
+
+.loading-screen-editor__form-group:last-child {
+  margin-bottom: 0;
+}
+
+.loading-screen-editor__label {
+  display: block;
+  margin-bottom: 8px;
+  color: #ccc;
+  font-size: 14px;
+}
+
+.loading-screen-editor__color-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.loading-screen-editor__color-picker {
+  width: 50px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color, #666);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.loading-screen-editor__color-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.loading-screen-editor__input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--background-color-light, #2a2a2a);
+  border: 1px solid var(--border-color, #666);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.loading-screen-editor__input:focus {
+  border-color: var(--accent-color, #018bd0);
+  outline: none;
+}
+
+.loading-screen-editor__range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: var(--border-color, #666);
+  border-radius: 2px;
+  outline: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.loading-screen-editor__range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent-color, #018bd0);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.loading-screen-editor__range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--accent-color, #018bd0);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.loading-screen-editor__range-value {
+  font-size: 12px;
+  color: #999;
+  text-align: right;
+}
+
+.loading-screen-editor__select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--background-color-light, #2a2a2a);
+  border: 1px solid var(--border-color, #666);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.loading-screen-editor__preview-screen {
+  background: var(--background-color, rgba(0, 0, 0, 0.85));
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
+}
+
+.loading-screen-editor__phone-frame {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.loading-screen-editor__preview-text {
+  color: var(--text-color, #ffffff);
+  margin: 8px 0;
+  text-align: center;
+  transform-origin: center;
+  transform: scale(var(--font-scale, 1));
+}
+
+.loading-screen-editor__progress {
+  width: 200px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+.loading-screen-editor__progress-bar {
+  width: 40%;
+  height: 100%;
+  background: var(--accent-color, #018bd0);
+  animation: loading-screen-editor-progress 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-screen-editor-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.loading-screen-editor__start-preview {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.loading-screen-editor__thumbnail-wrapper {
+  width: 100%;
+  max-width: 480px;
+  aspect-ratio: 16/9;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.loading-screen-editor__thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.loading-screen-editor__start-content {
+  text-align: center;
+}
+
+.loading-screen-editor__start-title {
+  font-size: 24px;
+  margin: 0 0 16px;
+  color: var(--text-color, #ffffff);
+}
+
+.loading-screen-editor__start-button {
+  padding: 12px 24px;
+  font-size: 16px;
+  background: var(--accent-color, #018bd0);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.loading-screen-editor__start-button:hover {
+  opacity: 0.9;
+}
+
+.loading-screen-editor__file-preview {
+  width: 100%;
+  height: 160px;
+  border: 2px dashed var(--border-color, #666);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-screen-editor__file-preview:hover {
+  border-color: var(--accent-color, #018bd0);
+}
+
+.loading-screen-editor__file-preview--dragover {
+  border-color: var(--accent-color, #018bd0);
+  background: rgba(1, 139, 208, 0.1);
+}
+
+.loading-screen-editor__drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.loading-screen-editor__drop-zone-icon {
+  font-size: 32px;
+}
+
+.loading-screen-editor__drop-zone-text {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.loading-screen-editor__drop-zone-subtext {
+  font-size: 12px;
+  color: #999;
+}
+
+.loading-screen-editor__supported-formats {
+  font-size: 11px;
+  color: #666;
+  margin-top: 8px;
+}
+
+.loading-screen-editor__error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 0, 0, 0.1);
+  color: #ff4444;
+  padding: 8px;
+  font-size: 12px;
+  text-align: center;
+  animation: loading-screen-editor-error-slide 0.3s ease-in-out;
+}
+
+@keyframes loading-screen-editor-error-slide {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+/* アニメーション */
+.loading-screen-editor__preview--animation-fade {
+  animation: loading-screen-editor-fade 0.3s ease-in-out;
+}
+
+.loading-screen-editor__preview--animation-slide {
+  animation: loading-screen-editor-slide 0.3s ease-in-out;
+}
+
+.loading-screen-editor__preview--animation-zoom {
+  animation: loading-screen-editor-zoom 0.3s ease-in-out;
+}
+
+@keyframes loading-screen-editor-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes loading-screen-editor-slide {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes loading-screen-editor-zoom {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .loading-screen-editor__container {
+    grid-template-columns: 1fr;
+  }
+
+  .loading-screen-editor__preview {
+    position: static;
+    margin-top: 24px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .loading-screen-editor {
+    --background-color: #1a1a1a;
+    --background-color-light: #2a2a2a;
+    --text-color: #ffffff;
+    --border-color: #666666;
+  }
+} 
