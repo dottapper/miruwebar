@@ -4,6 +4,20 @@ import { showMarkerUpload } from '../views/marker-upload.js'; // 依存関係を
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
 import { saveProject, getProject } from '../api/projects.js'; // プロジェクト保存APIをインポート
 
+/**
+ * ファイルサイズを適切な単位でフォーマットする
+ * @param {number} bytes - バイト単位のファイルサイズ
+ * @returns {string} フォーマットされたファイルサイズ文字列
+ */
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+}
+
 export function showEditor(container) {
   // URLパラメータからARタイプを取得
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
@@ -404,128 +418,65 @@ export function showEditor(container) {
   // ファイル一覧アイテムを作成し、イベントリスナーを設定する関数
   function createFileListItem(file, objectUrl, modelIndex) {
     const fileItem = document.createElement('div');
-    fileItem.classList.add('file-item');
-    // data属性に情報を格納
-    fileItem.dataset.fileName = file.name;
-    fileItem.dataset.fileSize = file.size;
-    fileItem.dataset.objectUrl = objectUrl; // 必要であれば
-    fileItem.dataset.modelIndex = modelIndex; // ★ モデルのインデックスを保存
+    fileItem.className = 'file-item';
+    fileItem.dataset.modelIndex = modelIndex;
 
-    fileItem.innerHTML = `
-      <div class="file-item-info">
-        <span>${file.name}</span>
-        <span>(${(file.size / (1024 * 1024)).toFixed(2)}MB)</span>
-      </div>
-      <div class="file-item-actions">
-        <button class="btn-icon model-delete-btn" title="削除">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-        </button>
-      </div>
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'file-info';
+    fileInfo.innerHTML = `
+      <span class="file-name">${file.name}</span>
+      <span class="file-size">${formatFileSize(file.size)}</span>
     `;
 
-    // --- ファイルアイテムクリック時の処理 (モデル選択) ---
-    const fileInfoDiv = fileItem.querySelector('.file-item-info');
-    if (fileInfoDiv) {
-      fileInfoDiv.addEventListener('click', () => {
-        // 他のアイテムのアクティブ状態を解除
-        fileListContainer?.querySelectorAll('.file-item.active').forEach(activeItem => {
-          activeItem.classList.remove('active');
-        });
-        // クリックされたアイテムをアクティブに
-        fileItem.classList.add('active');
+    const fileActions = document.createElement('div');
+    fileActions.className = 'file-actions';
+    fileActions.innerHTML = `
+      <button class="btn-icon delete-model" title="モデルを削除">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    `;
 
-        // 対応するモデルをビューアでアクティブにする
-        if (viewerInstance?.controls?.switchToModel) {
-           const indexToSwitch = parseInt(fileItem.dataset.modelIndex, 10);
-           if (!isNaN(indexToSwitch)) {
-               viewerInstance.controls.switchToModel(indexToSwitch);
-               console.log(`モデル ${indexToSwitch} に切り替えました。`);
-               // TransformControls を表示状態にする（オプション）
-               if (viewerInstance.controls.toggleTransformControls) {
-                   viewerInstance.controls.toggleTransformControls(true);
-               }
-           } else {
-               console.error("switchToModel に無効なインデックスが渡されました:", fileItem.dataset.modelIndex);
-           }
-        } else {
-             console.error("viewerInstance または switchToModel が見つかりません。");
+    fileItem.appendChild(fileInfo);
+    fileItem.appendChild(fileActions);
+
+    // 削除ボタンのイベントリスナー
+    const deleteButton = fileActions.querySelector('.delete-model');
+    deleteButton.addEventListener('click', async () => {
+      try {
+        // ユーザーに確認を求める
+        if (!confirm('このモデルを削除してもよろしいですか？')) {
+          return;
         }
-      });
-    }
 
-    // --- 削除ボタンのイベントリスナー設定 ---
-    const deleteButton = fileItem.querySelector('.model-delete-btn');
-    if (deleteButton) {
-      deleteButton.addEventListener('click', (e) => {
-        e.stopPropagation(); // 親要素へのクリックイベント伝播を防ぐ
-
-        const fileName = fileItem.dataset.fileName || 'このファイル';
-        const fileSize = parseInt(fileItem.dataset.fileSize || '0', 10);
-
-        if (confirm(`「${fileName}」を削除してもよろしいですか？`)) {
-
-          // 1. ファイルサイズを減算
-          if (!isNaN(fileSize) && fileSize > 0) {
-            totalFileSize -= fileSize;
-            updateTotalFileSizeDisplay(); // 表示を更新
-          } else {
-            console.warn('ファイルサイズが取得できなかったか0のため、合計サイズは更新されません。fileSize:', fileItem.dataset.fileSize);
-          }
-
-          // 2. ビューアからモデルを削除
-          try {
-            const modelIndexString = fileItem.dataset.modelIndex;
-            if (modelIndexString !== undefined) {
-              const modelIndex = parseInt(modelIndexString, 10);
-              if (!isNaN(modelIndex) && viewerInstance?.controls?.removeModel) {
-                console.log(`削除対象モデルのインデックス: ${modelIndex}`);
-                viewerInstance.controls.removeModel(modelIndex);
-                console.log(`モデル(インデックス: ${modelIndex})をビューアから削除しました`);
-                // TransformControls も非表示に
-                if (viewerInstance.controls.toggleTransformControls) {
-                  viewerInstance.controls.toggleTransformControls(false);
-                }
-              } else {
-                console.warn('モデルインデックスが無効か、removeModel関数が見つかりません。', modelIndexString, viewerInstance);
-              }
-            } else {
-               console.warn('fileItemにdata-model-index属性が見つかりません。');
-            }
-          } catch (error) {
-            console.error("モデル削除処理中にエラーが発生しました:", error);
-          }
-
-          // 3. ファイル一覧から項目を削除
-          if (fileListContainer && fileItem.parentNode === fileListContainer) {
-             fileListContainer.removeChild(fileItem);
-             console.log(`ファイルアイテム「${fileName}」をリストから削除しました。`);
-             // Object URL を解放 (もしあれば)
-             if (fileItem.dataset.objectUrl && fileItem.dataset.objectUrl.startsWith('blob:')) {
-                 URL.revokeObjectURL(fileItem.dataset.objectUrl);
-                 console.log(`Object URL を解放: ${fileItem.dataset.objectUrl}`);
-             }
-
-          } else {
-             console.warn("ファイルリストからアイテムを削除できませんでした。", fileListContainer, fileItem);
-          }
-
-          // 4. ファイル一覧が空になった場合の処理
-          if (fileListContainer && fileListContainer.children.length === 0) {
-            fileListContainer.innerHTML = '<p class="empty-text">モデルがありません</p>';
-            console.log("ファイルリストが空になりました。");
-            // ビューア内のメッセージ等もクリア
-            const viewerPanel = document.querySelector('.viewer-panel');
-            const emptyMsg = viewerPanel?.querySelector('.empty-scene-message');
-            const uploadBtn = viewerPanel?.querySelector('.empty-scene-upload');
-            if(emptyMsg && viewerPanel?.contains(emptyMsg)) viewerPanel.removeChild(emptyMsg);
-            if(uploadBtn && viewerPanel?.contains(uploadBtn)) viewerPanel.removeChild(uploadBtn);
-          }
-        } // confirm の if文の終わり
-      }); // deleteButton の addEventListener の終わり
-    } // if (deleteButton) の終わり
+        // モデルの削除
+        await viewerInstance.removeModel(modelIndex);
+        
+        // ファイルサイズの更新
+        totalFileSize -= file.size;
+        updateTotalFileSizeDisplay();
+        
+        // ファイルリストから削除
+        fileItem.remove();
+        
+        // オブジェクトURLの解放
+        URL.revokeObjectURL(objectUrl);
+        
+        // ファイルリストが空になった場合の処理
+        if (fileListContainer.children.length === 0) {
+          fileListContainer.innerHTML = '<p class="empty-text">まだファイルがありません</p>';
+          resetUploadArea();
+        }
+      } catch (error) {
+        console.error('モデルの削除に失敗しました:', error);
+        alert('モデルの削除に失敗しました。もう一度お試しください。');
+      }
+    });
 
     return fileItem;
-  } // createFileListItem 関数の終わり
+  }
 
   // 実寸サイズ表示更新
   function updateRealSizeDisplay(scale) {

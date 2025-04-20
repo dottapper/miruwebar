@@ -8,22 +8,28 @@ export default function showLoadingScreenEditor(container) {
   // デフォルト設定の定義を改善
   const defaultSettings = {
     startScreen: {
-      title: 'Start Experience',
-      buttonText: 'Start',
+      title: 'AR体験を開始',
+      buttonText: '開始',
       buttonColor: '#6c5ce7',
       thumbnail: null,
       backgroundColor: '#121212',
       textColor: '#ffffff',
-      accentColor: '#6c5ce7'
+      accentColor: '#6c5ce7',
+      titlePosition: 30,
+      buttonPosition: 70,
+      titleSize: 1.0,
+      buttonSize: 1.0,
+      textStyle: 'basic',
+      buttonTextColor: '#ffffff'
     },
     loadingScreen: {
       backgroundColor: '#121212',
       textColor: '#ffffff',
       accentColor: '#6c5ce7',
       logo: null,
-      brandName: 'Your Brand',
-      subTitle: 'Experience AR',
-      loadingMessage: 'Loading...',
+      brandName: 'あなたのブランド',
+      subTitle: 'AR体験',
+      loadingMessage: '読み込み中...',
       fontScale: 1,
       animation: 'fade'
     },
@@ -31,8 +37,8 @@ export default function showLoadingScreenEditor(container) {
       backgroundColor: '#121212',
       textColor: '#ffffff',
       accentColor: '#6c5ce7',
-      title: 'Guide Screen',
-      description: 'Coming Soon'
+      title: 'ガイド画面',
+      description: '準備中'
     }
   };
 
@@ -168,51 +174,161 @@ export default function showLoadingScreenEditor(container) {
   // テンプレート定義
   function createStartTabContent() {
     return `
-      <div class="loading-screen-editor__content-section">
+      <!-- テキスト設定セクション -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">テキスト設定</h3>
+        
+        <!-- タイトル設定 -->
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Background Color</label>
+          <label class="loading-screen-editor__label">タイトル</label>
+          <input type="text" class="loading-screen-editor__input" id="startScreen-title" value="${currentSettings.startScreen.title}" placeholder="AR体験を開始">
+        </div>
+        
+        <!-- ボタンテキスト設定 -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタンテキスト</label>
+          <input type="text" class="loading-screen-editor__input" id="startScreen-buttonText" value="${currentSettings.startScreen.buttonText}" placeholder="開始">
+        </div>
+
+        <!-- テキストスタイル選択 -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキストスタイル</label>
+          <div class="loading-screen-editor__style-selector">
+            <button class="loading-screen-editor__style-option ${currentSettings.startScreen.textStyle === 'basic' ? 'active' : ''}" data-style="basic">
+              <span class="style-preview basic">Aa</span>
+              <span class="style-name">ベーシック</span>
+            </button>
+            <button class="loading-screen-editor__style-option ${currentSettings.startScreen.textStyle === 'modern' ? 'active' : ''}" data-style="modern">
+              <span class="style-preview modern">Aa</span>
+              <span class="style-name">モダン</span>
+            </button>
+            <button class="loading-screen-editor__style-option ${currentSettings.startScreen.textStyle === 'creative' ? 'active' : ''}" data-style="creative">
+              <span class="style-preview creative">Aa</span>
+              <span class="style-name">クリエイティブ</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 位置とサイズセクション -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">位置とサイズ</h3>
+        
+        <!-- タイトル位置 -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトル位置（上下）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-titlePosition" 
+              min="0" max="100" step="5" value="${currentSettings.startScreen.titlePosition}">
+            <span class="loading-screen-editor__value-display" id="titlePosition-value">${currentSettings.startScreen.titlePosition}%</span>
+          </div>
+        </div>
+        
+        <!-- タイトルサイズ -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトルサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-titleSize" 
+              min="0.5" max="2.0" step="0.1" value="${currentSettings.startScreen.titleSize}">
+            <span class="loading-screen-editor__value-display" id="titleSize-value">${currentSettings.startScreen.titleSize}x</span>
+          </div>
+        </div>
+        
+        <!-- ボタン位置 -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタン位置（上下）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-buttonPosition" 
+              min="0" max="100" step="5" value="${currentSettings.startScreen.buttonPosition}">
+            <span class="loading-screen-editor__value-display" id="buttonPosition-value">${currentSettings.startScreen.buttonPosition}%</span>
+          </div>
+        </div>
+        
+        <!-- ボタンサイズ -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタンサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-buttonSize" 
+              min="0.5" max="2.0" step="0.1" value="${currentSettings.startScreen.buttonSize}">
+            <span class="loading-screen-editor__value-display" id="buttonSize-value">${currentSettings.startScreen.buttonSize}x</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- カラー設定セクション -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">カラー設定</h3>
+        
+        <!-- 背景色 -->
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">背景色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="startScreen-backgroundColor" value="${currentSettings.startScreen.backgroundColor}">
             <input type="text" class="loading-screen-editor__input" id="startScreen-backgroundColorText" value="${currentSettings.startScreen.backgroundColor}">
           </div>
         </div>
+        
+        <!-- テキスト色 -->
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Text Color</label>
+          <label class="loading-screen-editor__label">テキスト色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="startScreen-textColor" value="${currentSettings.startScreen.textColor}">
             <input type="text" class="loading-screen-editor__input" id="startScreen-textColorText" value="${currentSettings.startScreen.textColor}">
           </div>
         </div>
+        
+        <!-- ボタン色 -->
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Start Title</label>
-          <input type="text" class="loading-screen-editor__input" id="startScreen-title" value="${currentSettings.startScreen.title || ''}">
-        </div>
-        <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Button Text</label>
-          <input type="text" class="loading-screen-editor__input" id="startScreen-buttonText" value="${currentSettings.startScreen.buttonText || ''}">
-        </div>
-        <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Button Color</label>
+          <label class="loading-screen-editor__label">ボタン色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="startScreen-buttonColor" value="${currentSettings.startScreen.buttonColor}">
             <input type="text" class="loading-screen-editor__input" id="startScreen-buttonColorText" value="${currentSettings.startScreen.buttonColor}">
           </div>
         </div>
+        
+        <!-- ボタンテキスト色 -->
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Thumbnail Image</label>
+          <label class="loading-screen-editor__label">ボタンテキスト色</label>
+          <div class="loading-screen-editor__color-input">
+            <input type="color" class="loading-screen-editor__color-picker" id="startScreen-buttonTextColor" value="${currentSettings.startScreen.buttonTextColor}">
+            <input type="text" class="loading-screen-editor__input" id="startScreen-buttonTextColorText" value="${currentSettings.startScreen.buttonTextColor}">
+          </div>
+        </div>
+      </div>
+
+      <!-- サムネイル設定セクション -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">サムネイル画像</h3>
+        <div class="loading-screen-editor__form-group">
           <div class="loading-screen-editor__file-preview" id="thumbnailDropzone">
             <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">Drop your thumbnail here</div>
-              <div class="loading-screen-editor__drop-zone-subtext">or click to select</div>
+              <div class="loading-screen-editor__drop-zone-text">ここにサムネイルをドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                Supported: PNG, JPG, WebP (Max: 2MB)
+                推奨サイズ: 1920x1080px以下<br>
+                対応形式: PNG, JPG, WebP (最大: 2MB)
               </div>
             </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">Remove Image</button>
+            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
           </div>
         </div>
+      </div>
+
+      <!-- リセットボタン -->
+      <div class="loading-screen-editor__form-group loading-screen-editor__reset-container">
+        <button id="reset-settings-button" class="loading-screen-editor__reset-button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 2v6h6"></path>
+            <path d="M3 8L10 15"></path>
+            <path d="M21 12A9 9 0 0 0 12 3"></path>
+            <path d="M21 22v-6h-6"></path>
+            <path d="M21 16L14 9"></path>
+            <path d="M3 12a9 9 0 0 0 9 9"></path>
+          </svg>
+          すべての設定をリセット
+        </button>
       </div>
     `;
   }
@@ -222,36 +338,36 @@ export default function showLoadingScreenEditor(container) {
       <div class="loading-screen-editor__content-section">
         <div class="loading-screen-editor__reset-container">
           <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-loading-settings">
-            Reset to Default
+            デフォルトに戻す
           </button>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Background Color</label>
+          <label class="loading-screen-editor__label">背景色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-backgroundColor" value="${currentSettings.loadingScreen.backgroundColor}">
             <input type="text" class="loading-screen-editor__input" id="loadingScreen-backgroundColorText" value="${currentSettings.loadingScreen.backgroundColor}">
           </div>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Text Color</label>
+          <label class="loading-screen-editor__label">テキスト色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-textColor" value="${currentSettings.loadingScreen.textColor}">
             <input type="text" class="loading-screen-editor__input" id="loadingScreen-textColorText" value="${currentSettings.loadingScreen.textColor}">
           </div>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Logo</label>
+          <label class="loading-screen-editor__label">ロゴ</label>
           <div class="loading-screen-editor__file-preview" id="logoDropzone">
             <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">Drop your logo here</div>
-              <div class="loading-screen-editor__drop-zone-subtext">or click to select</div>
+              <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                Supported: PNG, JPG, WebP (Max: 2MB)
+                対応形式: PNG, JPG, WebP (最大: 2MB)
               </div>
             </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">Remove Image</button>
+            <button class="loading-screen-editor__remove-button" style="display: none;">画像を削除</button>
           </div>
         </div>
       </div>
@@ -261,35 +377,35 @@ export default function showLoadingScreenEditor(container) {
   function createTextTabContent() {
     return `
       <div class="loading-screen-editor__form-group">
-        <label class="loading-screen-editor__label">Brand Name</label>
+        <label class="loading-screen-editor__label">ブランド名</label>
         <input type="text" class="loading-screen-editor__input" id="brandName" value="${currentSettings.brandName}">
-                  </div>
+      </div>
       <div class="loading-screen-editor__form-group">
-        <label class="loading-screen-editor__label">Subtitle</label>
+        <label class="loading-screen-editor__label">サブタイトル</label>
         <input type="text" class="loading-screen-editor__input" id="subTitle" value="${currentSettings.subTitle}">
-                  </div>
+      </div>
       <div class="loading-screen-editor__form-group">
-        <label class="loading-screen-editor__label">Loading Message</label>
+        <label class="loading-screen-editor__label">ローディングメッセージ</label>
         <input type="text" class="loading-screen-editor__input" id="loadingMessage" value="${currentSettings.loadingMessage}">
-                </div>
+      </div>
       <div class="loading-screen-editor__form-group">
-        <label class="loading-screen-editor__label">Font Scale</label>
+        <label class="loading-screen-editor__label">フォントサイズ</label>
         <input type="range" class="loading-screen-editor__input" id="fontScale" min="0.5" max="2" step="0.1" value="${currentSettings.fontScale}">
         <span class="loading-screen-editor__range-value" id="fontScaleValue">${currentSettings.fontScale}x</span>
-              </div>
+      </div>
     `;
   }
 
   function createAnimationTabContent() {
     return `
       <div class="loading-screen-editor__form-group">
-        <label class="loading-screen-editor__label">Animation Style</label>
+        <label class="loading-screen-editor__label">アニメーションスタイル</label>
         <select class="loading-screen-editor__input" id="animation">
-          <option value="fade" ${currentSettings.animation === 'fade' ? 'selected' : ''}>Fade</option>
-          <option value="slide" ${currentSettings.animation === 'slide' ? 'selected' : ''}>Slide</option>
-          <option value="zoom" ${currentSettings.animation === 'zoom' ? 'selected' : ''}>Zoom</option>
+          <option value="fade" ${currentSettings.animation === 'fade' ? 'selected' : ''}>フェード</option>
+          <option value="slide" ${currentSettings.animation === 'slide' ? 'selected' : ''}>スライド</option>
+          <option value="zoom" ${currentSettings.animation === 'zoom' ? 'selected' : ''}>ズーム</option>
         </select>
-            </div>
+      </div>
     `;
   }
 
@@ -298,36 +414,36 @@ export default function showLoadingScreenEditor(container) {
       <div class="loading-screen-editor__content-section">
         <div class="loading-screen-editor__reset-container">
           <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-guide-settings">
-            Reset to Default
+            デフォルトに戻す
           </button>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Background Color</label>
+          <label class="loading-screen-editor__label">背景色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="guideScreen-backgroundColor" value="${currentSettings.guideScreen.backgroundColor}">
             <input type="text" class="loading-screen-editor__input" id="guideScreen-backgroundColorText" value="${currentSettings.guideScreen.backgroundColor}">
           </div>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Text Color</label>
+          <label class="loading-screen-editor__label">テキスト色</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="guideScreen-textColor" value="${currentSettings.guideScreen.textColor}">
             <input type="text" class="loading-screen-editor__input" id="guideScreen-textColorText" value="${currentSettings.guideScreen.textColor}">
           </div>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Accent Color</label>
+          <label class="loading-screen-editor__label">アクセントカラー</label>
           <div class="loading-screen-editor__color-input">
             <input type="color" class="loading-screen-editor__color-picker" id="guideScreen-accentColor" value="${currentSettings.guideScreen.accentColor}">
             <input type="text" class="loading-screen-editor__input" id="guideScreen-accentColorText" value="${currentSettings.guideScreen.accentColor}">
           </div>
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Guide Screen Title</label>
+          <label class="loading-screen-editor__label">ガイド画面タイトル</label>
           <input type="text" class="loading-screen-editor__input" id="guideScreenTitle" value="${currentSettings.guideScreen.title}">
         </div>
         <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">Guide Screen Description</label>
+          <label class="loading-screen-editor__label">ガイド画面の説明</label>
           <input type="text" class="loading-screen-editor__input" id="guideScreenDescription" value="${currentSettings.guideScreen.description}">
         </div>
       </div>
@@ -342,14 +458,14 @@ export default function showLoadingScreenEditor(container) {
     const editorHTML = `
     <div class="loading-screen-editor">
       <div class="loading-screen-editor__header">
-        Loading Screen Editor
+        ローディング画面エディタ
       </div>
       <div class="loading-screen-editor__container">
         <div class="loading-screen-editor__settings-panel">
           <div class="loading-screen-editor__main-tabs">
-            <button class="loading-screen-editor__main-tab loading-screen-editor__main-tab--active" data-tab="start">Start Screen</button>
-            <button class="loading-screen-editor__main-tab" data-tab="loading">Loading Screen</button>
-            <button class="loading-screen-editor__main-tab" data-tab="guide">Guide Screen</button>
+            <button class="loading-screen-editor__main-tab loading-screen-editor__main-tab--active" data-tab="start">開始画面</button>
+            <button class="loading-screen-editor__main-tab" data-tab="loading">ローディング画面</button>
+            <button class="loading-screen-editor__main-tab" data-tab="guide">ガイド画面</button>
           </div>
           
           <!-- メインコンテンツコンテナ -->
@@ -362,9 +478,9 @@ export default function showLoadingScreenEditor(container) {
             <!-- Loading Screen Content -->
             <div class="loading-screen-editor__main-content" data-tab="loading">
               <div class="loading-screen-editor__sub-tabs">
-                <button class="loading-screen-editor__sub-tab loading-screen-editor__sub-tab--active" data-subtab="loading-general">General</button>
-                <button class="loading-screen-editor__sub-tab" data-subtab="loading-text">Text</button>
-                <button class="loading-screen-editor__sub-tab" data-subtab="loading-animation">Animation</button>
+                <button class="loading-screen-editor__sub-tab loading-screen-editor__sub-tab--active" data-subtab="loading-general">一般</button>
+                <button class="loading-screen-editor__sub-tab" data-subtab="loading-text">テキスト</button>
+                <button class="loading-screen-editor__sub-tab" data-subtab="loading-animation">アニメーション</button>
               </div>
 
               <div class="loading-screen-editor__subcontent-container">
@@ -394,13 +510,13 @@ export default function showLoadingScreenEditor(container) {
         
         <div class="loading-screen-editor__preview-panel">
           <div class="loading-screen-editor__preview-header">
-            <div class="loading-screen-editor__preview-title">Preview</div>
+            <div class="loading-screen-editor__preview-title">プレビュー</div>
             <div class="loading-screen-editor__orientation-toggle">
               <button class="loading-screen-editor__orientation-button loading-screen-editor__orientation-button--active" data-orientation="portrait">
-                <span>📱</span> Portrait
+                <span>📱</span> 縦向き
               </button>
               <button class="loading-screen-editor__orientation-button" data-orientation="landscape">
-                <span>📱</span> Landscape
+                <span>📱</span> 横向き
               </button>
             </div>
           </div>
@@ -408,13 +524,29 @@ export default function showLoadingScreenEditor(container) {
             <div class="loading-screen-editor__phone-frame">
               <div class="loading-screen-editor__phone-screen">
                 <div class="loading-screen-editor__preview-screen">
-                  <div class="loading-screen-editor__preview-logo"></div>
-                  <div class="loading-screen-editor__preview-title"></div>
-                  <div class="loading-screen-editor__preview-subtitle"></div>
-                  <div class="loading-screen-editor__preview-progress">
-                    <div class="loading-screen-editor__preview-progress-bar"></div>
+                  <!-- スタート画面用の要素 -->
+                  <div class="loading-screen-editor__preview-start-screen">
+                    <div class="loading-screen-editor__preview-background"></div>
+                    <div class="loading-screen-editor__preview-title"></div>
+                    <div class="loading-screen-editor__preview-button"></div>
                   </div>
-                  <div class="loading-screen-editor__preview-message"></div>
+                  
+                  <!-- ローディング画面用の要素 -->
+                  <div class="loading-screen-editor__preview-loading-screen" style="display: none;">
+                    <div class="loading-screen-editor__preview-logo"></div>
+                    <div class="loading-screen-editor__preview-title"></div>
+                    <div class="loading-screen-editor__preview-subtitle"></div>
+                    <div class="loading-screen-editor__preview-progress">
+                      <div class="loading-screen-editor__preview-progress-bar"></div>
+                    </div>
+                    <div class="loading-screen-editor__preview-message"></div>
+                  </div>
+                  
+                  <!-- ガイド画面用の要素 -->
+                  <div class="loading-screen-editor__preview-guide-screen" style="display: none;">
+                    <div class="loading-screen-editor__preview-title"></div>
+                    <div class="loading-screen-editor__preview-subtitle"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -471,6 +603,8 @@ export default function showLoadingScreenEditor(container) {
 
   // タブ切り替えの処理 - 改良版
   function setupTabHandlers() {
+    console.log('タブハンドラーの設定を開始...');
+    
     // メインタブの処理
     const mainTabs = document.querySelectorAll('.loading-screen-editor__main-tab');
     const mainContents = document.querySelectorAll('.loading-screen-editor__main-content');
@@ -481,7 +615,7 @@ export default function showLoadingScreenEditor(container) {
     }
 
     mainTabs.forEach(tab => {
-      tab.addEventListener('click', (e) => {
+      tab.addEventListener('click', async (e) => {
         // クリックイベントの伝播を停止（レイアウト崩れを防止）
         e.stopPropagation();
         
@@ -534,48 +668,14 @@ export default function showLoadingScreenEditor(container) {
           }
           
           console.log('プレビュー更新:', screenType);
-          updatePreview(screenType);
+          try {
+            await updatePreview(screenType);
+          } catch (error) {
+            console.error('プレビュー更新中にエラーが発生しました:', error);
+          }
         }
       });
     });
-
-    // サブタブの処理
-    const subTabs = document.querySelectorAll('.loading-screen-editor__sub-tab');
-    const subContents = document.querySelectorAll('.loading-screen-editor__sub-content');
-
-    if (subTabs.length > 0 && subContents.length > 0) {
-      subTabs.forEach(tab => {
-        tab.addEventListener('click', (e) => {
-          e.stopPropagation();
-          
-          console.log('サブタブクリック:', tab.dataset.subtab);
-          
-          // アクティブ状態をリセット
-          subTabs.forEach(t => t.classList.remove('loading-screen-editor__sub-tab--active'));
-          subContents.forEach(c => {
-            c.classList.remove('loading-screen-editor__sub-content--active');
-            c.style.display = 'none';
-          });
-
-          // 新しいサブタブをアクティブに
-          tab.classList.add('loading-screen-editor__sub-tab--active');
-          const subtabName = tab.dataset.subtab;
-          
-          // サブタブコンテンツを探す
-          const subContent = document.querySelector(`.loading-screen-editor__sub-content[data-subtab="${subtabName}"]`);
-          
-          if (subContent) {
-            subContent.style.display = 'block';
-            setTimeout(() => {
-              subContent.classList.add('loading-screen-editor__sub-content--active');
-            }, 10);
-            
-            // Loading Screen のプレビューを更新
-            updatePreview('loadingScreen');
-          }
-        });
-      });
-    }
   }
 
   // カラー値のバリデーションと修正を行う関数を改善
@@ -683,25 +783,76 @@ export default function showLoadingScreenEditor(container) {
 
   // テキスト入力の処理
   function setupTextInputs() {
-    const textInputs = ['brandName', 'subTitle', 'loadingMessage', 'startScreen-title', 'startScreen-buttonText'];
+    console.log('テキスト入力の設定を開始...');
+    
+    // スタート画面のテキスト入力
+    const startScreenInputs = {
+      title: document.getElementById('startScreen-title'),
+      buttonText: document.getElementById('startScreen-buttonText')
+    };
 
-    textInputs.forEach(inputId => {
-      const input = document.getElementById(inputId);
+    // 各入力フィールドにイベントリスナーを設定
+    Object.entries(startScreenInputs).forEach(([key, input]) => {
+      if (!input) {
+        console.error(`入力フィールドが見つかりません: ${key}`);
+        return;
+      }
+
+      // 入力イベントのリスナーを設定
       input.addEventListener('input', (e) => {
-        currentSettings[inputId] = e.target.value;
-        updatePreview();
+        console.log(`${key}の値が変更されました:`, e.target.value);
+        
+        // currentSettingsを更新
+        if (!currentSettings.startScreen) {
+          currentSettings.startScreen = {};
+        }
+        currentSettings.startScreen[key] = e.target.value;
+        
+        // プレビューを更新
+        updatePreview('startScreen');
+        
+        // 設定を保存
+        mockAPI.saveSettings(currentSettings).catch(error => {
+          console.error('設定の保存に失敗しました:', error);
+        });
       });
     });
 
-    // フォントスケールの処理
-    const fontScale = document.getElementById('fontScale');
-    const fontScaleValue = document.getElementById('fontScaleValue');
+    // ローディング画面のテキスト入力
+    const loadingScreenInputs = {
+      brandName: document.getElementById('loadingScreen-brandName'),
+      subTitle: document.getElementById('loadingScreen-subTitle'),
+      loadingMessage: document.getElementById('loadingScreen-loadingMessage')
+    };
 
-    fontScale.addEventListener('input', (e) => {
-      const value = parseFloat(e.target.value);
-      currentSettings.fontScale = value;
-      fontScaleValue.textContent = `${value}x`;
-      updatePreview();
+    Object.entries(loadingScreenInputs).forEach(([key, input]) => {
+      if (input) {
+        input.addEventListener('input', (e) => {
+          currentSettings.loadingScreen[key] = e.target.value;
+          updatePreview('loadingScreen');
+          mockAPI.saveSettings(currentSettings).catch(error => {
+            console.error('設定の保存に失敗しました:', error);
+          });
+        });
+      }
+    });
+
+    // ガイド画面のテキスト入力
+    const guideScreenInputs = {
+      title: document.getElementById('guideScreen-title'),
+      description: document.getElementById('guideScreen-description')
+    };
+
+    Object.entries(guideScreenInputs).forEach(([key, input]) => {
+      if (input) {
+        input.addEventListener('input', (e) => {
+          currentSettings.guideScreen[key] = e.target.value;
+          updatePreview('guideScreen');
+          mockAPI.saveSettings(currentSettings).catch(error => {
+            console.error('設定の保存に失敗しました:', error);
+          });
+        });
+      }
     });
   }
 
@@ -960,300 +1111,135 @@ export default function showLoadingScreenEditor(container) {
   function updatePreview(screenType = 'startScreen') {
     console.log('プレビュー更新開始:', screenType);
     
-    // 設定オブジェクトの存在確認と初期化
-    if (!currentSettings || !currentSettings[screenType]) {
-      console.warn(`Settings for ${screenType} not found, initializing...`);
-      if (!currentSettings) {
-        currentSettings = JSON.parse(JSON.stringify(defaultSettings));
-      }
-      if (!currentSettings[screenType]) {
-        currentSettings[screenType] = { ...defaultSettings[screenType] };
-      }
-    }
-
-    // プレビュー要素の取得
+    // プレビュー画面の要素を取得
     const previewScreen = document.querySelector('.loading-screen-editor__preview-screen');
-    const frame = document.querySelector('.loading-screen-editor__phone-frame');
-    
-    if (!previewScreen || !frame) {
-      console.error('Preview elements not found');
+    if (!previewScreen) {
+      console.error('プレビュー画面が見つかりません');
       return;
     }
 
-    // 現在のスクリーンタイプの設定を取得
-    const settings = currentSettings[screenType];
-    console.log('Current settings for preview:', settings);
+    // 全てのプレビュー画面を非表示
+    const allScreens = [
+      '.loading-screen-editor__preview-start-screen',
+      '.loading-screen-editor__preview-loading-screen',
+      '.loading-screen-editor__preview-guide-screen'
+    ];
+    
+    allScreens.forEach(selector => {
+      const screen = previewScreen.querySelector(selector);
+      if (screen) {
+        screen.style.display = 'none';
+      }
+    });
 
-    // プレビュー要素の取得
+    // 対応する画面を表示
+    let targetScreen;
+    switch (screenType) {
+      case 'startScreen':
+        targetScreen = previewScreen.querySelector('.loading-screen-editor__preview-start-screen');
+        if (targetScreen) {
+          targetScreen.style.display = 'flex';
+          updateStartPreview(targetScreen, currentSettings.startScreen);
+        }
+        break;
+      case 'loadingScreen':
+        targetScreen = previewScreen.querySelector('.loading-screen-editor__preview-loading-screen');
+        if (targetScreen) {
+          targetScreen.style.display = 'flex';
+          updateLoadingPreview(targetScreen, currentSettings.loadingScreen);
+        }
+        break;
+      case 'guideScreen':
+        targetScreen = previewScreen.querySelector('.loading-screen-editor__preview-guide-screen');
+        if (targetScreen) {
+          targetScreen.style.display = 'flex';
+          updateGuidePreview(targetScreen, currentSettings.guideScreen);
+        }
+        break;
+    }
+  }
+
+  function updateStartPreview(screen, settings = {}) {
+    console.log('スタート画面の更新:', settings);
+    
     const elements = {
-      logo: previewScreen.querySelector('.loading-screen-editor__preview-logo'),
-      title: previewScreen.querySelector('.loading-screen-editor__preview-title'),
-      subtitle: previewScreen.querySelector('.loading-screen-editor__preview-subtitle'),
-      message: previewScreen.querySelector('.loading-screen-editor__preview-message'),
-      progress: previewScreen.querySelector('.loading-screen-editor__preview-progress')
+      background: screen.querySelector('.loading-screen-editor__preview-background'),
+      title: screen.querySelector('.loading-screen-editor__preview-title'),
+      button: screen.querySelector('.loading-screen-editor__preview-button')
     };
 
-    // 基本スタイルの適用
-    const backgroundColor = validateAndFixColor(settings.backgroundColor) || defaultSettings[screenType].backgroundColor;
-    const textColor = validateAndFixColor(settings.textColor) || defaultSettings[screenType].textColor;
-
-    previewScreen.style.backgroundColor = backgroundColor;
-    previewScreen.style.color = textColor;
-
-    const isLandscape = frame.classList.contains('loading-screen-editor__phone-frame--landscape');
-    
-    try {
-      // スクリーンタイプに応じた更新処理
-      switch (screenType) {
-        case 'startScreen':
-          updateStartPreview(previewScreen, isLandscape, settings, elements);
-          break;
-        case 'loadingScreen':
-          updateLoadingPreview(previewScreen, isLandscape, settings, elements);
-          break;
-        case 'guideScreen':
-          updateGuidePreview(previewScreen, isLandscape, settings, elements);
-          break;
-        default:
-          console.warn(`Unknown screen type: ${screenType}`);
-          updateStartPreview(previewScreen, isLandscape, defaultSettings.startScreen, elements);
-      }
-    } catch (error) {
-      console.error('Error updating preview:', error);
-      applyDefaultPreview(previewScreen, elements);
+    // 要素の存在確認とスタイル適用
+    if (elements.background) {
+      elements.background.style.backgroundColor = settings.backgroundColor || defaultSettings.startScreen.backgroundColor;
     }
-  }
 
-  // Start Screen プレビューの更新を改善
-  function updateStartPreview(previewScreen, isLandscape, settings = {}, elements = {}) {
-    const {
-      backgroundColor = '#121212',
-      textColor = '#ffffff',
-      buttonColor = '#6c5ce7',
-      title = 'Start Experience',
-      buttonText = 'Start',
-      thumbnail = null
-    } = settings;
-
-    // 要素の表示/非表示
-    if (elements.logo) elements.logo.style.display = 'none';
-    if (elements.progress) elements.progress.style.display = 'none';
-    if (elements.message) elements.message.style.display = 'none';
-
-    // タイトルの更新
     if (elements.title) {
-      elements.title.textContent = title;
-      elements.title.style.fontSize = '24px';
-      elements.title.style.fontWeight = 'bold';
-      elements.title.style.marginBottom = '20px';
-      elements.title.style.textAlign = 'center';
-      elements.title.style.color = textColor;
+      elements.title.textContent = settings.title || defaultSettings.startScreen.title;
+      elements.title.style.color = settings.textColor || defaultSettings.startScreen.textColor;
     }
 
-    // サムネイル表示の処理
-    if (thumbnail) {
-      previewScreen.style.backgroundImage = `url(${thumbnail})`;
-      previewScreen.style.backgroundSize = 'cover';
-      previewScreen.style.backgroundPosition = 'center';
-      
-      // オーバーレイの追加
-      const existingOverlay = previewScreen.querySelector('.preview-overlay');
-      let overlay = existingOverlay;
-      
-      if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'preview-overlay';
-        overlay.style.position = 'absolute';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        overlay.style.zIndex = '1';
-        previewScreen.appendChild(overlay);
-      }
-
-      // コンテンツを前面に
-      if (elements.title) {
-        elements.title.style.position = 'relative';
-        elements.title.style.zIndex = '2';
-        elements.title.style.textShadow = '0 2px 4px rgba(0, 0, 0, 0.5)';
-      }
-    } else {
-      previewScreen.style.backgroundImage = 'none';
-      previewScreen.style.backgroundColor = backgroundColor;
-      
-      // オーバーレイを削除
-      const overlay = previewScreen.querySelector('.preview-overlay');
-      if (overlay) overlay.remove();
+    if (elements.button) {
+      elements.button.textContent = settings.buttonText || defaultSettings.startScreen.buttonText;
+      elements.button.style.backgroundColor = settings.buttonColor || defaultSettings.startScreen.buttonColor;
+      elements.button.style.color = settings.textColor || defaultSettings.startScreen.textColor;
     }
-
-    // ボタンの更新（subtitle要素をボタンとして使用）
-    if (elements.subtitle) {
-      const validButtonColor = validateAndFixColor(buttonColor) || '#6c5ce7';
-      const darkerButtonColor = adjustColor(validButtonColor, -15);
-      const lighterButtonColor = adjustColor(validButtonColor, 15);
-      
-      elements.subtitle.textContent = buttonText || 'Start';
-      elements.subtitle.style.position = 'relative';
-      elements.subtitle.style.zIndex = '2';
-      elements.subtitle.style.display = 'inline-block';
-      elements.subtitle.style.padding = '14px 28px';
-      elements.subtitle.style.minWidth = '160px';
-      elements.subtitle.style.background = `linear-gradient(to bottom, ${validButtonColor}, ${darkerButtonColor})`;
-      elements.subtitle.style.color = textColor || '#ffffff';
-      elements.subtitle.style.borderRadius = '8px';
-      elements.subtitle.style.cursor = 'pointer';
-      elements.subtitle.style.fontWeight = '600';
-      elements.subtitle.style.fontSize = '16px';
-      elements.subtitle.style.letterSpacing = '0.5px';
-      elements.subtitle.style.textAlign = 'center';
-      elements.subtitle.style.transition = 'all 0.2s ease';
-      elements.subtitle.style.border = 'none';
-      elements.subtitle.style.boxShadow = `0 4px 6px rgba(${hexToRgb(validButtonColor)}, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1)`;
-      elements.subtitle.style.transform = 'translateY(0)';
-      elements.subtitle.style.textShadow = thumbnail ? '0 1px 2px rgba(0, 0, 0, 0.3)' : 'none';
-      elements.subtitle.style.marginTop = '20px';
-
-      // ホバーエフェクトの追加
-      elements.subtitle.onmouseenter = () => {
-        elements.subtitle.style.transform = 'translateY(-2px)';
-        elements.subtitle.style.boxShadow = `0 7px 14px rgba(${hexToRgb(validButtonColor)}, 0.25), 0 3px 6px rgba(0, 0, 0, 0.15)`;
-        elements.subtitle.style.background = `linear-gradient(to bottom, ${lighterButtonColor}, ${validButtonColor})`;
-      };
-
-      elements.subtitle.onmouseleave = () => {
-        elements.subtitle.style.transform = 'translateY(0)';
-        elements.subtitle.style.boxShadow = `0 4px 6px rgba(${hexToRgb(validButtonColor)}, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1)`;
-        elements.subtitle.style.background = `linear-gradient(to bottom, ${validButtonColor}, ${darkerButtonColor})`;
-      };
-
-      // クリックエフェクトの追加
-      elements.subtitle.onmousedown = () => {
-        elements.subtitle.style.transform = 'translateY(1px)';
-        elements.subtitle.style.boxShadow = `0 2px 4px rgba(${hexToRgb(validButtonColor)}, 0.2)`;
-        elements.subtitle.style.background = `linear-gradient(to bottom, ${darkerButtonColor}, ${adjustColor(darkerButtonColor, -10)})`;
-      };
-
-      elements.subtitle.onmouseup = () => {
-        elements.subtitle.style.transform = 'translateY(-2px)';
-        elements.subtitle.style.boxShadow = `0 7px 14px rgba(${hexToRgb(validButtonColor)}, 0.25), 0 3px 6px rgba(0, 0, 0, 0.15)`;
-        elements.subtitle.style.background = `linear-gradient(to bottom, ${lighterButtonColor}, ${validButtonColor})`;
-      };
-    }
-
-    applyLayoutStyles(previewScreen, isLandscape, elements);
   }
 
-  // Loading Screen プレビューの更新
-  function updateLoadingPreview(previewScreen, isLandscape, settings = {}, elements = {}) {
-    const {
-      backgroundColor = '#121212',
-      textColor = '#ffffff',
-      accentColor = '#6c5ce7',
-      logo = null,
-      brandName = 'Your Brand',
-      subTitle = 'Experience AR',
-      loadingMessage = 'Loading...',
-      fontScale = 1
-    } = settings;
+  function updateLoadingPreview(screen, settings = {}) {
+    console.log('ローディング画面の更新:', settings);
+    
+    const elements = {
+      logo: screen.querySelector('.loading-screen-editor__preview-logo'),
+      title: screen.querySelector('.loading-screen-editor__preview-title'),
+      subtitle: screen.querySelector('.loading-screen-editor__preview-subtitle'),
+      message: screen.querySelector('.loading-screen-editor__preview-message'),
+      progress: screen.querySelector('.loading-screen-editor__preview-progress')
+    };
 
-    // ロゴの処理
+    // 要素の存在確認とスタイル適用
     if (elements.logo) {
-      elements.logo.style.display = logo ? 'block' : 'none';
-      if (logo) {
-        elements.logo.style.backgroundImage = `url(${logo})`;
+      elements.logo.style.display = settings.logo ? 'block' : 'none';
+      if (settings.logo) {
+        elements.logo.style.backgroundImage = `url(${settings.logo})`;
         elements.logo.style.backgroundSize = 'contain';
         elements.logo.style.backgroundPosition = 'center';
         elements.logo.style.backgroundRepeat = 'no-repeat';
       }
     }
 
-    // プログレスバーの処理
     if (elements.progress) {
       elements.progress.style.display = 'block';
       const progressBar = elements.progress.querySelector('.loading-screen-editor__preview-progress-bar');
       if (progressBar) {
-        progressBar.style.backgroundColor = validateAndFixColor(accentColor);
+        progressBar.style.backgroundColor = validateAndFixColor(settings.accentColor);
       }
     }
 
-    // テキスト要素の更新
     if (elements.title) {
-      elements.title.textContent = brandName;
-      elements.title.style.fontSize = `${24 * fontScale}px`;
+      elements.title.textContent = settings.brandName || defaultSettings.loadingScreen.brandName;
     }
     if (elements.subtitle) {
-      elements.subtitle.textContent = subTitle;
-      elements.subtitle.style.fontSize = `${16 * fontScale}px`;
+      elements.subtitle.textContent = settings.subTitle || defaultSettings.loadingScreen.subTitle;
     }
     if (elements.message) {
-      elements.message.textContent = loadingMessage;
-      elements.message.style.fontSize = `${14 * fontScale}px`;
+      elements.message.textContent = settings.loadingMessage || defaultSettings.loadingScreen.loadingMessage;
     }
-
-    applyLayoutStyles(previewScreen, isLandscape, elements);
   }
 
-  // Guide Screen プレビューの更新
-  function updateGuidePreview(previewScreen, isLandscape, settings = {}, elements = {}) {
-    const {
-      backgroundColor = '#121212',
-      textColor = '#ffffff',
-      title = 'Guide Screen',
-      description = 'Coming Soon'
-    } = settings;
+  function updateGuidePreview(screen, settings = {}) {
+    console.log('ガイド画面の更新:', settings);
+    
+    const elements = {
+      title: screen.querySelector('.loading-screen-editor__preview-title'),
+      subtitle: screen.querySelector('.loading-screen-editor__preview-subtitle')
+    };
 
-    // 要素の表示/非表示
-    if (elements.logo) elements.logo.style.display = 'none';
-    if (elements.progress) elements.progress.style.display = 'none';
-    if (elements.message) elements.message.style.display = 'none';
-
-    // テキスト要素の更新
-    if (elements.title) elements.title.textContent = title;
-    if (elements.subtitle) elements.subtitle.textContent = description;
-
-    applyLayoutStyles(previewScreen, isLandscape, elements);
-  }
-
-  // レイアウトスタイルの適用を共通化
-  function applyLayoutStyles(previewScreen, isLandscape, elements) {
-    if (isLandscape) {
-      previewScreen.style.transform = 'none';
-      previewScreen.style.display = 'flex';
-      previewScreen.style.flexDirection = 'row';
-      previewScreen.style.justifyContent = 'space-between';
-      previewScreen.style.padding = '32px';
-      previewScreen.style.alignItems = 'center';
-      
-      // 2カラムレイアウトの適用
-      let leftColumn = previewScreen.querySelector('.preview-column-left');
-      let rightColumn = previewScreen.querySelector('.preview-column-right');
-      
-      if (!leftColumn) {
-        leftColumn = document.createElement('div');
-        leftColumn.className = 'preview-column-left';
-        rightColumn = document.createElement('div');
-        rightColumn.className = 'preview-column-right';
-        
-        // 要素の再配置
-        if (elements.logo) leftColumn.appendChild(elements.logo);
-        if (elements.title) leftColumn.appendChild(elements.title);
-        if (elements.subtitle) leftColumn.appendChild(elements.subtitle);
-        if (elements.progress) rightColumn.appendChild(elements.progress);
-        if (elements.message) rightColumn.appendChild(elements.message);
-        
-        previewScreen.innerHTML = '';
-        previewScreen.appendChild(leftColumn);
-        previewScreen.appendChild(rightColumn);
-      }
-    } else {
-      previewScreen.style.transform = 'none';
-      previewScreen.style.display = 'flex';
-      previewScreen.style.flexDirection = 'column';
-      previewScreen.style.justifyContent = 'center';
-      previewScreen.style.padding = '20px';
-      previewScreen.style.alignItems = 'center';
+    // 要素の存在確認とスタイル適用
+    if (elements.title) {
+      elements.title.textContent = settings.title || defaultSettings.guideScreen.title;
+    }
+    if (elements.subtitle) {
+      elements.subtitle.textContent = settings.description || defaultSettings.guideScreen.description;
     }
   }
 
@@ -1398,3 +1384,185 @@ function hexToRgb(hex) {
   const b = parseInt(hex.substring(5,7), 16);
   return `${r}, ${g}, ${b}`;
 }
+
+// スライダーコンポーネントの初期化
+function initializeSliders() {
+  const sliders = document.querySelectorAll('.loading-screen-editor__slider');
+  sliders.forEach(slider => {
+    const valueDisplay = slider.nextElementSibling;
+    const updateValue = () => {
+      valueDisplay.textContent = `${slider.value}${slider.dataset.unit || ''}`;
+      updatePreview(slider.dataset.target);
+    };
+
+    slider.addEventListener('input', updateValue);
+    slider.addEventListener('change', () => {
+      updateValue();
+      saveSettings();
+    });
+
+    // 初期値を設定
+    updateValue();
+  });
+}
+
+// テキストスタイル選択の初期化
+function initializeStyleSelector() {
+  const styleOptions = document.querySelectorAll('.loading-screen-editor__style-option');
+  styleOptions.forEach(option => {
+    option.addEventListener('click', () => {
+      // アクティブなスタイルを更新
+      styleOptions.forEach(opt => opt.classList.remove('active'));
+      option.classList.add('active');
+
+      // 設定を更新
+      const styleType = option.dataset.style;
+      currentSettings.textStyle = styleType;
+      updatePreview('text');
+      saveSettings();
+    });
+  });
+}
+
+// カラーピッカーの初期化
+function initializeColorPickers() {
+  const colorPickers = document.querySelectorAll('.loading-screen-editor__color-picker');
+  colorPickers.forEach(picker => {
+    picker.addEventListener('input', () => {
+      const target = picker.dataset.target;
+      currentSettings[target] = picker.value;
+      updatePreview(target);
+    });
+
+    picker.addEventListener('change', () => {
+      saveSettings();
+    });
+  });
+}
+
+// サムネイル画像のドラッグ&ドロップ処理
+function initializeThumbnailUpload() {
+  const dropZone = document.querySelector('.loading-screen-editor__drop-zone');
+  const fileInput = document.querySelector('.loading-screen-editor__file-input');
+
+  // ドラッグ&ドロップイベントの設定
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, preventDefaults);
+  });
+
+  function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // ドラッグ中のスタイル変更
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.classList.add('drag-active');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.classList.remove('drag-active');
+    });
+  });
+
+  // ファイルドロップ時の処理
+  dropZone.addEventListener('drop', handleDrop);
+  fileInput.addEventListener('change', handleFileSelect);
+
+  function handleDrop(e) {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    handleFiles(files);
+  }
+
+  function handleFileSelect(e) {
+    const files = e.target.files;
+    handleFiles(files);
+  }
+
+  function handleFiles(files) {
+    if (files.length > 0) {
+      const file = files[0];
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          currentSettings.thumbnailImage = e.target.result;
+          updateThumbnailPreview();
+          saveSettings();
+        };
+        reader.readAsDataURL(file);
+      } else {
+        showError('画像ファイルのみアップロード可能です。');
+      }
+    }
+  }
+}
+
+// サムネイル画像のプレビュー更新
+function updateThumbnailPreview() {
+  const preview = document.querySelector('.loading-screen-editor__file-preview');
+  if (currentSettings.thumbnailImage) {
+    preview.innerHTML = `
+      <img src="${currentSettings.thumbnailImage}" alt="サムネイル" style="width: 100%; height: 100%; object-fit: cover;">
+      <button class="loading-screen-editor__remove-button" onclick="removeThumbnail()">×</button>
+    `;
+  } else {
+    preview.innerHTML = createDropZoneContent();
+  }
+}
+
+// サムネイル画像の削除
+function removeThumbnail() {
+  currentSettings.thumbnailImage = null;
+  updateThumbnailPreview();
+  saveSettings();
+}
+
+// リセットボタンの処理
+function initializeResetButton() {
+  const resetButton = document.querySelector('.loading-screen-editor__reset-button');
+  resetButton.addEventListener('click', () => {
+    if (confirm('全ての設定を初期値に戻しますか？')) {
+      currentSettings = { ...defaultSettings };
+      updateAllPreviews();
+      saveSettings();
+    }
+  });
+}
+
+// エラーメッセージの表示
+function showError(message) {
+  const errorContainer = document.createElement('div');
+  errorContainer.className = 'loading-screen-editor__error';
+  errorContainer.textContent = message;
+  document.body.appendChild(errorContainer);
+
+  setTimeout(() => {
+    errorContainer.remove();
+  }, 3000);
+}
+
+// 全てのプレビューの更新
+function updateAllPreviews() {
+  updatePreview('text');
+  updatePreview('color');
+  updatePreview('size');
+  updateThumbnailPreview();
+}
+
+// 初期化関数
+function initializeEditor() {
+  initializeSliders();
+  initializeStyleSelector();
+  initializeColorPickers();
+  initializeThumbnailUpload();
+  initializeResetButton();
+  loadSettings();
+  updateAllPreviews();
+}
+
+// DOMの読み込み完了時に初期化を実行
+document.addEventListener('DOMContentLoaded', initializeEditor);

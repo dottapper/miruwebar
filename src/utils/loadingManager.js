@@ -27,8 +27,8 @@ const brandPresets = {
   default: defaultSettings,
   mavon: {
     name: 'MAVON',
-    subTitle: 'WebAR Experience',
-    loadingMessage: 'Loading 3D model...',
+    subTitle: 'WebARエクスペリエンス',
+    loadingMessage: '3Dモデルを読み込んでいます...',
     logo: '/path/to/mavon-logo.png',
     bgColor: 'rgba(25, 25, 35, 0.9)',
     textColor: 'white',
@@ -213,10 +213,12 @@ const loadingManager = {
 };
 
 // ページ遷移時などのクリーンアップ
-window.addEventListener('beforeunload', (event) => {
-  cleanupAllLoaders().catch(error => {
+window.addEventListener('beforeunload', () => {
+  try {
+    cleanupAllLoaders();
+  } catch (error) {
     console.error('Cleanup error during unload:', error);
-  });
+  }
 });
 
 /**
@@ -224,12 +226,9 @@ window.addEventListener('beforeunload', (event) => {
  * @param {string} container - 要素を追加する親コンテナ
  */
 function createLoadingElements(container) {
-  // 既存の要素があれば削除（二重作成防止）
-  const existingLoadingScreen = document.getElementById('app-loading-screen');
-  if (existingLoadingScreen) {
-    existingLoadingScreen.remove();
-  }
-
+  // 既存の要素を完全にクリーンアップ
+  cleanupAllLoaders();
+  
   // ローディング画面のコンテナを作成
   loadingScreen = document.createElement('div');
   loadingScreen.id = 'app-loading-screen';
@@ -368,6 +367,18 @@ async function initLoadingManager(containerElementId) {
       cleanupLoadingManager().catch(error => {
         console.error('Cleanup error during unload:', error);
       });
+    });
+
+    // WebSocket接続の監視を追加
+    window.addEventListener('online', () => {
+      console.log('ネットワーク接続が復帰しました。WebSocket再接続を試みます...');
+      if (typeof import.meta.hot !== 'undefined') {
+        import.meta.hot.send('vite:reconnect');
+      }
+    });
+
+    window.addEventListener('offline', () => {
+      console.warn('ネットワーク接続が切断されました。');
     });
 
     containerId = containerElementId;
