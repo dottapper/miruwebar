@@ -1,0 +1,508 @@
+/**
+ * ローディング画面エディタのプレビュー機能
+ */
+
+import { defaultSettings } from './settings.js';
+
+// プレビュー更新のメイン関数
+export function updatePreview(screenType = 'startScreen') {
+  const previewScreen = document.getElementById('preview-screen');
+  if (!previewScreen) return;
+
+  const settings = getCurrentSettingsFromDOM();
+  
+  switch (screenType) {
+    case 'startScreen':
+      updateStartPreview(previewScreen, settings);
+      break;
+    case 'loadingScreen':
+      updateLoadingPreview(previewScreen, settings);
+      break;
+    case 'guideScreen':
+      updateGuidePreview(previewScreen, settings);
+      break;
+    default:
+      updateStartPreview(previewScreen, settings);
+  }
+}
+
+// スタート画面のプレビュー更新
+function updateStartPreview(previewScreen, settings) {
+  const screen = settings.startScreen;
+  
+  // サムネイル画像の取得
+  const thumbnailDropzone = document.getElementById('thumbnailDropzone');
+  const thumbnailImg = thumbnailDropzone?.querySelector('img');
+  const thumbnailSrc = thumbnailImg?.src || '';
+  
+  // ロゴ画像の取得
+  const logoDropzone = document.getElementById('startLogoDropzone');
+  const logoImg = logoDropzone?.querySelector('img');
+  const logoSrc = logoImg?.src || '';
+
+  previewScreen.innerHTML = `
+    <div class="start-screen-preview" style="
+      background-color: ${screen.backgroundColor || defaultSettings.startScreen.backgroundColor};
+      color: ${screen.textColor || defaultSettings.startScreen.textColor};
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 20px;
+      box-sizing: border-box;
+    ">
+      ${logoSrc ? `
+        <div class="logo-container" style="
+          position: absolute;
+          top: ${screen.logoPosition || defaultSettings.startScreen.logoPosition}%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 80}px;
+          height: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 60}px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(255,255,255,0.05);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <img src="${logoSrc}" style="
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+          " alt="ロゴ">
+        </div>
+      ` : ''}
+      
+      ${thumbnailSrc ? `
+        <div class="thumbnail-container" style="
+          position: absolute;
+          top: 20px;
+          right: 20px;
+          width: 60px;
+          height: 60px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(255,255,255,0.1);
+        ">
+          <img src="${thumbnailSrc}" style="
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          " alt="サムネイル">
+        </div>
+      ` : ''}
+      
+      <div class="title-container" style="
+        position: absolute;
+        top: ${screen.titlePosition || defaultSettings.startScreen.titlePosition}%;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+        width: 90%;
+      ">
+        <h1 style="
+          font-size: ${(screen.titleSize || defaultSettings.startScreen.titleSize) * 24}px;
+          margin: 0;
+          font-weight: bold;
+          line-height: 1.2;
+          color: ${screen.textColor || defaultSettings.startScreen.textColor};
+        ">${screen.title || defaultSettings.startScreen.title}</h1>
+      </div>
+      
+      <div class="button-container" style="
+        position: absolute;
+        top: ${screen.buttonPosition || defaultSettings.startScreen.buttonPosition}%;
+        left: 50%;
+        transform: translateX(-50%);
+        text-align: center;
+      ">
+        <button style="
+          background-color: ${screen.buttonColor || defaultSettings.startScreen.buttonColor};
+          color: ${screen.buttonTextColor || defaultSettings.startScreen.buttonTextColor};
+          border: none;
+          padding: ${(screen.buttonSize || defaultSettings.startScreen.buttonSize) * 12}px ${(screen.buttonSize || defaultSettings.startScreen.buttonSize) * 24}px;
+          border-radius: 8px;
+          font-size: ${(screen.buttonSize || defaultSettings.startScreen.buttonSize) * 16}px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        " onmouseover="this.style.opacity='0.9'; this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)'">
+          ${screen.buttonText || defaultSettings.startScreen.buttonText}
+        </button>
+      </div>
+      
+      <!-- 画面の状態表示 -->
+      <div class="screen-indicator" style="
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(255,255,255,0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        opacity: 0.7;
+      ">
+        スタート画面
+      </div>
+    </div>
+  `;
+}
+
+// ローディング画面のプレビュー更新
+function updateLoadingPreview(previewScreen, settings) {
+  const screen = settings.loadingScreen;
+  
+  // ロゴ画像の取得
+  const logoDropzone = document.getElementById('logoDropzone');
+  const logoImg = logoDropzone?.querySelector('img');
+  const logoSrc = logoImg?.src || '';
+
+  previewScreen.innerHTML = `
+    <div class="loading-screen-preview" style="
+      background-color: ${screen.backgroundColor || defaultSettings.loadingScreen.backgroundColor};
+      color: ${screen.textColor || defaultSettings.loadingScreen.textColor};
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 20px;
+      box-sizing: border-box;
+    ">
+      ${logoSrc ? `
+        <div class="logo-container" style="
+          width: 60px;
+          height: 60px;
+          margin-bottom: 20px;
+          border-radius: 8px;
+          overflow: hidden;
+        ">
+          <img src="${logoSrc}" style="
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+          " alt="ロゴ">
+        </div>
+      ` : ''}
+      
+      <div class="brand-name" style="
+        font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 20}px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        text-align: center;
+      ">
+        ${screen.brandName || defaultSettings.loadingScreen.brandName}
+      </div>
+      
+      <div class="sub-title" style="
+        font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 14}px;
+        margin-bottom: 30px;
+        opacity: 0.8;
+        text-align: center;
+      ">
+        ${screen.subTitle || defaultSettings.loadingScreen.subTitle}
+      </div>
+      
+      <div class="progress-container" style="
+        width: 80%;
+        max-width: 200px;
+        margin-bottom: 15px;
+      ">
+        <div class="progress-bar" style="
+          width: 100%;
+          height: 4px;
+          background: rgba(255,255,255,0.2);
+          border-radius: 2px;
+          overflow: hidden;
+        ">
+          <div class="progress-fill" style="
+            width: 60%;
+            height: 100%;
+            background: ${screen.accentColor || defaultSettings.loadingScreen.accentColor};
+            transition: width 0.3s ease;
+            animation: loading-pulse 2s infinite;
+          "></div>
+        </div>
+      </div>
+      
+      <div class="loading-message" style="
+        font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 12}px;
+        opacity: 0.9;
+        text-align: center;
+      ">
+        ${screen.loadingMessage || defaultSettings.loadingScreen.loadingMessage}
+      </div>
+    </div>
+    
+    <style>
+      @keyframes loading-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.6; }
+      }
+    </style>
+  `;
+}
+
+// ガイド画面のプレビュー更新
+function updateGuidePreview(previewScreen, settings) {
+  const screen = settings.guideScreen;
+  const mode = screen.mode || 'surface';
+  
+  // モードに応じてガイド画像を取得
+  let guideImageDropzone, guideImg, guideSrc;
+  if (mode === 'surface') {
+    guideImageDropzone = document.getElementById('surfaceGuideImageDropzone');
+  } else {
+    guideImageDropzone = document.getElementById('worldGuideImageDropzone');
+  }
+  
+  guideImg = guideImageDropzone?.querySelector('img');
+  guideSrc = guideImg?.src || '';
+  
+  // モードに応じたタイトルと説明を取得
+  let title, description;
+  if (mode === 'surface') {
+    title = document.getElementById('guideScreen-surfaceTitle')?.value || 
+            screen.surfaceDetection?.title || 
+            '画像の上にカメラを向けて合わせてください';
+    description = document.getElementById('guideScreen-surfaceDescription')?.value || 
+                  screen.surfaceDetection?.description || 
+                  'マーカー画像を画面内に収めてください';
+  } else {
+    title = document.getElementById('guideScreen-worldTitle')?.value || 
+            screen.worldTracking?.title || 
+            '画面をタップしてください';
+    description = document.getElementById('guideScreen-worldDescription')?.value || 
+                  screen.worldTracking?.description || 
+                  '平らな面を見つけて画面をタップしてください';
+  }
+
+  previewScreen.innerHTML = `
+    <div class="guide-screen-preview" style="
+      background-color: ${screen.backgroundColor || defaultSettings.guideScreen.backgroundColor};
+      color: ${screen.textColor || defaultSettings.guideScreen.textColor};
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: 20px;
+      box-sizing: border-box;
+    ">
+      <!-- モード表示 -->
+      <div class="mode-indicator" style="
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255,255,255,0.2);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        opacity: 0.7;
+      ">
+        ${mode === 'surface' ? '平面検出' : '空間検出'}
+      </div>
+      
+      <div class="guide-title" style="
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        text-align: center;
+        line-height: 1.3;
+      ">
+        ${title}
+      </div>
+      
+      ${guideSrc ? `
+        <div class="guide-image-container" style="
+          width: ${mode === 'surface' ? '140px' : '100px'};
+          height: ${mode === 'surface' ? '100px' : '100px'};
+          margin-bottom: 20px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: rgba(255,255,255,0.1);
+          border: ${mode === 'surface' ? '2px dashed rgba(255,255,255,0.3)' : 'none'};
+        ">
+          <img src="${guideSrc}" style="
+            width: 100%;
+            height: 100%;
+            object-fit: ${mode === 'surface' ? 'contain' : 'cover'};
+          " alt="ガイド画像">
+        </div>
+      ` : `
+        <!-- デフォルトアイコン -->
+        <div class="guide-icon-container" style="
+          width: 80px;
+          height: 80px;
+          margin-bottom: 20px;
+          border-radius: 50%;
+          background: rgba(255,255,255,0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 32px;
+        ">
+          ${mode === 'surface' ? '📷' : '👆'}
+        </div>
+      `}
+      
+      <div class="guide-description" style="
+        font-size: 14px;
+        line-height: 1.5;
+        text-align: center;
+        max-width: 90%;
+        opacity: 0.9;
+        margin-bottom: 30px;
+      ">
+        ${description}
+      </div>
+      
+      <!-- モード別のインタラクション表示 -->
+      ${mode === 'surface' ? `
+        <div class="scanning-indicator" style="
+          width: 200px;
+          height: 120px;
+          border: 2px dashed ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+          animation: scanning-pulse 2s infinite;
+        ">
+          <div style="
+            font-size: 12px;
+            opacity: 0.8;
+            text-align: center;
+          ">
+            画像を認識中...
+          </div>
+        </div>
+      ` : `
+        <div class="tap-indicator" style="
+          width: 60px;
+          height: 60px;
+          border: 3px solid ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+          animation: tap-pulse 1.5s infinite;
+        ">
+          <div style="
+            width: 20px;
+            height: 20px;
+            background: ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+            border-radius: 50%;
+          "></div>
+        </div>
+      `}
+      
+      <div class="guide-status" style="
+        font-size: 12px;
+        opacity: 0.7;
+        text-align: center;
+      ">
+        ${mode === 'surface' ? '画像を認識しています...' : '平面を検出中...'}
+      </div>
+    </div>
+    
+    <style>
+      @keyframes scanning-pulse {
+        0%, 100% { opacity: 1; border-color: ${screen.accentColor || defaultSettings.guideScreen.accentColor}; }
+        50% { opacity: 0.6; border-color: rgba(108, 92, 231, 0.3); }
+      }
+      
+      @keyframes tap-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.7; }
+      }
+    </style>
+  `;
+}
+
+// DOMから現在の設定を取得
+function getCurrentSettingsFromDOM() {
+  const settings = {
+    startScreen: { ...defaultSettings.startScreen },
+    loadingScreen: { ...defaultSettings.loadingScreen },
+    guideScreen: { 
+      ...defaultSettings.guideScreen,
+      surfaceDetection: { ...defaultSettings.guideScreen.surfaceDetection },
+      worldTracking: { ...defaultSettings.guideScreen.worldTracking }
+    }
+  };
+
+  // すべての入力要素から値を取得
+  const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider, .loading-screen-editor__color-picker, select');
+  
+  inputs.forEach(input => {
+    const id = input.id;
+    if (!id) return;
+
+    const [screenType, property] = id.split('-');
+    if (settings[screenType] && property && !property.includes('Text')) {
+      let value = input.value;
+      
+      // 数値の場合は変換
+      if (input.type === 'range') {
+        value = parseFloat(value);
+      }
+      
+      // 空文字列の場合はデフォルト値を使用
+      if (value === '') {
+        value = defaultSettings[screenType]?.[property] || '';
+      }
+      
+      settings[screenType][property] = value;
+    }
+  });
+  
+  // ガイド画面の特別な処理
+  const guideModeSelect = document.getElementById('guideScreen-mode');
+  if (guideModeSelect) {
+    settings.guideScreen.mode = guideModeSelect.value;
+  }
+  
+  // 平面検出設定
+  const surfaceTitle = document.getElementById('guideScreen-surfaceTitle');
+  const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
+  if (surfaceTitle) {
+    settings.guideScreen.surfaceDetection.title = surfaceTitle.value;
+  }
+  if (surfaceDescription) {
+    settings.guideScreen.surfaceDetection.description = surfaceDescription.value;
+  }
+  
+  // 空間検出設定
+  const worldTitle = document.getElementById('guideScreen-worldTitle');
+  const worldDescription = document.getElementById('guideScreen-worldDescription');
+  if (worldTitle) {
+    settings.guideScreen.worldTracking.title = worldTitle.value;
+  }
+  if (worldDescription) {
+    settings.guideScreen.worldTracking.description = worldDescription.value;
+  }
+
+  return settings;
+}
+
+// プレビューのスクロール調整
+export function adjustPreviewScroll() {
+  const phoneContainer = document.querySelector('.loading-screen-editor__phone-container');
+  if (phoneContainer) {
+    setTimeout(() => {
+      phoneContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  }
+} 

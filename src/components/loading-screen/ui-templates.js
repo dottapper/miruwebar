@@ -1,0 +1,427 @@
+/**
+ * ローディング画面エディタのUIテンプレート生成
+ */
+
+import { defaultSettings } from './settings.js';
+
+// テンプレート定義
+export function createStartTabContent(currentSettings = defaultSettings) {
+  return `
+    <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__reset-container">
+        <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-start-settings">
+          設定をリセット
+        </button>
+      </div>
+      
+      <!-- ロゴ設定 -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">ロゴ設定</h3>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ロゴ画像</label>
+          <div class="loading-screen-editor__file-preview" id="startLogoDropzone">
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*,.gif" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+              <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                PNG, JPG, GIF, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ロゴ位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-logoPosition" min="5" max="50" step="1" value="${currentSettings.startScreen.logoPosition}">
+            <span class="loading-screen-editor__value-display" id="logoPosition-value">${currentSettings.startScreen.logoPosition}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ロゴサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-logoSize" min="0.3" max="2.0" step="0.1" value="${currentSettings.startScreen.logoSize}">
+            <span class="loading-screen-editor__value-display" id="logoSize-value">${currentSettings.startScreen.logoSize}x</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- テキスト設定 -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">テキスト設定</h3>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトル</label>
+          <input type="text" class="loading-screen-editor__input" id="startScreen-title" value="${currentSettings.startScreen.title}" placeholder="AR体験を開始">
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトル位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-titlePosition" min="20" max="80" step="1" value="${currentSettings.startScreen.titlePosition}">
+            <span class="loading-screen-editor__value-display" id="titlePosition-value">${currentSettings.startScreen.titlePosition}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトルサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-titleSize" min="0.5" max="2.0" step="0.1" value="${currentSettings.startScreen.titleSize}">
+            <span class="loading-screen-editor__value-display" id="titleSize-value">${currentSettings.startScreen.titleSize}x</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- ボタン設定 -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">ボタン設定</h3>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタンテキスト</label>
+          <input type="text" class="loading-screen-editor__input" id="startScreen-buttonText" value="${currentSettings.startScreen.buttonText}" placeholder="開始">
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタン位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-buttonPosition" min="40" max="90" step="1" value="${currentSettings.startScreen.buttonPosition}">
+            <span class="loading-screen-editor__value-display" id="buttonPosition-value">${currentSettings.startScreen.buttonPosition}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタンサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-buttonSize" min="0.5" max="2.0" step="0.1" value="${currentSettings.startScreen.buttonSize}">
+            <span class="loading-screen-editor__value-display" id="buttonSize-value">${currentSettings.startScreen.buttonSize}x</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 色設定 -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">色設定</h3>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">背景色</label>
+          <div class="loading-screen-editor__color-input">
+            <input type="color" class="loading-screen-editor__color-picker" id="startScreen-backgroundColor" value="${currentSettings.startScreen.backgroundColor}">
+            <input type="text" class="loading-screen-editor__input" id="startScreen-backgroundColorText" value="${currentSettings.startScreen.backgroundColor}">
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキスト色</label>
+          <div class="loading-screen-editor__color-input">
+            <input type="color" class="loading-screen-editor__color-picker" id="startScreen-textColor" value="${currentSettings.startScreen.textColor}">
+            <input type="text" class="loading-screen-editor__input" id="startScreen-textColorText" value="${currentSettings.startScreen.textColor}">
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタン背景色</label>
+          <div class="loading-screen-editor__color-input">
+            <input type="color" class="loading-screen-editor__color-picker" id="startScreen-buttonColor" value="${currentSettings.startScreen.buttonColor}">
+            <input type="text" class="loading-screen-editor__input" id="startScreen-buttonColorText" value="${currentSettings.startScreen.buttonColor}">
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ボタンテキスト色</label>
+          <div class="loading-screen-editor__color-input">
+            <input type="color" class="loading-screen-editor__color-picker" id="startScreen-buttonTextColor" value="${currentSettings.startScreen.buttonTextColor}">
+            <input type="text" class="loading-screen-editor__input" id="startScreen-buttonTextColorText" value="${currentSettings.startScreen.buttonTextColor}">
+          </div>
+        </div>
+      </div>
+      
+      <!-- サムネイル設定（既存機能） -->
+      <div class="loading-screen-editor__section">
+        <h3 class="loading-screen-editor__section-title">サムネイル設定</h3>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">サムネイル画像</label>
+          <div class="loading-screen-editor__file-preview" id="thumbnailDropzone">
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">📁</div>
+              <div class="loading-screen-editor__drop-zone-text">サムネイル画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                JPG, PNG, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function createGeneralTabContent(currentSettings = defaultSettings) {
+  return `
+    <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">背景色</label>
+        <div class="loading-screen-editor__color-input">
+          <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-backgroundColor" value="${currentSettings.loadingScreen.backgroundColor}">
+          <input type="text" class="loading-screen-editor__input" id="loadingScreen-backgroundColorText" value="${currentSettings.loadingScreen.backgroundColor}">
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function createTextTabContent(currentSettings = defaultSettings) {
+  return `
+    <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">ブランド名</label>
+        <input type="text" class="loading-screen-editor__input" id="loadingScreen-brandName" value="${currentSettings.loadingScreen.brandName}" placeholder="あなたのブランド">
+      </div>
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">サブタイトル</label>
+        <input type="text" class="loading-screen-editor__input" id="loadingScreen-subTitle" value="${currentSettings.loadingScreen.subTitle}" placeholder="AR体験">
+      </div>
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">ローディングメッセージ</label>
+        <input type="text" class="loading-screen-editor__input" id="loadingScreen-loadingMessage" value="${currentSettings.loadingScreen.loadingMessage}" placeholder="読み込み中...">
+      </div>
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">フォントスケール</label>
+        <div class="loading-screen-editor__slider-with-value">
+          <input type="range" class="loading-screen-editor__slider" id="loadingScreen-fontScale" min="0.5" max="2.0" step="0.1" value="${currentSettings.loadingScreen.fontScale}">
+          <span class="loading-screen-editor__value-display" id="fontScale-value">${currentSettings.loadingScreen.fontScale}x</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function createAnimationTabContent(currentSettings = defaultSettings) {
+  return `
+    <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">アニメーション</label>
+        <select class="loading-screen-editor__input" id="loadingScreen-animation">
+          <option value="fade" ${currentSettings.loadingScreen.animation === 'fade' ? 'selected' : ''}>フェード</option>
+          <option value="slide" ${currentSettings.loadingScreen.animation === 'slide' ? 'selected' : ''}>スライド</option>
+          <option value="zoom" ${currentSettings.loadingScreen.animation === 'zoom' ? 'selected' : ''}>ズーム</option>
+        </select>
+      </div>
+    </div>
+  `;
+}
+
+export function createGuideTabContent(currentSettings = defaultSettings) {
+  return `
+    <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__reset-container">
+        <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-guide-settings">
+          設定をリセット
+        </button>
+      </div>
+      
+      <!-- モード選択 -->
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">検出モード</label>
+        <select class="loading-screen-editor__input" id="guideScreen-mode">
+          <option value="surface" ${currentSettings.guideScreen.mode === 'surface' ? 'selected' : ''}>平面検出（マーカー画像）</option>
+          <option value="world" ${currentSettings.guideScreen.mode === 'world' ? 'selected' : ''}>空間検出（画面タップ）</option>
+        </select>
+      </div>
+      
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">背景色</label>
+        <div class="loading-screen-editor__color-input">
+          <input type="color" class="loading-screen-editor__color-picker" id="guideScreen-backgroundColor" value="${currentSettings.guideScreen.backgroundColor}">
+          <input type="text" class="loading-screen-editor__input" id="guideScreen-backgroundColorText" value="${currentSettings.guideScreen.backgroundColor}">
+        </div>
+      </div>
+      
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">テキスト色</label>
+        <div class="loading-screen-editor__color-input">
+          <input type="color" class="loading-screen-editor__color-picker" id="guideScreen-textColor" value="${currentSettings.guideScreen.textColor}">
+          <input type="text" class="loading-screen-editor__input" id="guideScreen-textColorText" value="${currentSettings.guideScreen.textColor}">
+        </div>
+      </div>
+      
+      <!-- 平面検出用設定 -->
+      <div class="loading-screen-editor__mode-section" id="surface-detection-section" style="${currentSettings.guideScreen.mode === 'surface' ? '' : 'display: none;'}">
+        <h4 class="loading-screen-editor__section-title">平面検出設定</h4>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトル</label>
+          <input type="text" class="loading-screen-editor__input" id="guideScreen-surfaceTitle" value="${currentSettings.guideScreen.surfaceDetection?.title || '画像の上にカメラを向けて合わせてください'}" placeholder="平面検出のタイトル">
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">説明</label>
+          <textarea class="loading-screen-editor__input" id="guideScreen-surfaceDescription" rows="3" placeholder="平面検出の説明を入力してください">${currentSettings.guideScreen.surfaceDetection?.description || 'マーカー画像を画面内に収めてください'}</textarea>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">マーカー画像</label>
+          <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">📁</div>
+              <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                JPG, PNG, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 空間検出用設定 -->
+      <div class="loading-screen-editor__mode-section" id="world-tracking-section" style="${currentSettings.guideScreen.mode === 'world' ? '' : 'display: none;'}">
+        <h4 class="loading-screen-editor__section-title">空間検出設定</h4>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">タイトル</label>
+          <input type="text" class="loading-screen-editor__input" id="guideScreen-worldTitle" value="${currentSettings.guideScreen.worldTracking?.title || '画面をタップしてください'}" placeholder="空間検出のタイトル">
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">説明</label>
+          <textarea class="loading-screen-editor__input" id="guideScreen-worldDescription" rows="3" placeholder="空間検出の説明を入力してください">${currentSettings.guideScreen.worldTracking?.description || '平らな面を見つけて画面をタップしてください'}</textarea>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">ガイド画像</label>
+          <div class="loading-screen-editor__file-preview" id="worldGuideImageDropzone">
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">📁</div>
+              <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                JPG, PNG, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// メインエディタのHTMLテンプレート
+export function createMainEditorTemplate() {
+  return `
+    <div class="loading-screen-editor">
+      <div class="loading-screen-editor__header">
+        <h1 class="loading-screen-editor__title">ローディング画面エディタ</h1>
+      </div>
+      
+      <div class="loading-screen-editor__container">
+        <!-- 設定パネル -->
+        <div class="loading-screen-editor__settings-panel">
+          <!-- メインタブ -->
+          <div class="loading-screen-editor__main-tabs">
+            <button class="loading-screen-editor__main-tab loading-screen-editor__main-tab--active" data-tab="start">
+              スタート画面
+            </button>
+            <button class="loading-screen-editor__main-tab" data-tab="loading">
+              ローディング画面
+            </button>
+            <button class="loading-screen-editor__main-tab" data-tab="guide">
+              ガイド画面
+            </button>
+          </div>
+          
+          <!-- タブコンテンツ -->
+          <div class="loading-screen-editor__content-container">
+            <!-- スタート画面タブ -->
+            <div class="loading-screen-editor__main-content loading-screen-editor__main-content--active" data-tab="start">
+              ${createStartTabContent()}
+            </div>
+            
+            <!-- ローディング画面タブ -->
+            <div class="loading-screen-editor__main-content" data-tab="loading" style="display: none;">
+              <!-- ローディング画面のサブタブ -->
+              <div class="loading-screen-editor__sub-tabs">
+                <button class="loading-screen-editor__sub-tab loading-screen-editor__sub-tab--active" data-subtab="general">
+                  一般設定
+                </button>
+                <button class="loading-screen-editor__sub-tab" data-subtab="text">
+                  テキスト
+                </button>
+                <button class="loading-screen-editor__sub-tab" data-subtab="animation">
+                  アニメーション
+                </button>
+              </div>
+              
+              <!-- サブタブコンテンツ -->
+              <div class="loading-screen-editor__subcontent-container">
+                <div class="loading-screen-editor__sub-content loading-screen-editor__sub-content--active" data-subtab="general">
+                  ${createGeneralTabContent()}
+                </div>
+                <div class="loading-screen-editor__sub-content" data-subtab="text" style="display: none;">
+                  ${createTextTabContent()}
+                </div>
+                <div class="loading-screen-editor__sub-content" data-subtab="animation" style="display: none;">
+                  ${createAnimationTabContent()}
+                </div>
+              </div>
+            </div>
+            
+            <!-- ガイド画面タブ -->
+            <div class="loading-screen-editor__main-content" data-tab="guide" style="display: none;">
+              ${createGuideTabContent()}
+            </div>
+          </div>
+        </div>
+        
+        <!-- プレビューパネル -->
+        <div class="loading-screen-editor__preview-panel">
+          <!-- プレビューヘッダー -->
+          <div class="loading-screen-editor__preview-header">
+            <h3 class="loading-screen-editor__preview-title">プレビュー</h3>
+            <div class="loading-screen-editor__orientation-toggle">
+              <button class="loading-screen-editor__orientation-button loading-screen-editor__orientation-button--active" data-orientation="portrait">
+                📱 縦向き
+              </button>
+              <button class="loading-screen-editor__orientation-button" data-orientation="landscape">
+                📱 横向き
+              </button>
+            </div>
+          </div>
+          
+          <!-- プレビューコンテナ -->
+          <div class="loading-screen-editor__phone-container">
+            <div class="loading-screen-editor__phone-frame" id="phone-frame">
+              <div class="loading-screen-editor__phone-screen">
+                <div class="loading-screen-editor__preview-screen" id="preview-screen">
+                  <!-- プレビューコンテンツがここに動的に挿入される -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- フッター -->
+      <div class="loading-screen-editor__fixed-footer">
+        <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
+          キャンセル
+        </button>
+        <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
+          保存
+        </button>
+      </div>
+    </div>
+  `;
+} 
