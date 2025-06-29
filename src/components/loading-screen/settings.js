@@ -25,7 +25,10 @@ export const defaultSettings = {
     backgroundColor: '#121212',
     textColor: '#ffffff',
     accentColor: '#6c5ce7',
-    logo: null,
+    logoType: 'none', // 'none', 'useStartLogo', 'custom'
+    logo: null, // カスタムロゴのファイルデータ
+    logoPosition: 20,
+    logoSize: 1.0,
     brandName: 'あなたのブランド',
     subTitle: 'AR体験',
     loadingMessage: '読み込み中...',
@@ -43,7 +46,8 @@ export const defaultSettings = {
       title: '画像の上にカメラを向けて合わせてください',
       description: 'マーカー画像を画面内に収めてください',
       instructionText: '画像を認識しています...',
-      guideImage: null // ガイド用のマーカー画像
+      guideImage: null, // ガイド用のマーカー画像
+      markerSize: 1.0 // マーカー画像のサイズ倍率
     },
     worldTracking: {
       title: '画面をタップしてください',

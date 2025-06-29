@@ -9,6 +9,9 @@ export function updatePreview(screenType = 'startScreen') {
   const previewScreen = document.getElementById('preview-screen');
   if (!previewScreen) return;
 
+  // プレビューヘッダーのタイトルを更新
+  updatePreviewTitle(screenType);
+
   const settings = getCurrentSettingsFromDOM();
   
   switch (screenType) {
@@ -26,9 +29,25 @@ export function updatePreview(screenType = 'startScreen') {
   }
 }
 
+// プレビューヘッダーのタイトルを更新
+function updatePreviewTitle(screenType) {
+  const previewTitle = document.querySelector('.loading-screen-editor__preview-title');
+  if (!previewTitle) return;
+
+  const titleMap = {
+    'startScreen': 'プレビュー - スタート画面',
+    'loadingScreen': 'プレビュー - ローディング画面',
+    'guideScreen': 'プレビュー - ガイド画面'
+  };
+
+  previewTitle.textContent = titleMap[screenType] || 'プレビュー';
+}
+
 // スタート画面のプレビュー更新
 function updateStartPreview(previewScreen, settings) {
   const screen = settings.startScreen;
+  
+
   
   // サムネイル画像の取得
   const thumbnailDropzone = document.getElementById('thumbnailDropzone');
@@ -62,9 +81,6 @@ function updateStartPreview(previewScreen, settings) {
           transform: translateX(-50%);
           width: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 80}px;
           height: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 60}px;
-          border-radius: 8px;
-          overflow: hidden;
-          background: rgba(255,255,255,0.05);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -73,6 +89,7 @@ function updateStartPreview(previewScreen, settings) {
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
           " alt="ロゴ">
         </div>
       ` : ''}
@@ -86,12 +103,15 @@ function updateStartPreview(previewScreen, settings) {
           height: 60px;
           border-radius: 8px;
           overflow: hidden;
-          background: rgba(255,255,255,0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
         ">
           <img src="${thumbnailSrc}" style="
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.3));
           " alt="サムネイル">
         </div>
       ` : ''}
@@ -136,19 +156,7 @@ function updateStartPreview(previewScreen, settings) {
         </button>
       </div>
       
-      <!-- 画面の状態表示 -->
-      <div class="screen-indicator" style="
-        position: absolute;
-        bottom: 10px;
-        left: 10px;
-        background: rgba(255,255,255,0.1);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 10px;
-        opacity: 0.7;
-      ">
-        スタート画面
-      </div>
+
     </div>
   `;
 }
@@ -157,10 +165,23 @@ function updateStartPreview(previewScreen, settings) {
 function updateLoadingPreview(previewScreen, settings) {
   const screen = settings.loadingScreen;
   
+  // ロゴタイプの取得
+  const logoTypeRadio = document.querySelector('input[name="loadingLogoType"]:checked');
+  const logoType = logoTypeRadio?.value || screen.logoType || 'none';
+  
   // ロゴ画像の取得
-  const logoDropzone = document.getElementById('logoDropzone');
-  const logoImg = logoDropzone?.querySelector('img');
-  const logoSrc = logoImg?.src || '';
+  let logoSrc = '';
+  if (logoType === 'useStartLogo') {
+    // スタート画面のロゴを使用
+    const startLogoDropzone = document.getElementById('startLogoDropzone');
+    const startLogoImg = startLogoDropzone?.querySelector('img');
+    logoSrc = startLogoImg?.src || '';
+  } else if (logoType === 'custom') {
+    // ローディング専用ロゴを使用
+    const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
+    const loadingLogoImg = loadingLogoDropzone?.querySelector('img');
+    logoSrc = loadingLogoImg?.src || '';
+  }
 
   previewScreen.innerHTML = `
     <div class="loading-screen-preview" style="
@@ -176,18 +197,23 @@ function updateLoadingPreview(previewScreen, settings) {
       padding: 20px;
       box-sizing: border-box;
     ">
-      ${logoSrc ? `
+      ${logoType !== 'none' && logoSrc ? `
         <div class="logo-container" style="
-          width: 60px;
-          height: 60px;
-          margin-bottom: 20px;
-          border-radius: 8px;
-          overflow: hidden;
+          position: absolute;
+          top: ${screen.logoPosition || defaultSettings.loadingScreen.logoPosition}%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 60}px;
+          height: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 60}px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         ">
           <img src="${logoSrc}" style="
-            width: 100%;
-            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
           " alt="ロゴ">
         </div>
       ` : ''}
@@ -266,6 +292,35 @@ function updateGuidePreview(previewScreen, settings) {
   guideImg = guideImageDropzone?.querySelector('img');
   guideSrc = guideImg?.src || '';
   
+  // マーカーサイズを取得
+  const markerSizeSlider = document.getElementById('guideScreen-markerSize');
+  const markerSize = markerSizeSlider?.value || screen.surfaceDetection?.markerSize || 1.0;
+  
+  // 画像の縦横比を計算（画像がある場合）
+  let containerWidth = 120;
+  let containerHeight = 90;
+  
+  if (guideImg && guideImg.naturalWidth && guideImg.naturalHeight) {
+    const imageAspectRatio = guideImg.naturalWidth / guideImg.naturalHeight;
+    const maxSize = 140; // 最大サイズを少し大きく
+    const minSize = 80;  // 最小サイズを設定
+    
+    if (imageAspectRatio > 1.5) {
+      // 横長画像（16:9など）
+      containerWidth = maxSize;
+      containerHeight = Math.max(minSize, maxSize / imageAspectRatio);
+    } else if (imageAspectRatio < 0.7) {
+      // 縦長画像（9:16など）
+      containerHeight = maxSize;
+      containerWidth = Math.max(minSize, maxSize * imageAspectRatio);
+    } else {
+      // 正方形に近い画像
+      const baseSize = 120;
+      containerWidth = baseSize;
+      containerHeight = baseSize / imageAspectRatio;
+    }
+  }
+  
   // モードに応じたタイトルと説明を取得
   let title, description;
   if (mode === 'surface') {
@@ -290,137 +345,205 @@ function updateGuidePreview(previewScreen, settings) {
       color: ${screen.textColor || defaultSettings.guideScreen.textColor};
       width: 100%;
       height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
       position: relative;
       padding: 20px;
       box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
     ">
-      <!-- モード表示 -->
-      <div class="mode-indicator" style="
+      
+      <!-- 上部タイトルエリア -->
+      <div class="guide-header" style="
         position: absolute;
-        top: 10px;
-        right: 10px;
-        background: rgba(255,255,255,0.2);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 10px;
-        opacity: 0.7;
-      ">
-        ${mode === 'surface' ? '平面検出' : '空間検出'}
-      </div>
-      
-      <div class="guide-title" style="
-        font-size: 18px;
-        font-weight: bold;
-        margin-bottom: 20px;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
         text-align: center;
-        line-height: 1.3;
+        z-index: 10;
+        width: 90%;
       ">
-        ${title}
-      </div>
-      
-      ${guideSrc ? `
-        <div class="guide-image-container" style="
-          width: ${mode === 'surface' ? '140px' : '100px'};
-          height: ${mode === 'surface' ? '100px' : '100px'};
-          margin-bottom: 20px;
-          border-radius: 8px;
-          overflow: hidden;
-          background: rgba(255,255,255,0.1);
-          border: ${mode === 'surface' ? '2px dashed rgba(255,255,255,0.3)' : 'none'};
+        <div class="guide-title" style="
+          font-size: 16px;
+          font-weight: bold;
+          margin-bottom: 8px;
+          text-align: center;
+          line-height: 1.3;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         ">
-          <img src="${guideSrc}" style="
-            width: 100%;
-            height: 100%;
-            object-fit: ${mode === 'surface' ? 'contain' : 'cover'};
-          " alt="ガイド画像">
+          ${title}
         </div>
-      ` : `
-        <!-- デフォルトアイコン -->
-        <div class="guide-icon-container" style="
-          width: 80px;
-          height: 80px;
-          margin-bottom: 20px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 32px;
+        
+        <div class="guide-description" style="
+          font-size: 12px;
+          line-height: 1.4;
+          text-align: center;
+          opacity: 0.9;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.5);
         ">
-          ${mode === 'surface' ? '📷' : '👆'}
+          ${description}
         </div>
-      `}
-      
-      <div class="guide-description" style="
-        font-size: 14px;
-        line-height: 1.5;
-        text-align: center;
-        max-width: 90%;
-        opacity: 0.9;
-        margin-bottom: 30px;
-      ">
-        ${description}
       </div>
-      
-      <!-- モード別のインタラクション表示 -->
+
+      <!-- 中央マーカー画像エリア（平面検出のみ） -->
       ${mode === 'surface' ? `
-        <div class="scanning-indicator" style="
-          width: 200px;
-          height: 120px;
-          border: 2px dashed ${screen.accentColor || defaultSettings.guideScreen.accentColor};
-          border-radius: 8px;
+        <div class="marker-center-area" style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          animation: scanning-pulse 2s infinite;
+          z-index: 5;
         ">
-          <div style="
-            font-size: 12px;
-            opacity: 0.8;
+          ${guideSrc ? `
+            <div class="marker-image-container" style="
+              width: ${containerWidth * markerSize}px;
+              height: ${containerHeight * markerSize}px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border: 2px solid ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+              border-radius: 8px;
+              background: rgba(255,255,255,0.1);
+              backdrop-filter: blur(5px);
+              animation: marker-glow 2s infinite;
+            ">
+              <img src="${guideSrc}" style="
+                max-width: 90%;
+                max-height: 90%;
+                object-fit: contain;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+              " alt="マーカー画像">
+            </div>
+          ` : `
+            <div class="marker-placeholder" style="
+              width: ${containerWidth * markerSize}px;
+              height: ${containerHeight * markerSize}px;
+              border: 2px dashed ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+              border-radius: 8px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: rgba(255,255,255,0.05);
+              animation: marker-glow 2s infinite;
+            ">
+              <div style="
+                font-size: ${Math.min(containerWidth, containerHeight) * markerSize * 0.2}px;
+                opacity: 0.6;
+              ">📷</div>
+            </div>
+          `}
+          
+          <div class="marker-label" style="
+            margin-top: 8px;
+            font-size: 10px;
+            opacity: 0.7;
             text-align: center;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
           ">
-            画像を認識中...
+            マーカー画像
           </div>
         </div>
       ` : `
-        <div class="tap-indicator" style="
-          width: 60px;
-          height: 60px;
-          border: 3px solid ${screen.accentColor || defaultSettings.guideScreen.accentColor};
-          border-radius: 50%;
+        <!-- 空間検出用の中央エリア -->
+        <div class="world-center-area" style="
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
           display: flex;
+          flex-direction: column;
           align-items: center;
-          justify-content: center;
-          margin-bottom: 20px;
-          animation: tap-pulse 1.5s infinite;
+          z-index: 5;
         ">
-          <div style="
-            width: 20px;
-            height: 20px;
-            background: ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+          ${guideSrc ? `
+            <div class="guide-image-container" style="
+              width: 100px;
+              height: 100px;
+              margin-bottom: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <img src="${guideSrc}" style="
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
+                filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+              " alt="ガイド画像">
+            </div>
+          ` : `
+            <div class="guide-icon-container" style="
+              width: 80px;
+              height: 80px;
+              margin-bottom: 20px;
+              border-radius: 50%;
+              background: rgba(255,255,255,0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 32px;
+            ">
+              👆
+            </div>
+          `}
+          
+          <div class="tap-indicator" style="
+            width: 60px;
+            height: 60px;
+            border: 3px solid ${screen.accentColor || defaultSettings.guideScreen.accentColor};
             border-radius: 50%;
-          "></div>
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: tap-pulse 1.5s infinite;
+          ">
+            <div style="
+              width: 20px;
+              height: 20px;
+              background: ${screen.accentColor || defaultSettings.guideScreen.accentColor};
+              border-radius: 50%;
+            "></div>
+          </div>
         </div>
       `}
       
-      <div class="guide-status" style="
-        font-size: 12px;
-        opacity: 0.7;
+      <!-- 下部ステータスエリア -->
+      <div class="guide-footer" style="
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
         text-align: center;
+        z-index: 10;
       ">
-        ${mode === 'surface' ? '画像を認識しています...' : '平面を検出中...'}
+        <div class="guide-status" style="
+          font-size: 12px;
+          opacity: 0.7;
+          text-align: center;
+          background: rgba(0,0,0,0.5);
+          padding: 4px 12px;
+          border-radius: 12px;
+          text-shadow: none;
+        ">
+          ${mode === 'surface' ? '画像を認識しています...' : '平面を検出中...'}
+        </div>
       </div>
     </div>
     
     <style>
-      @keyframes scanning-pulse {
-        0%, 100% { opacity: 1; border-color: ${screen.accentColor || defaultSettings.guideScreen.accentColor}; }
-        50% { opacity: 0.6; border-color: rgba(108, 92, 231, 0.3); }
+      @keyframes marker-glow {
+        0%, 100% { 
+          border-color: ${screen.accentColor || defaultSettings.guideScreen.accentColor}; 
+          box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+        }
+        50% { 
+          border-color: rgba(108, 92, 231, 0.8); 
+          box-shadow: 0 0 20px rgba(108, 92, 231, 0.6);
+        }
       }
       
       @keyframes tap-pulse {
@@ -451,7 +574,12 @@ function getCurrentSettingsFromDOM() {
     if (!id) return;
 
     const [screenType, property] = id.split('-');
-    if (settings[screenType] && property && !property.includes('Text')) {
+    if (settings[screenType] && property) {
+      // カラーピッカーのテキスト入力（例：backgroundColorText）は除外
+      if (property.endsWith('ColorText')) {
+        return;
+      }
+      
       let value = input.value;
       
       // 数値の場合は変換
@@ -465,6 +593,8 @@ function getCurrentSettingsFromDOM() {
       }
       
       settings[screenType][property] = value;
+      
+
     }
   });
   
@@ -477,11 +607,15 @@ function getCurrentSettingsFromDOM() {
   // 平面検出設定
   const surfaceTitle = document.getElementById('guideScreen-surfaceTitle');
   const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
+  const markerSizeSlider = document.getElementById('guideScreen-markerSize');
   if (surfaceTitle) {
     settings.guideScreen.surfaceDetection.title = surfaceTitle.value;
   }
   if (surfaceDescription) {
     settings.guideScreen.surfaceDetection.description = surfaceDescription.value;
+  }
+  if (markerSizeSlider) {
+    settings.guideScreen.surfaceDetection.markerSize = parseFloat(markerSizeSlider.value);
   }
   
   // 空間検出設定

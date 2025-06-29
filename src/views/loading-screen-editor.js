@@ -11,7 +11,8 @@ import {
   setupTextInputs, 
   setupFileDropzones, 
   initializeSliders, 
-  setupButtons 
+  setupButtons,
+  setupLogoTypeHandlers
 } from '../components/loading-screen/event-handlers.js';
 import { updatePreview, adjustPreviewScroll } from '../components/loading-screen/preview.js';
 
@@ -42,6 +43,7 @@ export default function showLoadingScreenEditor(container) {
         setupFileDropzones();
         initializeSliders();
         setupButtons();
+        setupLogoTypeHandlers();
         
         console.log('全てのイベントリスナーを設定しました');
 
@@ -86,7 +88,7 @@ export default function showLoadingScreenEditor(container) {
       
       // UIを更新
       updateFormValues();
-      updatePreview();
+      updatePreview('startScreen');
     } catch (error) {
       console.error('Failed to load settings:', error);
       // エラー時はデフォルト値を使用
@@ -123,6 +125,28 @@ export default function showLoadingScreenEditor(container) {
         }
       });
     });
+
+    // ロゴタイプラジオボタンの更新
+    const logoType = currentSettings.loadingScreen.logoType || 'none';
+    const logoTypeRadio = document.querySelector(`input[name="loadingLogoType"][value="${logoType}"]`);
+    if (logoTypeRadio) {
+      logoTypeRadio.checked = true;
+      
+      // UIの表示/非表示を更新
+      const customLogoSection = document.getElementById('loading-custom-logo-section');
+      const logoControls = document.getElementById('loading-logo-controls');
+      const logoSizeControls = document.getElementById('loading-logo-size-controls');
+      
+      if (customLogoSection) {
+        customLogoSection.style.display = logoType === 'custom' ? 'block' : 'none';
+      }
+      if (logoControls) {
+        logoControls.style.display = logoType !== 'none' ? 'block' : 'none';
+      }
+      if (logoSizeControls) {
+        logoSizeControls.style.display = logoType !== 'none' ? 'block' : 'none';
+      }
+    }
   }
 
   // レイアウト検証
@@ -138,8 +162,8 @@ export default function showLoadingScreenEditor(container) {
 
     console.log('レイアウト検証完了');
     
-    // プレビューの初期表示を更新
-    updatePreview('startScreen');
+    // プレビューの初期表示を更新（既に初期化時に実行済みなのでコメントアウト）
+    // updatePreview('startScreen');
   }
 
   // クリーンアップ処理

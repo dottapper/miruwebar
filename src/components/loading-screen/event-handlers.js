@@ -5,6 +5,30 @@
 import { settingsAPI, validateAndFixColor } from './settings.js';
 import { updatePreview } from './preview.js';
 
+// タブ名を画面タイプに変換する関数
+function convertTabNameToScreenType(tabName) {
+  switch (tabName) {
+    case 'start':
+      return 'startScreen';
+    case 'loading':
+      return 'loadingScreen';
+    case 'guide':
+      return 'guideScreen';
+    default:
+      return 'startScreen';
+  }
+}
+
+// 現在のアクティブタブから画面タイプを取得する関数
+function getCurrentActiveScreenType() {
+  const activeTab = document.querySelector('.loading-screen-editor__main-tab--active');
+  if (activeTab) {
+    const tabName = activeTab.dataset.tab;
+    return convertTabNameToScreenType(tabName);
+  }
+  return 'startScreen';
+}
+
 // エラー表示関数
 export function showLogoError(message, detail = '') {
   console.error('Logo Error:', message, detail);
@@ -92,7 +116,9 @@ export function setupTabHandlers() {
           setupGuideModeHandlers();
         }
         
-        updatePreview(tabName);
+        // タブ名を画面タイプに変換してプレビューを更新
+        const screenType = convertTabNameToScreenType(tabName);
+        updatePreview(screenType);
       }
     });
   });
@@ -132,6 +158,9 @@ function setupSubTabHandlers() {
         setTimeout(() => {
           subContent.classList.add('loading-screen-editor__sub-content--active');
         }, 10);
+        
+        // ローディング画面のプレビューを更新
+        updatePreview('loadingScreen');
       }
     });
   });
@@ -160,7 +189,8 @@ function setupGuideModeHandlers() {
       worldSection.style.display = 'block';
     }
     
-    updatePreview();
+    const currentScreenType = getCurrentActiveScreenType();
+    updatePreview(currentScreenType);
   });
 }
 
@@ -208,7 +238,8 @@ export function setupColorInputs() {
         textInput.value = color;
       }
       
-      updatePreview();
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
     });
   });
 
@@ -223,7 +254,8 @@ export function setupColorInputs() {
           picker.value = color;
         }
         
-        updatePreview();
+        const currentScreenType = getCurrentActiveScreenType();
+        updatePreview(currentScreenType);
       }
     });
   });
@@ -235,7 +267,8 @@ export function setupTextInputs() {
   
   textInputs.forEach(input => {
     input.addEventListener('input', () => {
-      updatePreview();
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
     });
   });
 }
@@ -316,16 +349,29 @@ function handleFileSelection(file, dropzone, removeButton) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
+    const imgElement = document.createElement('img');
+    imgElement.src = e.target.result;
+    imgElement.alt = 'プレビュー';
+    imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+    
+    // 画像が読み込まれた後にプレビューを更新
+    imgElement.onload = () => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    };
+    
     dropZone.innerHTML = `
-      <img src="${e.target.result}" alt="プレビュー" style="max-width: 100%; max-height: 100px; object-fit: contain;">
       <div class="loading-screen-editor__file-name">${file.name}</div>
     `;
+    dropZone.insertBefore(imgElement, dropZone.firstChild);
     
     if (removeButton) {
       removeButton.style.display = 'block';
     }
     
-    updatePreview();
+    // 初回のプレビュー更新（画像読み込み前）
+    const currentScreenType = getCurrentActiveScreenType();
+    updatePreview(currentScreenType);
   };
   
   reader.readAsDataURL(file);
@@ -346,8 +392,10 @@ function removeFile(dropzone, removeButton) {
     defaultText = 'ロゴ画像をドロップ';
     icon = '🖼️';
     formats = 'PNG, JPG, GIF, WebP (最大2MB)';
-  } else if (id === 'logoDropzone') {
+  } else if (id === 'loadingLogoDropzone') {
     defaultText = 'ロゴをドロップ';
+    icon = '🖼️';
+    formats = 'PNG, JPG, WebP (最大2MB、透過PNG推奨)';
   } else if (id === 'guideImageDropzone' || id === 'surfaceGuideImageDropzone' || id === 'worldGuideImageDropzone') {
     defaultText = 'ガイド画像をドロップ';
   }
@@ -365,7 +413,8 @@ function removeFile(dropzone, removeButton) {
     removeButton.style.display = 'none';
   }
   
-  updatePreview();
+  const currentScreenType = getCurrentActiveScreenType();
+  updatePreview(currentScreenType);
 }
 
 // スライダーの設定
@@ -383,11 +432,60 @@ export function initializeSliders() {
         valueDisplay.textContent = value + unit;
       }
       
-      updatePreview();
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
     };
     
     slider.addEventListener('input', updateValue);
     updateValue(); // 初期値を設定
+  });
+  
+  // マーカーサイズスライダーの特別な処理
+  const markerSizeSlider = document.getElementById('guideScreen-markerSize');
+  if (markerSizeSlider) {
+    const markerValueDisplay = document.getElementById('markerSize-value');
+    
+    const updateMarkerSize = () => {
+      const value = parseFloat(markerSizeSlider.value);
+      if (markerValueDisplay) {
+        markerValueDisplay.textContent = value + 'x';
+      }
+      updatePreview('guideScreen');
+    };
+    
+    markerSizeSlider.addEventListener('input', updateMarkerSize);
+    updateMarkerSize(); // 初期値を設定
+  }
+}
+
+// ロゴタイプラジオボタンの設定
+export function setupLogoTypeHandlers() {
+  const radioButtons = document.querySelectorAll('input[name="loadingLogoType"]');
+  
+  radioButtons.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const logoType = e.target.value;
+      const customLogoSection = document.getElementById('loading-custom-logo-section');
+      const logoControls = document.getElementById('loading-logo-controls');
+      const logoSizeControls = document.getElementById('loading-logo-size-controls');
+      
+      // カスタムロゴアップロードセクションの表示/非表示
+      if (customLogoSection) {
+        customLogoSection.style.display = logoType === 'custom' ? 'block' : 'none';
+      }
+      
+      // ロゴ位置・サイズコントロールの表示/非表示
+      if (logoControls) {
+        logoControls.style.display = logoType !== 'none' ? 'block' : 'none';
+      }
+      if (logoSizeControls) {
+        logoSizeControls.style.display = logoType !== 'none' ? 'block' : 'none';
+      }
+      
+      // プレビューを更新
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    });
   });
 }
 
@@ -447,6 +545,12 @@ function getCurrentSettings() {
       settings[screenType][property] = value;
     }
   });
+
+  // ロゴタイプラジオボタンの値を取得
+  const logoTypeRadio = document.querySelector('input[name="loadingLogoType"]:checked');
+  if (logoTypeRadio) {
+    settings.loadingScreen.logoType = logoTypeRadio.value;
+  }
 
   return settings;
 } 

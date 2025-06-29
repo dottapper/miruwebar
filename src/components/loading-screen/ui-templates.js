@@ -174,6 +174,58 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
           <input type="text" class="loading-screen-editor__input" id="loadingScreen-backgroundColorText" value="${currentSettings.loadingScreen.backgroundColor}">
         </div>
       </div>
+      
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">ロゴ設定</label>
+        <div class="loading-screen-editor__radio-group">
+          <label class="loading-screen-editor__radio-option">
+            <input type="radio" name="loadingLogoType" value="none" ${currentSettings.loadingScreen.logoType === 'none' ? 'checked' : ''}>
+            <span class="loading-screen-editor__radio-text">表示なし</span>
+          </label>
+          <label class="loading-screen-editor__radio-option">
+            <input type="radio" name="loadingLogoType" value="useStartLogo" ${currentSettings.loadingScreen.logoType === 'useStartLogo' ? 'checked' : ''}>
+            <span class="loading-screen-editor__radio-text">スタート画面のロゴを使用</span>
+          </label>
+          <label class="loading-screen-editor__radio-option">
+            <input type="radio" name="loadingLogoType" value="custom" ${currentSettings.loadingScreen.logoType === 'custom' ? 'checked' : ''}>
+            <span class="loading-screen-editor__radio-text">ローディング専用ロゴ</span>
+          </label>
+        </div>
+      </div>
+      
+      <!-- カスタムロゴアップロード -->
+      <div class="loading-screen-editor__form-group" id="loading-custom-logo-section" style="display: ${currentSettings.loadingScreen.logoType === 'custom' ? 'block' : 'none'};">
+        <label class="loading-screen-editor__label">ローディング用ロゴ</label>
+        <div class="loading-screen-editor__file-preview" id="loadingLogoDropzone">
+          <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+          <div class="loading-screen-editor__drop-zone">
+            <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+            <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
+            <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+            <div class="loading-screen-editor__supported-formats">
+              PNG, JPG, WebP (最大2MB、透過PNG推奨)
+            </div>
+          </div>
+          <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+        </div>
+      </div>
+      
+      <!-- ロゴ位置とサイズ設定 -->
+      <div class="loading-screen-editor__form-group" id="loading-logo-controls" style="display: ${currentSettings.loadingScreen.logoType !== 'none' ? 'block' : 'none'};">
+        <label class="loading-screen-editor__label">ロゴ位置（上から）</label>
+        <div class="loading-screen-editor__slider-with-value">
+          <input type="range" class="loading-screen-editor__slider" id="loadingScreen-logoPosition" min="10" max="50" step="1" value="${currentSettings.loadingScreen.logoPosition}">
+          <span class="loading-screen-editor__value-display" id="logoPosition-value">${currentSettings.loadingScreen.logoPosition}%</span>
+        </div>
+      </div>
+      
+      <div class="loading-screen-editor__form-group" id="loading-logo-size-controls" style="display: ${currentSettings.loadingScreen.logoType !== 'none' ? 'block' : 'none'};">
+        <label class="loading-screen-editor__label">ロゴサイズ</label>
+        <div class="loading-screen-editor__slider-with-value">
+          <input type="range" class="loading-screen-editor__slider" id="loadingScreen-logoSize" min="0.5" max="2.0" step="0.1" value="${currentSettings.loadingScreen.logoSize}">
+          <span class="loading-screen-editor__value-display" id="logoSize-value">${currentSettings.loadingScreen.logoSize}x</span>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -280,6 +332,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">マーカーサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-markerSize" min="0.5" max="2.0" step="0.1" value="${currentSettings.guideScreen.surfaceDetection?.markerSize || 1.0}">
+            <span class="loading-screen-editor__value-display" id="markerSize-value">${currentSettings.guideScreen.surfaceDetection?.markerSize || 1.0}x</span>
           </div>
         </div>
       </div>
