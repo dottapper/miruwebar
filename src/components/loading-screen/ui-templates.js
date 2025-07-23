@@ -475,12 +475,17 @@ export function createMainEditorTemplate() {
       
       <!-- フッター -->
       <div class="loading-screen-editor__fixed-footer">
-        <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
-          キャンセル
+        <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
+          ← プロジェクト一覧に戻る
         </button>
-        <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
-          保存
-        </button>
+        <div class="loading-screen-editor__footer-right">
+          <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
+            キャンセル
+          </button>
+          <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
+            保存
+          </button>
+        </div>
       </div>
     </div>
   `;

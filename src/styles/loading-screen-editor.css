@@ -326,11 +326,17 @@
 /* フッター */
 .loading-screen-editor__fixed-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-md) var(--spacing-lg);
   background-color: var(--background-color-light);
   border-top: 1px solid var(--border-color);
+}
+
+.loading-screen-editor__footer-right {
+  display: flex;
+  gap: var(--spacing-md);
 }
 
 /* ボタンスタイル */
@@ -362,6 +368,46 @@
 
 .loading-screen-editor__button--secondary:hover {
   background: var(--background-color-lighter);
+}
+
+.loading-screen-editor__button--back {
+  background: transparent;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition-normal);
+  min-width: auto;
+}
+
+.loading-screen-editor__button--back:hover {
+  background: var(--background-color-lighter);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+/* 通知スタイル */
+.loading-screen-editor__notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: var(--border-radius-sm);
+  color: white;
+  font-weight: 500;
+  z-index: 10000;
+  transition: opacity var(--transition-normal);
+}
+
+.loading-screen-editor__notification--success {
+  background-color: var(--success-color);
+}
+
+.loading-screen-editor__notification--error {
+  background-color: var(--error-color);
 }
 
 /* フォーム要素 */

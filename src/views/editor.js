@@ -1,6 +1,6 @@
 // src/views/editor.js
 import { initARViewer } from '../components/arViewer.js';
-import { showMarkerUpload } from '../views/marker-upload.js'; // 依存関係を確認
+import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
 import { saveProject, getProject } from '../api/projects.js'; // プロジェクト保存APIをインポート
 
@@ -10,18 +10,18 @@ import { saveProject, getProject } from '../api/projects.js'; // プロジェク
  * @returns {string} フォーマットされたファイルサイズ文字列
  */
 function formatFileSize(bytes) {
-  if (bytes === 0) return '0 B';
-  
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 export function showEditor(container) {
-  // URLパラメータからARタイプを取得
-  const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  // URLパラメータからARタイプとプロジェクトIDを取得
+  const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const arType = urlParams.get('type') || 'unknown';
+  const projectId = urlParams.get('id') || null; // プロジェクトID取得
   const isMarkerMode = arType === 'marker';
 
   // ARタイプに応じたタイトルとヘルプテキストを設定
@@ -158,13 +158,15 @@ export function showEditor(container) {
                 </div>
                 <div class="size-display"><span id="scale-size-label"></span></div>
               </div>
-              <div class="scale-ratio-display">
-                スケール値(XYZ):
-                <span id="scale-x-value">1.00</span> |
-                <span id="scale-y-value">1.00</span> |
-                <span id="scale-z-value">1.00</span>
-              </div>
-              <button id="reset-scale-button">比率をリセット</button>
+              <button id="reset-all-button" class="btn-secondary" style="width: 100%; margin-top: 10px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+                  <path d="M21 3v5h-5"/>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+                  <path d="M3 21v-5h5"/>
+                </svg>
+                すべてリセット
+              </button>
               <div class="control-group">
                 <label for="rotation-slider">回転 (Y軸):</label>
                 <div class="slider-with-value">
@@ -215,10 +217,19 @@ export function showEditor(container) {
   let shareButton = document.getElementById('share-button');
   let previewButton = document.getElementById('preview-button');
   let qrcodeButton = document.getElementById('qrcode-button');
+
+  // デバッグ: DOM要素の取得状況をログ出力
+  console.log('DOM要素の取得状況:', {
+    backButton: !!backButton,
+    saveButton: !!saveButton,
+    qrcodeButton: !!qrcodeButton,
+    uploadArea: !!uploadArea,
+    fileListContainer: !!fileListContainer
+  });
   let scaleSlider = document.getElementById('scale-slider');
   let scaleValue = document.getElementById('scale-value');
   let scaleSizeLabel = document.getElementById('scale-size-label');
-  let resetScaleButton = document.getElementById('reset-scale-button');
+  let resetAllButton = document.getElementById('reset-all-button');
   let rotationSlider = document.getElementById('rotation-slider');
   let rotationValue = document.getElementById('rotation-value');
   let positionXSlider = document.getElementById('position-x');
@@ -238,35 +249,188 @@ export function showEditor(container) {
   let totalFileSize = 0;
   const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB
   let originalModelSize = { width: 0, height: 0, depth: 0 }; // モデルの元サイズ
+  
+  // --- 変更追跡用の状態管理 ---
+  let hasUnsavedChanges = false;
+  let initialState = {
+    models: [],
+    markerImage: localStorage.getItem('markerImageUrl'),
+    settings: {}
+  };
+
+  // --- 変更追跡用の関数 ---
+  function markAsChanged() {
+    hasUnsavedChanges = true;
+    console.log('変更が検出されました - 未保存状態に設定');
+  }
+
+  function markAsSaved() {
+    hasUnsavedChanges = false;
+    console.log('保存完了 - 保存済み状態に設定');
+  }
+
+  function checkForUnsavedChanges() {
+    return hasUnsavedChanges;
+  }
+
+  // 戻る前の保存確認ダイアログ
+  function showUnsavedChangesDialog() {
+    return new Promise((resolve) => {
+      const message = "変更内容が保存されていません。\n\n保存してからプロジェクト一覧に戻りますか？";
+      const result = confirm(message);
+      
+      if (result) {
+        // 「OK」を選択 - 保存してから戻る
+        console.log('ユーザーが保存を選択しました');
+        handleSaveProject()
+          .then(() => {
+            console.log('保存完了 - プロジェクト一覧に戻ります');
+            resolve(true);
+          })
+          .catch((error) => {
+            console.error('保存に失敗しました:', error);
+            alert('保存に失敗しました。もう一度お試しください。');
+            resolve(false);
+          });
+      } else {
+        // 「キャンセル」を選択 - 保存せずに戻る
+        const confirmDiscard = confirm("変更内容を破棄してプロジェクト一覧に戻りますか？");
+        console.log(confirmDiscard ? 'ユーザーが変更破棄を選択しました' : 'ユーザーが操作をキャンセルしました');
+        resolve(confirmDiscard);
+      }
+    });
+  }
 
   // --- ARビューアー初期化 ---
   let viewerInstance = null;
   
-  (async () => {
+  async function initialize() {
     try {
+      console.log('エディタの初期化を開始...');
+      
+      // DOM要素の存在確認
+      const arViewerElement = document.getElementById('ar-viewer');
+      console.log('ar-viewer要素:', arViewerElement);
+      if (!arViewerElement) {
+        throw new Error('ar-viewer要素が見つかりません');
+      }
+      
+      console.log('ar-viewer要素のサイズ:', {
+        width: arViewerElement.clientWidth,
+        height: arViewerElement.clientHeight,
+        offsetWidth: arViewerElement.offsetWidth,
+        offsetHeight: arViewerElement.offsetHeight
+      });
+
+      // 通知アニメーション用のCSSを追加
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+
+      console.log('ARビューアーの初期化を開始...');
+      // ARビューアの初期化
       viewerInstance = await initARViewer('ar-viewer', {
         markerMode: isMarkerMode,
         showGrid: true,
+        backgroundColor: 0x222222,
         onModelLoaded: (size) => {
+          console.log('モデルが読み込まれました:', size);
           originalModelSize = { width: size.x, height: size.y, depth: size.z };
-          // モデルロード時に現在のスライダー値でサイズ表示を更新
-          const currentScale = scaleSlider ? parseFloat(scaleSlider.value) : 1.0;
-          updateRealSizeDisplay(currentScale);
+          updateRealSizeDisplay(1.0);
         }
       });
-  
-      // ビューアーの初期化が完了したら、イベントリスナーを設定
-      setupEventListeners();
-    } catch (error) {
-      console.error('ARビューアーの初期化に失敗しました:', error);
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'error-message';
-      errorMessage.textContent = 'ARビューアーの初期化に失敗しました。ページを再読み込みしてください。';
-      if (arViewerContainer) {
-        arViewerContainer.appendChild(errorMessage);
+
+      console.log('ARビューアーの初期化完了:', viewerInstance);
+
+      if (!viewerInstance) {
+        throw new Error('ARビューアーの初期化に失敗しました');
       }
+
+      // イベントリスナーの設定
+      console.log('イベントリスナーの設定を開始...');
+      setupEventListeners();
+
+      // 既存プロジェクトの場合は読み込み
+      if (projectId) {
+        console.log('既存プロジェクトの読み込みを開始:', projectId);
+        await loadExistingProject(projectId);
+      }
+
+      console.log('エディタの初期化が完了しました');
+    } catch (error) {
+      console.error('エディタの初期化に失敗しました:', error);
+      alert('エディタの初期化に失敗しました。ページを再読み込みしてください。\n詳細: ' + error.message);
     }
-  })();
+  }
+
+  // 既存プロジェクトの読み込み
+  async function loadExistingProject(projectId) {
+    try {
+      const project = getProject(projectId);
+      if (!project) {
+        console.warn('プロジェクトが見つかりません:', projectId);
+        return;
+      }
+
+      console.log('既存プロジェクトを読み込み中:', project);
+
+      // マーカー画像の復元（マーカーモードの場合）
+      if (isMarkerMode && project.markerImage) {
+        localStorage.setItem('markerImageUrl', project.markerImage);
+        if (markerThumbnail) {
+          markerThumbnail.src = project.markerImage;
+        }
+        if (viewerInstance?.controls?.setMarkerTexture) {
+          viewerInstance.controls.setMarkerTexture(project.markerImage);
+        }
+      }
+
+      // 3Dモデルの復元
+      if (project.models && project.models.length > 0) {
+        for (const modelData of project.models) {
+          if (modelData.objectUrl) {
+            try {
+              const modelIndex = await viewerInstance.controls.loadNewModel(
+                modelData.objectUrl,
+                modelData.fileName,
+                modelData.fileSize
+              );
+              
+              // ファイルリストに追加
+              const fileItem = createFileListItem({
+                name: modelData.fileName,
+                size: modelData.fileSize
+              }, modelData.objectUrl, modelIndex);
+              
+              const emptyText = fileListContainer.querySelector('.empty-text');
+              if (emptyText) {
+                emptyText.remove();
+              }
+              
+              fileListContainer.appendChild(fileItem);
+              totalFileSize += modelData.fileSize;
+            } catch (error) {
+              console.error('モデルの復元に失敗:', modelData.fileName, error);
+            }
+          }
+        }
+        updateTotalFileSizeDisplay();
+      }
+
+      console.log('プロジェクトの読み込みが完了しました');
+    } catch (error) {
+      console.error('プロジェクト読み込みエラー:', error);
+    }
+  }
 
   // アップロードボタンのクリックハンドラ
   function handleUploadButtonClick() {
@@ -303,6 +467,9 @@ export function showEditor(container) {
         totalFileSize += file.size;
         updateTotalFileSizeDisplay();
         
+        // ファイルアップロードを変更として記録
+        markAsChanged();
+        
         console.log(`モデル "${file.name}" (${fileSizeMB}MB) を読み込みました`);
       } catch (error) {
         console.error('モデルのアップロードに失敗しました:', error);
@@ -315,6 +482,31 @@ export function showEditor(container) {
 
   // イベントリスナーのセットアップを関数にまとめる
   function setupEventListeners() {
+    console.log('イベントリスナーの設定を開始...');
+    
+    // イベント委譲を使用した戻るボタンの設定（フォールバック）
+    container.addEventListener('click', async (event) => {
+      if (event.target.id === 'back-to-projects' || event.target.closest('#back-to-projects')) {
+        console.log('戻るボタンがクリックされました（イベント委譲）');
+        event.preventDefault();
+        
+        if (checkForUnsavedChanges()) {
+          console.log('未保存の変更があります - 確認ダイアログを表示（イベント委譲）');
+          const shouldProceed = await showUnsavedChangesDialog();
+          if (shouldProceed) {
+            console.log('プロジェクト一覧に遷移します（イベント委譲）');
+            window.location.hash = '#/projects';
+          } else {
+            console.log('戻る操作がキャンセルされました（イベント委譲）');
+          }
+        } else {
+          console.log('未保存の変更はありません - プロジェクト一覧に遷移します（イベント委譲）');
+          window.location.hash = '#/projects';
+        }
+      }
+    });
+    console.log('イベント委譲による戻るボタンのイベントリスナーを設定しました');
+    
     // マーカー画像設定 (マーカーモード時)
     if (isMarkerMode && markerThumbnail) {
       const markerImageUrl = localStorage.getItem('markerImageUrl');
@@ -350,9 +542,17 @@ export function showEditor(container) {
     }
 
     // スケール・回転・位置スライダー
-    if (scaleSlider) scaleSlider.addEventListener('input', handleScaleChange);
-    if (resetScaleButton) resetScaleButton.addEventListener('click', handleScaleReset);
-    if (rotationSlider) rotationSlider.addEventListener('input', handleRotationChange);
+    if (scaleSlider) scaleSlider.addEventListener('input', (e) => {
+      handleScaleChange(e);
+      markAsChanged(); // 変更を記録
+    });
+    if (resetAllButton) {
+      resetAllButton.addEventListener('click', handleResetAll);
+    }
+    if (rotationSlider) rotationSlider.addEventListener('input', (e) => {
+      handleRotationChange(e);
+      markAsChanged(); // 変更を記録
+    });
     if (arScaleSlider) arScaleSlider.addEventListener('input', handleArScaleChange);
     if (positionXSlider) positionXSlider.addEventListener('input', updatePosition);
     if (positionYSlider) positionYSlider.addEventListener('input', updatePosition);
@@ -365,11 +565,68 @@ export function showEditor(container) {
     const resetFrontViewButton = document.getElementById('reset-front-view-button');
     if (resetFrontViewButton) resetFrontViewButton.addEventListener('click', handleResetFrontView);
 
+    // TransformControlsからの変更イベントを監視（ギズモ操作時のUI同期）
+    if (arViewerContainer) {
+      arViewerContainer.addEventListener('transformChanged', (event) => {
+        handleTransformChanged(event);
+        markAsChanged(); // 変更を記録
+      });
+      arViewerContainer.addEventListener('scaleReset', handleScaleReset);
+      arViewerContainer.addEventListener('modelListChanged', () => {
+        markAsChanged(); // モデルリスト変更を記録
+      });
+    }
+
     // バックボタン
     if (backButton) {
-      backButton.addEventListener('click', () => {
-        window.location.hash = '#/projects';
+      backButton.addEventListener('click', async (e) => {
+        console.log('戻るボタンがクリックされました');
+        e.preventDefault();
+        
+        if (checkForUnsavedChanges()) {
+          console.log('未保存の変更があります - 確認ダイアログを表示');
+          const shouldProceed = await showUnsavedChangesDialog();
+          if (shouldProceed) {
+            console.log('プロジェクト一覧に遷移します');
+            window.location.hash = '#/projects';
+          } else {
+            console.log('戻る操作がキャンセルされました');
+          }
+        } else {
+          console.log('未保存の変更はありません - プロジェクト一覧に遷移します');
+          window.location.hash = '#/projects';
+        }
       });
+      console.log('戻るボタンのイベントリスナーが設定されました');
+    } else {
+      console.error('戻るボタンの要素が見つかりませんでした。再取得を試行します...');
+      // 再取得を試行
+      setTimeout(() => {
+        const retryBackButton = document.getElementById('back-to-projects');
+        if (retryBackButton) {
+          retryBackButton.addEventListener('click', async (e) => {
+            console.log('戻るボタンがクリックされました（再取得後）');
+            e.preventDefault();
+            
+            if (checkForUnsavedChanges()) {
+              console.log('未保存の変更があります - 確認ダイアログを表示（再取得後）');
+              const shouldProceed = await showUnsavedChangesDialog();
+              if (shouldProceed) {
+                console.log('プロジェクト一覧に遷移します（再取得後）');
+                window.location.hash = '#/projects';
+              } else {
+                console.log('戻る操作がキャンセルされました（再取得後）');
+              }
+            } else {
+              console.log('未保存の変更はありません - プロジェクト一覧に遷移します（再取得後）');
+              window.location.hash = '#/projects';
+            }
+          });
+          console.log('戻るボタンのイベントリスナーが設定されました（再取得後）');
+        } else {
+          console.error('戻るボタンの再取得にも失敗しました');
+        }
+      }, 100);
     }
 
     // QRコードボタン
@@ -377,7 +634,9 @@ export function showEditor(container) {
 
     // 保存ボタン
     if (saveButton) {
-      // ... existing code for save button ...
+      saveButton.addEventListener('click', () => {
+        handleSaveProject();
+      });
     }
   }
 
@@ -415,6 +674,15 @@ export function showEditor(container) {
     }
   }
 
+  // ファイルアイテムのインデックスを更新する関数
+  function updateFileItemIndices() {
+    const fileItems = fileListContainer.querySelectorAll('.file-item');
+    fileItems.forEach((item, index) => {
+      item.dataset.modelIndex = index;
+      console.log(`ファイルアイテム "${item.querySelector('.file-name').textContent}" のインデックスを ${index} に更新`);
+    });
+  }
+
   // ファイル一覧アイテムを作成し、イベントリスナーを設定する関数
   function createFileListItem(file, objectUrl, modelIndex) {
     const fileItem = document.createElement('div');
@@ -444,15 +712,26 @@ export function showEditor(container) {
 
     // 削除ボタンのイベントリスナー
     const deleteButton = fileActions.querySelector('.delete-model');
-    deleteButton.addEventListener('click', async () => {
+    deleteButton.addEventListener('click', () => {
       try {
         // ユーザーに確認を求める
         if (!confirm('このモデルを削除してもよろしいですか？')) {
           return;
         }
 
+        // 現在のモデルインデックスを取得（DOM要素から）
+        const currentModelIndex = parseInt(fileItem.dataset.modelIndex);
+
         // モデルの削除
-        await viewerInstance.removeModel(modelIndex);
+        if (!viewerInstance?.controls?.removeModel) {
+          throw new Error('removeModel関数が利用できません');
+        }
+        
+        const removeResult = viewerInstance.controls.removeModel(currentModelIndex);
+        
+        if (!removeResult) {
+          throw new Error(`モデルインデックス ${currentModelIndex} の削除に失敗しました`);
+        }
         
         // ファイルサイズの更新
         totalFileSize -= file.size;
@@ -462,16 +741,24 @@ export function showEditor(container) {
         fileItem.remove();
         
         // オブジェクトURLの解放
-        URL.revokeObjectURL(objectUrl);
+        if (objectUrl && objectUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(objectUrl);
+        }
         
         // ファイルリストが空になった場合の処理
         if (fileListContainer.children.length === 0) {
           fileListContainer.innerHTML = '<p class="empty-text">まだファイルがありません</p>';
           resetUploadArea();
         }
+
+        // 残りのファイルアイテムのインデックスを更新
+        updateFileItemIndices();
+        
+        // モデル削除を変更として記録
+        markAsChanged();
       } catch (error) {
         console.error('モデルの削除に失敗しました:', error);
-        alert('モデルの削除に失敗しました。もう一度お試しください。');
+        alert(`モデルの削除に失敗しました: ${error.message}`);
       }
     });
 
@@ -507,6 +794,9 @@ export function showEditor(container) {
     if (positionXValue) positionXValue.textContent = x.toFixed(1);
     if (positionYValue) positionYValue.textContent = y.toFixed(1);
     if (positionZValue) positionZValue.textContent = z.toFixed(1);
+    
+    // 位置変更を記録（TransformControlsとの重複を防ぐため、スライダー操作のみ記録）
+    markAsChanged();
   }
 
   // TransformControls モード設定ボタンのセットアップ
@@ -533,7 +823,9 @@ export function showEditor(container) {
     const handleRotateClick = () => {
       if (viewerInstance?.controls?.setTransformMode('rotate')) {
         setActiveButton(rotateButton);
-        console.log('Transform mode set to: rotate');
+        console.log('Transform mode set to: rotate - ギズモで3軸回転が可能になりました');
+      } else {
+        console.warn('回転モードの設定に失敗しました。モデルが選択されているか確認してください。');
       }
     };
 
@@ -595,6 +887,9 @@ export function showEditor(container) {
         // 合計ファイルサイズ表示を更新
         totalFileSize += file.size;
         updateTotalFileSizeDisplay();
+        
+        // ファイルアップロードを変更として記録
+        markAsChanged();
         
         // アップロードエリアをリセット
         resetUploadArea();
@@ -665,6 +960,9 @@ export function showEditor(container) {
           totalFileSize += file.size;
           updateTotalFileSizeDisplay();
 
+          // ファイルアップロードを変更として記録
+          markAsChanged();
+
           resetUploadArea();
 
           fileListContainer.querySelectorAll('.file-item.active').forEach(activeItem => {
@@ -715,17 +1013,128 @@ export function showEditor(container) {
     updateRealSizeDisplay(value);
   };
 
-  const handleScaleReset = () => {
-    if (viewerInstance?.controls?.resetScaleRatio) {
-      viewerInstance.controls.resetScaleRatio();
-      console.log('スケール比率をリセットしました。');
+  const handleResetAll = () => {
+    if (!viewerInstance?.controls) {
+      alert('リセットするには、まずモデルを選択してください。');
+      return;
+    }
+    
+    // アクティブなモデルが存在するかチェック
+    const activeModelIndex = viewerInstance.controls.getActiveModelIndex();
+    if (activeModelIndex < 0) {
+      alert('リセットするには、まずモデルを選択してください。');
+      return;
+    }
+    
+    // 確認ダイアログ
+    if (!confirm('モデルを初期状態（アップロード時）にリセットしますか？')) {
+      return;
+    }
+    
+    // 初期状態にリセット（位置・回転・スケール・カメラを含む）
+    if (viewerInstance.controls.resetToInitialState) {
+      const success = viewerInstance.controls.resetToInitialState();
+      if (success) {
+        // 成功通知
+        showNotification('モデルを初期状態にリセットしました', 'success');
+        // UIの更新は transformChanged イベントで自動的に行われる
+      } else {
+        showNotification('リセットに失敗しました', 'error');
+      }
+    } else {
+      // フォールバック：従来の方法
+      console.warn('resetToInitialState not available, using fallback');
+      
+      // 固定値でリセット
+      if (viewerInstance.controls.setPosition) {
+        viewerInstance.controls.setPosition(0, 0, 0);
+      }
+      if (viewerInstance.controls.setRotationY) {
+        viewerInstance.controls.setRotationY(0);
+      }
+      if (viewerInstance.controls.setScale) {
+        viewerInstance.controls.setScale(1);
+      }
+      if (viewerInstance.controls.resetCamera) {
+        viewerInstance.controls.resetCamera();
+      }
+      
+      resetAllUI();
+      showNotification('設定をリセットしました', 'success');
     }
   };
+  
+  // 全UIをリセットする関数
+  function resetAllUI() {
+    // 位置スライダーをリセット
+    if (positionXSlider && positionXValue) {
+      positionXSlider.value = 0;
+      positionXValue.textContent = '0.0';
+    }
+    if (positionYSlider && positionYValue) {
+      positionYSlider.value = 0;
+      positionYValue.textContent = '0.0';
+    }
+    if (positionZSlider && positionZValue) {
+      positionZSlider.value = 0;
+      positionZValue.textContent = '0.0';
+    }
+    
+    // 回転スライダーをリセット
+    if (rotationSlider && rotationValue) {
+      rotationSlider.value = 0;
+      rotationValue.textContent = '0°';
+    }
+    
+    // スケールスライダーをリセット
+    if (scaleSlider && scaleValue) {
+      scaleSlider.value = 1;
+      scaleValue.textContent = '1.0';
+      updateRealSizeDisplay(1);
+    }
+  }
+
+  // 通知表示関数
+  function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 4px;
+      color: white;
+      font-size: 14px;
+      z-index: 10000;
+      animation: slideIn 0.3s ease-out;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      ${type === 'success' ? 'background: #4CAF50;' : ''}
+      ${type === 'error' ? 'background: #f44336;' : ''}
+      ${type === 'info' ? 'background: #2196F3;' : ''}
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+
+    // 3秒後に削除
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            document.body.removeChild(notification);
+          }
+        }, 300);
+      }
+    }, 3000);
+  }
 
   const handleRotationChange = () => {
     if (!viewerInstance?.controls?.setRotationY) return;
     const value = parseInt(rotationSlider.value, 10);
     if (rotationValue) rotationValue.textContent = `${value}°`;
+    
+    // スライダー操作時はギズモの同期を一時的に無効化しないで更新
     viewerInstance.controls.setRotationY(value);
   };
 
@@ -741,6 +1150,50 @@ export function showEditor(container) {
     }
   };
 
+  // TransformControlsでの変更をUIに反映する関数
+  const handleTransformChanged = (event) => {
+    const detail = event.detail;
+    if (!detail) return;
+
+    // 位置スライダーの更新
+    if (detail.position) {
+      if (positionXSlider && positionXValue) {
+        positionXSlider.value = detail.position.x.toFixed(1);
+        positionXValue.textContent = detail.position.x.toFixed(1);
+      }
+      if (positionYSlider && positionYValue) {
+        positionYSlider.value = detail.position.y.toFixed(1);
+        positionYValue.textContent = detail.position.y.toFixed(1);
+      }
+      if (positionZSlider && positionZValue) {
+        positionZSlider.value = detail.position.z.toFixed(1);
+        positionZValue.textContent = detail.position.z.toFixed(1);
+      }
+    }
+
+    // 回転スライダーの更新（Y軸のみ表示しているため）
+    if (detail.rotation && rotationSlider && rotationValue) {
+      // 角度を0-360度の範囲に正規化
+      let yRotation = Math.round(detail.rotation.y);
+      while (yRotation < 0) yRotation += 360;
+      while (yRotation >= 360) yRotation -= 360;
+      
+      rotationSlider.value = yRotation;
+      rotationValue.textContent = `${yRotation}°`;
+    }
+
+    // スケールの更新
+    if (detail.scale) {
+      // メインスケールスライダー（統一スケール）
+      if (scaleSlider && scaleValue) {
+        const avgScale = (detail.scale.x + detail.scale.y + detail.scale.z) / 3;
+        scaleSlider.value = avgScale.toFixed(1);
+        scaleValue.textContent = avgScale.toFixed(1);
+        updateRealSizeDisplay(avgScale);
+      }
+    }
+  };
+
   const handleMarkerUploaded = (event) => {
     if (event.detail && event.detail.markerImageUrl) {
       const newMarkerUrl = event.detail.markerImageUrl;
@@ -750,22 +1203,136 @@ export function showEditor(container) {
       if (viewerInstance?.controls?.setMarkerTexture) {
         viewerInstance.controls.setMarkerTexture(newMarkerUrl);
       }
+      markAsChanged(); // マーカー変更を記録
     }
   };
 
   const handleQRCodeButtonClick = () => {
-    let selectedModelName = 'sample';
-    if (viewerInstance?.controls?.getActiveModelInfo) {
-      const activeModel = viewerInstance.controls.getActiveModelInfo();
-      if (activeModel) {
-        selectedModelName = activeModel.fileName || 'model';
-      }
-    }
-    showQRCodeModal({ modelName: selectedModelName });
+    showQRCodeModal({
+      modelName: 'current-project'
+    });
   };
+
+  // プロジェクト保存処理
+  const handleSaveProject = () => {
+    return new Promise((resolve, reject) => {
+      // URLパラメータから現在のプロジェクトIDを取得
+      const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const currentProjectId = urlParams.get('id');
+      const isEdit = !!currentProjectId;
+      
+      // 既存プロジェクトの場合は現在の情報を取得
+      let currentProject = null;
+      if (isEdit) {
+        currentProject = getProject(currentProjectId);
+      }
+
+      // 保存確認モーダルを表示
+      showSaveProjectModal({
+        isEdit: isEdit,
+        projectId: currentProjectId,
+        currentName: currentProject?.name || '',
+        currentDescription: currentProject?.description || ''
+      }, (projectData) => {
+      try {
+        // プロジェクトデータを構築
+        const saveData = {
+          id: projectData.id,
+          name: projectData.name,
+          description: projectData.description,
+          type: arType,
+          markerImage: isMarkerMode ? localStorage.getItem('markerImageUrl') : null
+        };
+
+        // プロジェクトを保存
+        const savedProject = saveProject(saveData, viewerInstance);
+        
+        // 保存成功の通知
+        const notification = document.createElement('div');
+        notification.className = 'notification success';
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #4CAF50;
+          color: white;
+          padding: 12px 20px;
+          border-radius: 4px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          z-index: 10000;
+          animation: slideIn 0.3s ease-out;
+        `;
+        notification.textContent = `プロジェクト「${savedProject.name}」を保存しました`;
+        document.body.appendChild(notification);
+
+        // 3秒後に通知を削除
+        setTimeout(() => {
+          if (document.body.contains(notification)) {
+            notification.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => {
+              if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+              }
+            }, 300);
+          }
+        }, 3000);
+
+        // 新規保存の場合はURLを更新（既存編集の場合は現在の画面を維持）
+        if (!isEdit) {
+          // 新規保存後は編集モードのURLに更新
+          window.history.replaceState(null, '', `#/editor?id=${savedProject.id}&type=${arType}`);
+        }
+
+        console.log('プロジェクト保存完了:', savedProject);
+        markAsSaved(); // 保存完了をマーク
+        resolve(savedProject); // Promise解決
+      } catch (error) {
+        console.error('プロジェクト保存エラー:', error);
+        
+        // エラー通知
+        const errorNotification = document.createElement('div');
+        errorNotification.className = 'notification error';
+        errorNotification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #f44336;
+          color: white;
+          padding: 12px 20px;
+          border-radius: 4px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          z-index: 10000;
+        `;
+        errorNotification.textContent = 'プロジェクトの保存に失敗しました';
+        document.body.appendChild(errorNotification);
+
+        setTimeout(() => {
+          if (document.body.contains(errorNotification)) {
+            document.body.removeChild(errorNotification);
+          }
+        }, 3000);
+        
+        reject(error); // Promise拒否
+      }
+    });
+    });
+  };
+
+  // --- ページ離脱時の確認 ---
+  window.addEventListener('beforeunload', (event) => {
+    if (checkForUnsavedChanges()) {
+      const message = '変更内容が保存されていません。このページを離れてもよろしいですか？';
+      event.preventDefault();
+      event.returnValue = message;
+      return message;
+    }
+  });
 
   // --- 初期化処理 ---
   updateTotalFileSizeDisplay(); // 初期ファイルサイズ表示 (0MBのはず)
+
+  // 初期化を実行
+  initialize();
 
   // --- クリーンアップ関数 ---
   // このビューが表示されなくなったときに呼ばれるべき関数を返す
@@ -810,8 +1377,8 @@ export function showEditor(container) {
       scaleSlider.removeEventListener('input', handleScaleChange);
     }
 
-    if (resetScaleButton) {
-      resetScaleButton.removeEventListener('click', handleScaleReset);
+    if (resetAllButton) {
+      resetAllButton.removeEventListener('click', handleResetAll);
     }
 
     if (rotationSlider) {
@@ -829,6 +1396,11 @@ export function showEditor(container) {
     const resetFrontViewButton = document.getElementById('reset-front-view-button');
     if (resetFrontViewButton) {
       resetFrontViewButton.removeEventListener('click', handleResetFrontView);
+    }
+
+    // TransformChangedイベントリスナーを解除
+    if (arViewerContainer) {
+      arViewerContainer.removeEventListener('transformChanged', handleTransformChanged);
     }
 
     // 変換モードボタンのイベントリスナーを正しく解除
@@ -856,7 +1428,7 @@ export function showEditor(container) {
     scaleSlider = null;
     scaleValue = null;
     scaleSizeLabel = null;
-    resetScaleButton = null;
+    resetAllButton = null;
     rotationSlider = null;
     rotationValue = null;
     positionXSlider = null;
@@ -874,5 +1446,4 @@ export function showEditor(container) {
 
     console.log("エディタービューのクリーンアップが完了しました。");
   };
-
-} // export function showEditor の終わり
+}

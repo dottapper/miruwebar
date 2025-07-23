@@ -103,7 +103,16 @@ const handleModelListChanged = (e) => {
         item.querySelector('.model-delete-btn').addEventListener('click', (e) => {
           e.stopPropagation(); // 親要素へのイベント伝播を阻止
           if (confirm(`「${model.fileName || 'モデル ' + (index + 1)}」を削除してもよろしいですか？`)) {
-            modelControls.removeModel(index);
+            try {
+              const removeResult = modelControls.removeModel(index);
+              if (!removeResult) {
+                throw new Error(`モデルインデックス ${index} の削除に失敗しました`);
+              }
+              console.log(`モデル "${model.fileName || 'モデル ' + (index + 1)}" を正常に削除しました`);
+            } catch (error) {
+              console.error('モデルの削除に失敗しました:', error);
+              alert(`モデルの削除に失敗しました: ${error.message}`);
+            }
           }
         });
   

@@ -183,4 +183,4 @@ export default function showLoadingScreenEditor(container) {
 
   // クリーンアップ関数を返す
   return cleanup;
-} 
+}

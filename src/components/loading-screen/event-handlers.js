@@ -491,19 +491,61 @@ export function setupLogoTypeHandlers() {
 
 // ボタンの設定
 export function setupButtons() {
+  console.log('ボタンイベントの設定を開始...');
+  
+  // プロジェクト一覧に戻るボタン
+  const backButton = document.getElementById('back-to-projects-button');
+  if (backButton) {
+    backButton.addEventListener('click', () => {
+      // 変更があるかチェック（簡易版）
+      const hasChanges = checkForUnsavedChanges();
+      
+      if (hasChanges) {
+        if (confirm('変更内容が失われますが、プロジェクト一覧に戻りますか？')) {
+          window.location.hash = '#/projects';
+        }
+      } else {
+        window.location.hash = '#/projects';
+      }
+    });
+    console.log('戻るボタンのイベントリスナーを設定しました');
+  } else {
+    console.warn('戻るボタンが見つかりません');
+  }
+  
   // 保存ボタン
-  const saveButton = document.getElementById('save-settings');
+  const saveButton = document.getElementById('save-button');
   if (saveButton) {
     saveButton.addEventListener('click', async () => {
       try {
+        console.log('設定を保存中...');
         const settings = getCurrentSettings();
         await settingsAPI.saveSettings(settings);
+        
+        // 保存成功の通知
+        showNotification('設定を保存しました', 'success');
         console.log('設定を保存しました');
-        // 成功メッセージを表示（必要に応じて）
       } catch (error) {
         console.error('設定の保存に失敗しました:', error);
+        showNotification('設定の保存に失敗しました', 'error');
       }
     });
+    console.log('保存ボタンのイベントリスナーを設定しました');
+  } else {
+    console.warn('保存ボタンが見つかりません');
+  }
+  
+  // キャンセルボタン
+  const cancelButton = document.getElementById('cancel-button');
+  if (cancelButton) {
+    cancelButton.addEventListener('click', () => {
+      if (confirm('変更内容が失われますが、よろしいですか？')) {
+        window.location.reload();
+      }
+    });
+    console.log('キャンセルボタンのイベントリスナーを設定しました');
+  } else {
+    console.warn('キャンセルボタンが見つかりません');
   }
 
   // リセットボタン
@@ -516,6 +558,38 @@ export function setupButtons() {
       }
     });
   });
+  console.log(`${resetButtons.length}個のリセットボタンのイベントリスナーを設定しました`);
+}
+
+// 未保存の変更があるかチェックする関数
+function checkForUnsavedChanges() {
+  // 簡易版：フォーム要素の値をチェック
+  const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider');
+  for (const input of inputs) {
+    if (input.value !== input.defaultValue) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// 通知を表示する関数
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `loading-screen-editor__notification loading-screen-editor__notification--${type}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    if (document.body.contains(notification)) {
+      notification.style.opacity = '0';
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 300);
+    }
+  }, 3000);
 }
 
 // 現在の設定を取得

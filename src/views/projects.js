@@ -324,7 +324,14 @@ export default function showProjects(container) {
       const menuButton = projectCard.querySelector('.card-menu-button');
       const menuDropdown = projectCard.querySelector('.card-menu-dropdown');
       
+      console.log('メニューボタンとドロップダウンの要素確認:', {
+        menuButton: !!menuButton,
+        menuDropdown: !!menuDropdown,
+        projectName: project.name
+      });
+      
       menuButton.addEventListener('click', (e) => {
+        console.log('メニューボタンがクリックされました:', project.name);
         e.preventDefault();
         e.stopPropagation();
         
@@ -335,25 +342,35 @@ export default function showProjects(container) {
           }
         });
         
+        console.log('ドロップダウンの表示状態を切り替えます');
         menuDropdown.classList.toggle('show');
+        console.log('ドロップダウンが表示されました:', menuDropdown.classList.contains('show'));
       });
       
       // ドロップダウンメニューの各項目のクリックイベント
       const dropdownItems = projectCard.querySelectorAll('.dropdown-item');
       dropdownItems.forEach(item => {
         item.addEventListener('click', (e) => {
+          console.log('ドロップダウンアイテムがクリックされました:', item.getAttribute('data-action'));
           e.preventDefault();
           e.stopPropagation();
           menuDropdown.classList.remove('show');
           
           const action = item.getAttribute('data-action');
+          console.log('実行するアクション:', action);
+          
           switch (action) {
             case 'delete':
+              console.log('削除処理を開始します:', project.name);
               showConfirmDialog(
                 `「${project.name}」を削除してもよろしいですか？`,
                 () => {
+                  console.log('削除が確認されました。deleteProject関数を呼び出します:', project.id);
                   const success = deleteProject(project.id);
+                  console.log('削除結果:', success);
+                  
                   if (success) {
+                    console.log('削除成功 - プロジェクトリストを更新します');
                     renderProjectList(currentPage);
                     const notification = document.createElement('div');
                     notification.className = 'notification success';
@@ -364,6 +381,9 @@ export default function showProjects(container) {
                         document.body.removeChild(notification);
                       }
                     }, 3000);
+                  } else {
+                    console.error('削除に失敗しました');
+                    alert('削除に失敗しました。もう一度お試しください。');
                   }
                 }
               );
@@ -431,9 +451,38 @@ export default function showProjects(container) {
   // ローカルストレージの変更を監視し、プロジェクトリストを更新
   window.addEventListener('storage', (e) => {
     if (e.key === 'miruwebAR_projects') {
+      console.log('プロジェクトデータが更新されました');
       renderProjectList(currentPage);
     }
   });
+
+  // ページの表示・非表示切り替え時にプロジェクトリストを更新
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      console.log('ページが表示されました - プロジェクトリストを更新');
+      renderProjectList(currentPage);
+    }
+  });
+
+  // ハッシュ変更時にプロジェクト一覧に戻った場合は更新
+  const originalHashChangeHandler = window.onhashchange;
+  window.addEventListener('hashchange', (e) => {
+    if (originalHashChangeHandler) originalHashChangeHandler(e);
+    
+    const currentHash = window.location.hash || '#/projects';
+    if (currentHash.startsWith('#/projects')) {
+      console.log('プロジェクト一覧に戻りました - リストを更新');
+      renderProjectList(currentPage);
+    }
+  });
+
+  // 定期的な更新（他のタブでの変更を検出するため）
+  setInterval(() => {
+    const currentHash = window.location.hash || '#/projects';
+    if (currentHash.startsWith('#/projects')) {
+      renderProjectList(currentPage);
+    }
+  }, 5000); // 5秒ごと
 
   // ドキュメント全体のクリックイベントでドロップダウンを閉じる
   document.addEventListener('click', (e) => {

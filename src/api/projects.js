@@ -23,6 +23,9 @@ function createProjectData(data, viewerInstance) {
             arScale: data.arScale || 1,
             isPublic: data.isPublic || false,
         },
+        stats: {
+            views: data.stats?.views || 0
+        },
         markerImage: data.markerImage || null,
         thumbnail: data.thumbnail || null, // サムネイル画像
         created: data.created || Date.now(),

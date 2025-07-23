@@ -22,19 +22,32 @@ const updateLoadingProgress = loadingStub.updateProgress;
 const cleanupLoading = loadingStub.cleanup;
 
 export async function initARViewer(containerId, options = {}) {
+  console.log('initARViewer開始:', { containerId, options });
+  
   const container = document.getElementById(containerId);
+  console.log('コンテナ要素:', container);
+  
   if (!container) {
     console.error(`ARViewer: コンテナID "${containerId}" が見つかりません`);
     return null;
   }
   
+  console.log('コンテナサイズ:', {
+    clientWidth: container.clientWidth,
+    clientHeight: container.clientHeight,
+    offsetWidth: container.offsetWidth,
+    offsetHeight: container.offsetHeight
+  });
+  
   const config = {
     showGrid: true,
     markerMode: false,
-    backgroundColor: 0xcccccc,
+    backgroundColor: 0x222222,
     onModelLoaded: null,
     ...options
   };
+  
+  console.log('設定:', config);
 
   // ローディングマネージャーの初期化（コンテナIDを渡す）
   const loadingManager = {
@@ -114,8 +127,10 @@ export async function initARViewer(containerId, options = {}) {
   const loader = new GLTFLoader(threeLoadingManager);
 
   // シーン・カメラ・レンダラーの初期化
+  console.log('Three.jsシーンの初期化を開始...');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(config.backgroundColor);
+  console.log('シーン作成完了');
 
   const camera = new THREE.PerspectiveCamera(
     75,
@@ -123,8 +138,12 @@ export async function initARViewer(containerId, options = {}) {
     0.1,
     1000
   );
-  camera.position.set(0, 5, 2);
+  
+  // 統一したカメラ初期位置（マーカー・3Dモデル共通）
+  const defaultCameraDistance = 3.5;  // より近い距離に統一
+  camera.position.set(0, defaultCameraDistance * 0.3, defaultCameraDistance);  // 正面・ちょい引き・ちょい斜め上
   camera.lookAt(0, 0, 0);
+  console.log('カメラ作成完了');
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(container.clientWidth || 800, container.clientHeight || 600);
@@ -132,15 +151,21 @@ export async function initARViewer(containerId, options = {}) {
   renderer.domElement.style.height = '100%';
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  console.log('レンダラー作成完了');
+  
+  console.log('レンダラーをコンテナに追加...');
   container.appendChild(renderer.domElement);
+  console.log('レンダラーをコンテナに追加完了');
 
   // OrbitControlsとTransformControlsの設定
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
-  controls.minDistance = 0.1;
-  controls.maxDistance = 500;
-  //controls.target.set(0, 0, 0);
+  
+  // マーカー・3Dモデル共通の適切な距離設定
+  controls.minDistance = 1.0;  // 最小距離を適度に設定
+  controls.maxDistance = 20;   // 最大距離を適度に制限
+  controls.target.set(0, 0, 0);
 
   // OrientationCube (方向キューブ) の追加
   // 小さなシーンとカメラを作成
@@ -269,6 +294,7 @@ export async function initARViewer(containerId, options = {}) {
   scene.add(transformControls);
 
   // ライトとグリッドヘルパー
+  console.log('ライティングの設定を開始...');
   const ambientLight = new THREE.AmbientLight(0xffffff, 2.1); // ← 0.6 から 2.1 に変更　全体のライトを調整
   scene.add(ambientLight);
 
@@ -286,10 +312,18 @@ export async function initARViewer(containerId, options = {}) {
   directionalLight.shadow.camera.far = 20;
   directionalLight.shadow.bias = -0.001;
   scene.add(directionalLight);
+  console.log('ライティング設定完了');
 
-  const gridHelper = new THREE.GridHelper(10, 10, 0x777777, 0xbbbbbb);
-  gridHelper.position.y = -0.01;
-  scene.add(gridHelper);
+  // グリッドヘルパー（設定で有効な場合のみ）
+  console.log('グリッドの設定を開始...', { showGrid: config.showGrid });
+  if (config.showGrid) {
+    const gridHelper = new THREE.GridHelper(10, 10, 0x777777, 0xbbbbbb);
+    gridHelper.position.y = -0.01;
+    scene.add(gridHelper);
+    console.log('グリッドヘルパー追加完了');
+  } else {
+    console.log('グリッドは無効化されています');
+  }
 
   // マーカー（ARマーカーモードの場合）
   let markerPlane, markerMaterial;
@@ -298,10 +332,13 @@ export async function initARViewer(containerId, options = {}) {
     const markerGeometry = new THREE.PlaneGeometry(markerSize, markerSize);
     markerMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.5,
-      map: null
+      side: THREE.FrontSide, // 表面のみ表示
+      transparent: false, // 透明度を無効化
+      opacity: 1.0,
+      map: null,
+      // テクスチャの品質を向上
+      alphaTest: 0, // アルファテストを無効化
+      depthWrite: true // 深度書き込みを有効化
     });
     markerPlane = new THREE.Mesh(markerGeometry, markerMaterial);
     markerPlane.rotation.x = -Math.PI / 2;
@@ -322,35 +359,76 @@ export async function initARViewer(containerId, options = {}) {
       objectUrl,
       fileName,
       fileSize,
-      position: new THREE.Vector3(0, 0, 0),
-      rotation: new THREE.Euler(0, 0, 0),
-      scale: new THREE.Vector3(1, 1, 1),
+      position: model.position.clone(),
+      rotation: model.rotation.clone(),
+      scale: model.scale.clone(),
+      // 初期状態を保存（リセット用）
+      initialPosition: model.position.clone(),
+      initialRotation: model.rotation.clone(),
+      initialScale: model.scale.clone(),
       visible: true
     };
   }
 
   function disposeModelResources(modelData) {
-    if (!modelData || !modelData.model) return;
-    if (modelData.objectUrl && modelData.objectUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(modelData.objectUrl);
-      objectUrls.delete(modelData.model);
+    if (!modelData || !modelData.model) {
+      console.warn('disposeModelResources: 無効なmodelDataが渡されました');
+      return;
     }
-    modelData.model.traverse(child => {
-      if (child.isMesh) {
-        if (child.geometry) child.geometry.dispose();
-        if (child.material) {
-          if (Array.isArray(child.material)) {
-            child.material.forEach(material => {
-              if (material.map) material.map.dispose();
-              material.dispose();
-            });
-          } else {
-            if (child.material.map) child.material.map.dispose();
-            child.material.dispose();
+
+    try {
+      // Object URLを解放
+      if (modelData.objectUrl && modelData.objectUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(modelData.objectUrl);
+        objectUrls.delete(modelData.model);
+        console.log(`Object URL解放: ${modelData.objectUrl}`);
+      }
+
+      // モデルのリソースを再帰的に解放
+      modelData.model.traverse(child => {
+        if (child.isMesh) {
+          // ジオメトリの解放
+          if (child.geometry) {
+            child.geometry.dispose();
+          }
+
+          // マテリアルの解放
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach(material => {
+                disposeMaterial(material);
+              });
+            } else {
+              disposeMaterial(child.material);
+            }
           }
         }
-      }
-    });
+      });
+
+      console.log(`モデルリソース解放完了: ${modelData.fileName || 'Unknown'}`);
+    } catch (error) {
+      console.error('disposeModelResources内でエラーが発生:', error);
+    }
+  }
+
+  // マテリアルを安全に解放するヘルパー関数
+  function disposeMaterial(material) {
+    if (!material) return;
+
+    try {
+      // テクスチャを解放
+      if (material.map) material.map.dispose();
+      if (material.normalMap) material.normalMap.dispose();
+      if (material.roughnessMap) material.roughnessMap.dispose();
+      if (material.metalnessMap) material.metalnessMap.dispose();
+      if (material.emissiveMap) material.emissiveMap.dispose();
+      if (material.aoMap) material.aoMap.dispose();
+
+      // マテリアル自体を解放
+      material.dispose();
+    } catch (error) {
+      console.error('disposeMaterial内でエラーが発生:', error);
+    }
   }
 
   // モデル読み込み関数を更新
@@ -426,6 +504,12 @@ export async function initARViewer(containerId, options = {}) {
       modelData.position.copy(model.position);
       modelData.rotation.copy(model.rotation);
       modelData.scale.copy(model.scale);
+      
+      // カメラを適切な位置に調整してからその位置を保存
+      adjustCameraToModel(model);  
+      modelData.initialCameraPosition = camera.position.clone();
+      modelData.initialCameraTarget = controls.target.clone();
+      
       modelList.push(modelData);
 
       updateLoadingProgress(loaderId, 80, 'モデルを配置中...');
@@ -526,25 +610,71 @@ export async function initARViewer(containerId, options = {}) {
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let distance = (maxDim > 1e-6) ? (maxDim / (2 * Math.tan(fov / 2))) * 2.2 : 10;
-    distance = Math.max(distance, maxDim * 1.8);
+    
+    let distance;
+    if (config.markerMode) {
+      // マーカーモードの場合は統一した固定距離を使用
+      distance = defaultCameraDistance;
+    } else {
+      // 非マーカーモードの場合は、統一した固定距離をベースにしつつ、必要に応じて調整
+      const fov = camera.fov * (Math.PI / 180);
+      const calculatedDistance = (maxDim > 1e-6) ? (maxDim / (2 * Math.tan(fov / 2))) * 1.8 : defaultCameraDistance;
+      // 統一した距離感を保つため、計算距離とデフォルト距離の中間値を使用
+      distance = Math.max(defaultCameraDistance, Math.min(calculatedDistance, defaultCameraDistance * 1.5));
+    }
+    
     const modelWorldCenter = new THREE.Vector3();
     const worldBox = box.clone().applyMatrix4(model.matrixWorld);
     worldBox.getCenter(modelWorldCenter);
+    
+    // 統一した構図でカメラを配置（マーカーモードと同じ比率）
     const newCameraPos = new THREE.Vector3(
-      modelWorldCenter.x,
-      modelWorldCenter.y + distance * 1.2,
-      modelWorldCenter.z + distance * 0.2
+      modelWorldCenter.x,                    // X軸: 正面（中央）
+      modelWorldCenter.y + distance * 0.3,  // Y軸: ちょい斜め上（統一した比率）
+      modelWorldCenter.z + distance         // Z軸: 統一した距離感
     );
+    
     camera.position.copy(newCameraPos);
     camera.near = Math.max(0.01, distance * 0.1);
     camera.far = distance * 10;
     camera.updateProjectionMatrix();
-    controls.update();
     controls.target.copy(modelWorldCenter); 
-    controls.minDistance = maxDim * 0.2;
-    controls.maxDistance = Math.max(distance * 20, 50);
+    
+    // 統一した距離制限を設定
+    controls.minDistance = 1.0;
+    controls.maxDistance = 20;
+    controls.update();
+  }
+
+  // マーカーモード用のカメラ調整
+  function adjustCameraForMarker() {
+    if (!config.markerMode) return;
+    
+    const targetDistance = defaultCameraDistance;  // 統一した距離を使用
+    
+    // マーカーの中心位置を取得（マーカーは原点に配置されている）
+    const markerCenter = new THREE.Vector3(0, 0, 0);
+    if (markerPlane) {
+      markerCenter.copy(markerPlane.position);
+    }
+    
+    // 統一した構図でカメラを配置（3Dモデルと同じ比率・同じ距離）
+    const newCameraPos = new THREE.Vector3(
+      markerCenter.x,                        // X軸: 正面（中央）
+      markerCenter.y + targetDistance * 0.3, // Y軸: ちょい斜め上（統一した比率）
+      markerCenter.z + targetDistance        // Z軸: 統一した距離感
+    );
+    
+    camera.position.copy(newCameraPos);
+    camera.near = Math.max(0.01, targetDistance * 0.1);
+    camera.far = targetDistance * 10;
+    camera.updateProjectionMatrix();
+    controls.target.copy(markerCenter);
+    
+    // 統一した距離制限を設定（3Dモデルと同じ）
+    controls.minDistance = 1.0;
+    controls.maxDistance = 20;
+    controls.update();
   }
 
   // マーカーテクスチャ設定
@@ -552,11 +682,58 @@ export async function initARViewer(containerId, options = {}) {
     if (config.markerMode && markerMaterial) {
       const textureLoader = new THREE.TextureLoader();
       textureLoader.load(textureUrl, texture => {
+        // テクスチャの品質設定
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        texture.flipY = true; // 上下反転を修正
+        texture.colorSpace = THREE.SRGBColorSpace; // 色空間を正しく設定
+        
+        // 画像の縦横比を取得
+        const img = texture.image;
+        const aspectRatio = img.width / img.height;
+        
+        // マーカー平面のジオメトリを縦横比に合わせて更新
+        const markerSize = 1;
+        let width, height;
+        
+        if (aspectRatio > 1) {
+          // 横長画像
+          width = markerSize;
+          height = markerSize / aspectRatio;
+        } else {
+          // 縦長または正方形画像
+          width = markerSize * aspectRatio;
+          height = markerSize;
+        }
+        
+        // 新しいジオメトリを作成
+        const newGeometry = new THREE.PlaneGeometry(width, height);
+        
+        // 古いジオメトリを破棄
+        if (markerPlane.geometry) {
+          markerPlane.geometry.dispose();
+        }
+        
+        // 新しいジオメトリを適用
+        markerPlane.geometry = newGeometry;
+        
+        // マテリアルの設定を更新
         markerMaterial.map = texture;
-        markerMaterial.opacity = 1;
+        markerMaterial.transparent = false; // 透明度を無効化
+        markerMaterial.opacity = 1.0;
+        markerMaterial.alphaTest = 0; // アルファテストを無効化
         markerMaterial.needsUpdate = true;
+        
+        // マーカー設定時にカメラを調整（統一した視点にする）
+        adjustCameraForMarker();
+        
+        console.log(`マーカーテクスチャ設定完了: ${img.width}x${img.height} (縦横比: ${aspectRatio.toFixed(2)}), カメラ調整済み`);
       }, undefined, error => {
+        console.error('マーカーテクスチャの読み込みに失敗:', error);
         markerMaterial.map = null;
+        markerMaterial.transparent = true;
         markerMaterial.opacity = 0.5;
         markerMaterial.needsUpdate = true;
       });
@@ -564,6 +741,9 @@ export async function initARViewer(containerId, options = {}) {
   }
 
   if (config.markerMode) {
+    // マーカーモード初期化時にカメラを調整
+    adjustCameraForMarker();
+    
     const markerImageUrl = localStorage.getItem('markerImageUrl');
     if (markerImageUrl) {
       setMarkerTexture(markerImageUrl);
@@ -646,28 +826,17 @@ export async function initARViewer(containerId, options = {}) {
     // アクティブなモデルがある場合はモデルを中心に
     if (activeModelIndex >= 0 && modelList[activeModelIndex] && modelList[activeModelIndex].model) {
       const model = modelList[activeModelIndex].model;
-      const box = new THREE.Box3().setFromObject(model);
-      const center = new THREE.Vector3();
-      box.getCenter(center);
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      let cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 1.5;
-      
-      // 新しいカメラ位置 (モデルの正面から見る)
-      camera.position.set(center.x, center.y + maxDim * 0.5, center.z + cameraZ);
-      controls.target.copy(center);
+      adjustCameraToModel(model);
+    } else if (config.markerMode) {
+      // マーカーモードの場合は統一したマーカー用カメラ位置
+      adjustCameraForMarker();
     } else {
-      // モデルがない場合はデフォルト位置に
-      camera.position.set(0, 5, 2);
+      // モデルがない場合はデフォルト位置に（統一した距離感）
+      camera.position.set(0, defaultCameraDistance * 0.3, defaultCameraDistance);
       controls.target.set(0, 0, 0);
+      camera.updateProjectionMatrix();
+      controls.update();
     }
-    
-    // アニメーションなしで即座に更新
-    camera.updateProjectionMatrix();
-    controls.update();
     
     // ユーザーに視覚的なフィードバックを提供
     const feedback = document.createElement('div');
@@ -719,7 +888,10 @@ export async function initARViewer(containerId, options = {}) {
     }
     renderer.render(scene, camera);
   }
+  
+  console.log('アニメーションループを開始...');
   animate();
+  console.log('アニメーションループ開始完了');
 
   function getActiveModelData() {
     if (activeModelIndex >= 0 && activeModelIndex < modelList.length) {
@@ -816,11 +988,19 @@ export async function initARViewer(containerId, options = {}) {
       };
     },
     removeModel: (index) => {
-      if (index >= 0 && index < modelList.length) {
+      console.log(`removeModel呼び出し: インデックス=${index}, モデル数=${modelList.length}`);
+      
+      if (index < 0 || index >= modelList.length) {
+        console.error(`無効なモデルインデックス: ${index} (有効範囲: 0-${modelList.length - 1})`);
+        return false;
+      }
+
+      try {
         const removedModelData = modelList[index];
+        console.log(`削除対象モデル: ${removedModelData.fileName || 'Unknown'}`);
         
         // Detach TransformControls if it's attached to the model being removed
-        if (transformControls.object === removedModelData.model) {
+        if (transformControls && transformControls.object === removedModelData.model) {
           transformControls.detach();
           transformControls.visible = false;
         }
@@ -831,19 +1011,27 @@ export async function initARViewer(containerId, options = {}) {
           boundingBox = null;
         }
 
-        if (removedModelData.model.parent) {
+        // Remove the model from the scene
+        if (removedModelData.model && removedModelData.model.parent) {
           scene.remove(removedModelData.model);
         }
+        
+        // Dispose resources
         disposeModelResources(removedModelData);
+        
+        // Remove from model list
         modelList.splice(index, 1);
         
+        // Update active model index
         let newActiveIndex = -1;
         if (modelList.length === 0) {
           activeModelIndex = -1;
-          transformControls.detach();
-          transformControls.visible = false;
+          if (transformControls) {
+            transformControls.detach();
+            transformControls.visible = false;
+          }
         } else if (activeModelIndex === index) {
-          newActiveIndex = 0;
+          newActiveIndex = Math.min(0, modelList.length - 1);
         } else if (activeModelIndex > index) {
           newActiveIndex = activeModelIndex - 1;
         } else {
@@ -852,13 +1040,18 @@ export async function initARViewer(containerId, options = {}) {
         
         setActiveModel(newActiveIndex);
         
+        // Dispatch model list changed event
         const modelListChangedEvent = new CustomEvent('modelListChanged', {
-          detail: { models: modelControls.getAllModels(), activeModelIndex }
+          detail: { models: modelControls.getAllModels(), activeModelIndex: newActiveIndex }
         });
         container.dispatchEvent(modelListChangedEvent);
+        
+        console.log(`モデル削除完了: インデックス=${index}, 新しいアクティブインデックス=${newActiveIndex}`);
         return true;
+      } catch (error) {
+        console.error('removeModel内でエラーが発生:', error);
+        return false;
       }
-      return false;
     },
     setScale: (scale) => {
       const modelData = getActiveModelData();
@@ -919,6 +1112,15 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
         container.dispatchEvent(event);
+        
+        // scaleResetイベントも発行してUI更新を促す
+        const scaleResetEvent = new CustomEvent('scaleReset', {
+          detail: {
+            index: activeModelIndex,
+            scale: { x: model.scale.x, y: model.scale.y, z: model.scale.z }
+          }
+        });
+        container.dispatchEvent(scaleResetEvent);
 
         console.log('Scale ratio reset to:', newScaleValue); // 動作確認ログ
       } else {
@@ -931,13 +1133,16 @@ export async function initARViewer(containerId, options = {}) {
       const modelData = getActiveModelData();
       if (modelData) {
         adjustCameraToModel(modelData.model);
+      } else if (config.markerMode) {
+        adjustCameraForMarker();
       } else {
-        camera.position.set(0, 5, 2);
+        // 統一したデフォルト位置
+        camera.position.set(0, defaultCameraDistance * 0.3, defaultCameraDistance);
         controls.target.set(0, 0, 0);
-        controls.minDistance = 0.1;
-        controls.maxDistance = 100;
+        controls.minDistance = 1.0;
+        controls.maxDistance = 20;
         camera.near = 0.1;
-        camera.far = 1000;
+        camera.far = 100;
         camera.updateProjectionMatrix();
         controls.update();
       }
@@ -988,12 +1193,74 @@ export async function initARViewer(containerId, options = {}) {
     resetToFrontView: () => {
       resetCameraToFrontView();
     },
+    // カメラを適切な位置に調整するメソッドを追加
+    adjustCameraToActiveModel: () => {
+      const modelData = getActiveModelData();
+      if (modelData && modelData.model) {
+        adjustCameraToModel(modelData.model);
+      }
+    },
+    // 初期状態にリセットするメソッドを追加
+    resetToInitialState: () => {
+      const modelData = getActiveModelData();
+      if (modelData && modelData.model) {
+        const model = modelData.model;
+        
+        // 初期状態に戻す
+        model.position.copy(modelData.initialPosition);
+        model.rotation.copy(modelData.initialRotation);
+        model.scale.copy(modelData.initialScale);
+        
+        // 内部データも更新
+        modelData.position.copy(model.position);
+        modelData.rotation.copy(model.rotation);
+        modelData.scale.copy(model.scale);
+        
+        // カメラを初期位置に復元
+        if (modelData.initialCameraPosition && modelData.initialCameraTarget) {
+          camera.position.copy(modelData.initialCameraPosition);
+          controls.target.copy(modelData.initialCameraTarget);
+          controls.update();
+        } else {
+          // フォールバック：適切な位置に調整
+          if (config.markerMode) {
+            adjustCameraForMarker();
+          } else {
+            adjustCameraToModel(model);
+          }
+        }
+        
+        // UIに変更を通知
+        const event = new CustomEvent('transformChanged', {
+          detail: {
+            index: activeModelIndex,
+            position: { x: model.position.x, y: model.position.y, z: model.position.z },
+            rotation: {
+              x: THREE.MathUtils.radToDeg(model.rotation.x),
+              y: THREE.MathUtils.radToDeg(model.rotation.y),
+              z: THREE.MathUtils.radToDeg(model.rotation.z)
+            },
+            scale: { x: model.scale.x, y: model.scale.y, z: model.scale.z }
+          }
+        });
+        container.dispatchEvent(event);
+        
+        console.log('Model reset to initial state');
+        return true;
+      } else {
+        console.warn('Cannot reset: No active model found.');
+        return false;
+      }
+    },
     // ローディング画面の手動制御用関数を追加
     showLoadingScreen: () => loadingManager.showLoadingScreen(),
     hideLoadingScreen: () => loadingManager.hideLoadingScreen(),
-    updateLoadingProgress: (percent, message) => loadingManager.updateProgress(percent, message)
+    updateLoadingProgress: (percent, message) => loadingManager.updateProgress(percent, message),
+    // アクティブモデルデータ取得関数を追加
+    getActiveModelData: getActiveModelData
   };
 
+  console.log('ARビューアーの初期化完了、コントロールを返却します');
   return {
     dispose: modelControls.dispose,
     controls: modelControls,
