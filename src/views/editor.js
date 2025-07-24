@@ -2,7 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, getProjects, loadProjectWithModels, deleteProject } from '../api/projects-new.js'; // 新しい IndexedDB 対応 API をインポート
+import { saveProject, getProject, getProjects, loadProjectModels, deleteProject } from '../api/projects.js'; // IndexedDB 対応 API をインポート
 
 /**
  * ファイルサイズを適切な単位でフォーマットする
@@ -446,22 +446,25 @@ export function showEditor(container) {
         return;
       }
       
-      // IndexedDB からモデルデータを含む完全なプロジェクトを読み込み
-      let project;
+      // IndexedDB からモデルデータを読み込み
+      let modelData = [];
       try {
         console.log('🔄 IndexedDB からモデルデータ読み込み中...');
-        project = await loadProjectWithModels(basicProject);
-        console.log('✅ IndexedDB対応プロジェクト読み込み完了:', {
-          id: project.id,
-          name: project.name,
-          modelCount: project.modelData?.length || 0,
-          restoredModels: project.modelData?.filter(m => m.objectUrl).length || 0
+        modelData = await loadProjectModels(projectId);
+        console.log('✅ IndexedDB対応モデル読み込み完了:', {
+          modelCount: modelData.length,
+          restoredModels: modelData.filter(m => m.objectUrl).length
         });
       } catch (loadError) {
-        console.error('❌ IndexedDB プロジェクト読み込みエラー:', loadError);
-        console.log('⚠️ 基本プロジェクトデータのみ使用します');
-        project = basicProject;
+        console.error('❌ IndexedDB モデル読み込みエラー:', loadError);
+        console.log('⚠️ モデルなしで継続します');
       }
+      
+      // プロジェクトデータにモデルデータを追加
+      const project = {
+        ...basicProject,
+        modelData: modelData
+      };
 
       console.log('✅ プロジェクトデータ読み込み成功:', {
         id: project.id,
@@ -541,17 +544,11 @@ export function showEditor(container) {
       }
 
       // 3Dモデルの復元 - IndexedDB から読み込まれたモデルデータを復元
-      console.log('🎯 3Dモデルの復元処理開始 [IndexedDB版]');
-      console.log('- project.modelSettings:', project.modelSettings);
+      console.log('🎯 IndexedDB対応 3Dモデル復元処理開始');
       console.log('- project.modelData:', project.modelData);
-      console.log('- modelSettings数:', project.modelSettings?.length || 0);
-      console.log('- modelData数:', project.modelData?.length || 0);
+      console.log('- 復元対象モデル数:', project.modelData?.length || 0);
       
-      // IndexedDB から読み込まれたモデルデータがあるかチェック
-      const modelsToRestore = project.modelData || project.modelSettings || [];
-      console.log('🔍 復元対象モデル:', modelsToRestore.length);
-      
-      if (modelsToRestore && modelsToRestore.length > 0) {
+      if (project.modelData && project.modelData.length > 0) {
         const emptyText = fileListContainer.querySelector('.empty-text');
         if (emptyText) {
           emptyText.remove();
@@ -560,127 +557,114 @@ export function showEditor(container) {
         let successCount = 0;
         let errorCount = 0;
 
-        // 保存された各モデルを復元
-        for (let index = 0; index < modelsToRestore.length; index++) {
-          const modelSetting = modelsToRestore[index];
+        // IndexedDBから復元された各モデルを処理
+        for (let index = 0; index < project.modelData.length; index++) {
+          const modelData = project.modelData[index];
           
           try {
             console.log(`🔄 モデル${index}の復元開始 [IndexedDB版]:`, {
-              fileName: modelSetting.fileName,
-              fileSize: modelSetting.fileSize,
-              hasObjectUrl: !!modelSetting.objectUrl,
-              hasModelData: !!modelSetting.modelData,
-              hasModelUrl: !!modelSetting.modelUrl,
-              hasError: !!modelSetting.error,
-              modelId: modelSetting.modelId
+              fileName: modelData.fileName,
+              fileSize: modelData.fileSize,
+              hasObjectUrl: !!modelData.objectUrl,
+              hasModelBlob: !!modelData.modelBlob,
+              modelId: modelData.modelId,
+              blobSize: modelData.modelBlob?.size
             });
             
             let modelIndex = null;
             
-            // IndexedDB から読み込まれた Object URL がある場合
-            if (modelSetting.objectUrl) {
-              console.log('✅ IndexedDB からの Object URL を使用:', {
-                objectUrl: modelSetting.objectUrl,
-                fileName: modelSetting.fileName,
-                fileSize: modelSetting.fileSize
+            if (modelData.objectUrl && modelData.modelBlob) {
+              console.log('✅ IndexedDB復元データを使用:', {
+                objectUrl: modelData.objectUrl.substring(0, 50) + '...',
+                fileName: modelData.fileName,
+                blobSize: modelData.modelBlob.size
               });
               
               try {
+                // ARビューアにモデルを読み込み
                 modelIndex = await viewerInstance.controls.loadNewModel(
-                  modelSetting.objectUrl,
-                  modelSetting.fileName,
-                  modelSetting.fileSize
+                  modelData.objectUrl,
+                  modelData.fileName,
+                  modelData.fileSize
                 );
-                console.log('✅ IndexedDB Object URL からの読み込み成功:', modelIndex);
-              } catch (loadError) {
-                console.error('❌ IndexedDB Object URL からの読み込み失敗:', loadError);
-                throw loadError;
-              }
-            } else if (modelSetting.modelData) {
-              // 後方互換性: 従来の Base64 データから復元
-              console.log('✅ 従来のBase64データから復元:', {
-                dataPreview: modelSetting.modelData?.substring(0, 50) + '...',
-                isBase64: modelSetting.modelData?.startsWith('data:')
-              });
-              
-              try {
-                modelIndex = await viewerInstance.controls.loadNewModel(
-                  modelSetting.modelData,
-                  modelSetting.fileName,
-                  modelSetting.fileSize
+                console.log('✅ IndexedDB モデル読み込み成功:', modelIndex);
+                
+                // ファイルリストにアイテムを追加
+                const fileItem = createFileListItem(
+                  {
+                    name: modelData.fileName,
+                    size: modelData.modelBlob.size
+                  }, 
+                  modelData.objectUrl, 
+                  modelIndex
                 );
-                console.log('✅ Base64データからの読み込み成功:', modelIndex);
+                fileListContainer.appendChild(fileItem);
+                
+                // 保存された変形設定を適用
+                if (modelData.transform) {
+                  setTimeout(() => {
+                    if (viewerInstance?.controls?.setPosition && modelData.transform.position) {
+                      viewerInstance.controls.setPosition(
+                        modelData.transform.position.x,
+                        modelData.transform.position.y,
+                        modelData.transform.position.z
+                      );
+                    }
+                    if (viewerInstance?.controls?.setRotationY && modelData.transform.rotation) {
+                      viewerInstance.controls.setRotationY(modelData.transform.rotation.y);
+                    }
+                    if (viewerInstance?.controls?.setScale && modelData.transform.scale) {
+                      viewerInstance.controls.setScale(modelData.transform.scale.x);
+                    }
+                    console.log('✅ 変形設定適用:', modelData.transform);
+                  }, 500);
+                }
+                
+                // 合計ファイルサイズを更新
+                totalFileSize += modelData.modelBlob.size;
+                
+                successCount++;
+                console.log(`✅ モデル "${modelData.fileName}" の復元完了`);
+                
               } catch (loadError) {
-                console.error('❌ Base64データからの読み込み失敗:', loadError);
-                throw loadError;
-              }
-            } else if (modelSetting.modelUrl) {
-              // 保存されたモデルURLから復元
-              console.log('✅ 保存されたモデルURLから復元:', {
-                url: modelSetting.modelUrl,
-                isBlobUrl: modelSetting.modelUrl?.startsWith('blob:'),
-                isHttpUrl: modelSetting.modelUrl?.startsWith('http')
-              });
-              
-              try {
-                modelIndex = await viewerInstance.controls.loadNewModel(
-                  modelSetting.modelUrl,
-                  modelSetting.fileName,
-                  modelSetting.fileSize
-                );
-                console.log('✅ モデルURLからの読み込み成功:', modelIndex);
-              } catch (loadError) {
-                console.error('❌ モデルURLからの読み込み失敗:', loadError);
+                console.error('❌ IndexedDB モデル読み込み失敗:', loadError);
                 throw loadError;
               }
             } else {
-              // モデルデータがない場合は設定情報のみ表示
-              console.log('⚠️ モデルデータなし - 設定情報のみ表示');
-              const infoItem = createModelInfoItem(modelSetting, index);
+              // モデルデータがない場合（エラー処理）
+              console.warn('⚠️ IndexedDB復元データが不完全:', {
+                hasObjectUrl: !!modelData.objectUrl,
+                hasModelBlob: !!modelData.modelBlob,
+                modelId: modelData.modelId
+              });
+              
+              // 設定情報のみ表示
+              const infoItem = createModelInfoItem(modelData, index);
               fileListContainer.appendChild(infoItem);
+              errorCount++;
               continue;
             }
-
-            if (modelIndex !== null && modelIndex !== undefined) {
-              // ファイルリストアイテムを作成
-              const fileItem = createRestoredFileListItem(modelSetting, modelIndex);
-              fileListContainer.appendChild(fileItem);
-              
-              // 保存された設定を適用
-              setTimeout(() => {
-                if (viewerInstance?.controls?.setPosition && modelSetting.transform?.position) {
-                  viewerInstance.controls.setPosition(
-                    modelSetting.transform.position.x,
-                    modelSetting.transform.position.y,
-                    modelSetting.transform.position.z
-                  );
-                }
-                if (viewerInstance?.controls?.setRotationY && modelSetting.transform?.rotation) {
-                  viewerInstance.controls.setRotationY(modelSetting.transform.rotation.y);
-                }
-                if (viewerInstance?.controls?.setScale && modelSetting.transform?.scale) {
-                  viewerInstance.controls.setScale(modelSetting.transform.scale.x);
-                }
-                
-                console.log('✅ 保存された設定を適用しました:', modelSetting.transform);
-                updateAnimationInfo(); // アニメーション情報を更新
-              }, 500);
-              
-              successCount++;
-              console.log(`✅ モデル "${modelSetting.fileName}" の復元完了`);
-            }
+            
           } catch (error) {
             errorCount++;
-            console.error(`❌ モデル "${modelSetting.fileName}" の復元に失敗:`, error);
+            console.error(`❌ モデル "${modelData.fileName}" の復元に失敗:`, error);
             
             // エラーの場合は設定情報のみ表示
-            const infoItem = createModelInfoItem(modelSetting, index);
+            const infoItem = createModelInfoItem(modelData, index);
             fileListContainer.appendChild(infoItem);
           }
         }
         
+        // 総ファイルサイズ表示を更新
+        updateTotalFileSizeDisplay();
+        
+        // アニメーション情報を更新
+        setTimeout(() => {
+          updateAnimationInfo();
+        }, 1000);
+        
         // 復元結果の通知
-        const totalModels = project.modelSettings.length;
+        const totalModels = project.modelData.length;
         if (successCount > 0) {
           showNotification(`${successCount}/${totalModels}個のモデルを復元しました`, 'success');
         }
@@ -688,7 +672,7 @@ export function showEditor(container) {
           showNotification(`${errorCount}個のモデルは再アップロードが必要です`, 'info');
         }
         
-        console.log('✅ モデル復元処理完了:', { successCount, errorCount, totalModels });
+        console.log('✅ IndexedDB対応モデル復元処理完了:', { successCount, errorCount, totalModels });
       } else {
         console.log('ℹ️ 保存されたモデル設定がありません');
       }
@@ -1712,11 +1696,11 @@ export function showEditor(container) {
     });
   };
 
-  // プロジェクト保存処理
+  // IndexedDB対応プロジェクト保存処理
   const handleSaveProject = () => {
-    console.log('🔥🔥🔥 プロジェクト保存処理開始 [v3.0] 🔥🔥🔥');
+    console.log('🔥🔥🔥 IndexedDB対応プロジェクト保存処理開始 [v4.0] 🔥🔥🔥');
     
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       // URLパラメータから現在のプロジェクトIDを取得
       const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
       const currentProjectId = urlParams.get('id');

@@ -4,6 +4,9 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   // ★★★ キャッシュ無効化設定（緊急対策） ★★★
   server: {
+    host: 'localhost',
+    port: 3000,
+    strictPort: true,
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',

@@ -395,14 +395,14 @@ export async function initARViewer(containerId, options = {}) {
   // 選択オブジェクト表示用のBoxHelper
   let boundingBox = null;
 
-  function createModelData(model, objectUrl, fileName, fileSize, animations = []) {
-    console.log('🔥🔥🔥 createModelData実行 [IndexedDB版 v4.0] 🔥🔥🔥');
+  function createModelData(model, objectUrl, fileName, fileSize, animations = [], sourceFile = null) {
+    console.log('🔥🔥🔥 IndexedDB対応createModelData実行 [v5.0] 🔥🔥🔥');
     console.log('- fileName:', fileName);
     console.log('- fileSize:', fileSize);
     console.log('- objectUrl:', objectUrl);
     console.log('- objectUrl type:', typeof objectUrl);
     console.log('- isBlobUrl:', objectUrl && objectUrl.startsWith('blob:'));
-    console.log('- isDataUrl:', objectUrl && objectUrl.startsWith('data:'));
+    console.log('- sourceFile:', sourceFile?.name);
     
     const modelData = {
       model,
@@ -410,40 +410,41 @@ export async function initARViewer(containerId, options = {}) {
       fileName,
       fileSize,
       
-      // 新しい IndexedDB システム用のデータ保存
-      // modelData は保存時に IndexedDB に移動されるため、ここでは一時的に保持
-      modelData: null, // Base64 データは IndexedDB に移行済みのため null
-      modelUrl: objectUrl && !objectUrl.startsWith('data:') && !objectUrl.startsWith('blob:') ? objectUrl : null,
-      modelId: null, // 保存時に IndexedDB のモデル ID が設定される
+      // IndexedDB対応：Blobベースの保存システム
+      _sourceBlob: null,     // 保存用Blob（後で設定される）
+      _sourceFile: sourceFile, // 元ファイル参照
+      modelId: null,         // IndexedDBのキー（保存時に設定）
       
-      // TODO: IndexedDB 保存用のソースデータ（一時保存）
-      _sourceBlob: null, // ファイルから読み込んだ場合の元 Blob
-      _sourceFile: null, // ファイルオブジェクト（ファイル選択時）
-      
+      // 変形設定
       position: model.position.clone(),
       rotation: model.rotation.clone(),
       scale: model.scale.clone(),
+      
       // 初期状態を保存（リセット用）
       initialPosition: model.position.clone(),
       initialRotation: model.rotation.clone(),
       initialScale: model.scale.clone(),
-      initialCameraPosition: null, // カメラ初期位置（後で設定）
-      initialCameraTarget: null,   // カメラ初期ターゲット（後で設定）
+      initialCameraPosition: null,
+      initialCameraTarget: null,
       visible: true,
+      
       // アニメーション情報
       animations: animations,
       hasAnimations: animations.length > 0,
       
-      // IndexedDB メタデータ
-      mimeType: 'model/gltf-binary',
-      lastModified: Date.now()
+      // IndexedDBメタデータ
+      mimeType: sourceFile?.type || 'model/gltf-binary',
+      lastModified: Date.now(),
+      uploadedAt: Date.now()
     };
     
-    console.log('🔍 作成されたmodelData [IndexedDB版]:', {
+    console.log('🔍 作成されたmodelData [IndexedDB対応版]:', {
       fileName: modelData.fileName,
-      hasModelId: !!modelData.modelId,
+      fileSize: modelData.fileSize,
       hasObjectUrl: !!modelData.objectUrl,
-      mimeType: modelData.mimeType
+      hasSourceFile: !!modelData._sourceFile,
+      hasAnimations: modelData.hasAnimations,
+      animationCount: modelData.animations.length
     });
     
     return modelData;
@@ -510,7 +511,7 @@ export async function initARViewer(containerId, options = {}) {
     }
   }
 
-  // モデル読み込み関数を更新
+  // IndexedDB対応モデル読み込み関数
   async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0, sourceFile = null) {
     let createdObjectUrl = null;
     const loaderId = showLoading({
@@ -519,56 +520,36 @@ export async function initARViewer(containerId, options = {}) {
     });
     
     try {
-      let storedModelData = null;
+      let storedModelBlob = null;
       
-      // モデルのURLを準備とデータ保存の準備
+      // モデルのURLを準備とBlob保存の準備
       if (modelUrl instanceof Blob || modelUrl instanceof File) {
         createdObjectUrl = URL.createObjectURL(modelUrl);
         
-        // 保存用にBase64データを生成
-        try {
-          console.log('📦 Base64データ変換開始...');
-          const originalFileSize = modelUrl.size || 0;
-          console.log('- 元ファイルサイズ:', (originalFileSize / 1024).toFixed(2), 'KB');
-          
-          storedModelData = await fileToBase64(modelUrl);
-          const base64Size = storedModelData.length;
-          console.log('✅ Base64データ変換完了:', {
-            base64Size: (base64Size / 1024).toFixed(2) + 'KB',
-            compressionRatio: (base64Size / originalFileSize).toFixed(2) + 'x'
-          });
-          
-          // 500KB制限をチェック（localStorage容量制限対策）
-          if (base64Size > 500 * 1024) {
-            console.warn('⚠️ Base64データが500KBを超えています - 設定のみ保存');
-            storedModelData = null; // データを保存せず、設定のみ保存
-          }
-        } catch (error) {
-          console.warn('⚠️ Base64変換に失敗、設定のみ保存:', error);
-          storedModelData = null;
-        }
+        // IndexedDB保存用にBlobを保持
+        storedModelBlob = modelUrl;
+        console.log('📦 IndexedDB保存用Blob準備完了:', {
+          fileName: fileName,
+          blobSize: (storedModelBlob.size / 1024).toFixed(2) + 'KB',
+          blobType: storedModelBlob.type
+        });
         
         modelUrl = createdObjectUrl;
       } else if (typeof modelUrl === 'string' && modelUrl.startsWith('blob:')) {
-        // Blob URLの場合もBase64に変換を試行
+        // Blob URLの場合はfetchでBlobを取得
         try {
-          console.log('📦 Blob URL -> Base64変換開始...');
-          storedModelData = await blobUrlToBase64(modelUrl);
-          const base64Size = storedModelData?.length || 0;
-          console.log('✅ Blob URL -> Base64変換完了:', (base64Size / 1024).toFixed(2) + 'KB');
-          
-          // 500KB制限をチェック
-          if (base64Size > 500 * 1024) {
-            console.warn('⚠️ Base64データが500KBを超えています - 設定のみ保存');
-            storedModelData = null;
-          }
+          console.log('📦 Blob URL -> Blob変換開始...');
+          const response = await fetch(modelUrl);
+          storedModelBlob = await response.blob();
+          console.log('✅ Blob URL -> Blob変換完了:', (storedModelBlob.size / 1024).toFixed(2) + 'KB');
         } catch (error) {
-          console.warn('⚠️ Blob URL変換に失敗、設定のみ保存:', error);
-          storedModelData = null;
+          console.warn('⚠️ Blob URL変換に失敗:', error);
+          storedModelBlob = null;
         }
       } else {
-        // 通常のURLの場合
-        storedModelData = modelUrl;
+        // 通常のURLの場合（外部URL等）
+        console.log('🌐 外部URL使用:', modelUrl.substring(0, 100));
+        storedModelBlob = null;
       }
       
       // モデルを読み込む
@@ -644,23 +625,26 @@ export async function initARViewer(containerId, options = {}) {
         model.position.set(0, 0, 0);
       }
 
-      // createModelDataに正しいデータを渡す
-      console.log('🔥 createModelData呼び出し前の確認:');
-      console.log('- storedModelData type:', typeof storedModelData);
-      console.log('- storedModelData preview:', storedModelData?.substring(0, 50));
+      // IndexedDB対応createModelDataに正しいデータを渡す
+      console.log('🔥 IndexedDB対応createModelData呼び出し前の確認:');
+      console.log('- storedModelBlob type:', typeof storedModelBlob);
+      console.log('- storedModelBlob size:', storedModelBlob?.size);
       console.log('- createdObjectUrl:', createdObjectUrl);
       
-      const modelData = createModelData(model, storedModelData, fileName, fileSize, animations);
+      const modelData = createModelData(model, createdObjectUrl, fileName, fileSize, animations, sourceFile);
       
-      // IndexedDB 保存用に元ファイルを保持
-      if (sourceFile) {
-        console.log('🔄 元ファイルをモデルデータに保持 [IndexedDB対応]:', {
-          fileName: sourceFile.name,
-          fileSize: sourceFile.size,
-          fileType: sourceFile.type
-        });
-        modelData._sourceFile = sourceFile;
+      // IndexedDB保存用のBlobを設定
+      if (storedModelBlob) {
+        modelData._sourceBlob = storedModelBlob;
+        console.log('✅ IndexedDB保存用Blob設定完了:', storedModelBlob.size, 'bytes');
       }
+      
+      // デバッグ: 元ファイルが正しく設定されているかチェック
+      console.log('🔍 modelData作成後の_sourceFileチェック:', {
+        hasSourceFile: !!modelData._sourceFile,
+        sourceFileName: modelData._sourceFile?.name,
+        sourceFileSize: modelData._sourceFile?.size
+      });
       console.log('📦 createModelData 実行結果:');
       console.log('- modelData.animations:', modelData.animations);
       console.log('- modelData.hasAnimations:', modelData.hasAnimations);
@@ -1153,24 +1137,54 @@ export async function initARViewer(containerId, options = {}) {
       }
     },
     switchToModel: (index) => setActiveModel(index),
-    getAllModels: () => modelList.map((data, index) => ({
-      index,
-      fileName: data.fileName,
-      fileSize: data.fileSize,
-      // モデルデータを保存用に含める
-      modelData: data.modelData,
-      modelUrl: data.modelUrl,
-      isActive: index === activeModelIndex,
-      visible: data.visible,
-      hasAnimations: data.hasAnimations || false,
-      position: { x: data.position.x, y: data.position.y, z: data.position.z },
-      rotation: {
-        x: THREE.MathUtils.radToDeg(data.rotation.x),
-        y: THREE.MathUtils.radToDeg(data.rotation.y),
-        z: THREE.MathUtils.radToDeg(data.rotation.z)
-      },
-      scale: { x: data.scale.x, y: data.scale.y, z: data.scale.z }
-    })),
+    getAllModels: () => {
+      console.log('🔍 IndexedDB対応getAllModels() 呼び出し:', {
+        modelListLength: modelList.length,
+        activeModelIndex
+      });
+      
+      const result = modelList.map((data, index) => {
+        console.log(`🔍 モデル${index}データ詳細 [IndexedDB版]:`, {
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+          hasSourceBlob: !!data._sourceBlob,
+          sourceBlobSize: data._sourceBlob?.size,
+          hasSourceFile: !!data._sourceFile,
+          sourceFileName: data._sourceFile?.name,
+          mimeType: data.mimeType
+        });
+        
+        return {
+          index,
+          fileName: data.fileName,
+          fileSize: data.fileSize,
+          
+          // IndexedDB対応：Blobデータを保存用に含める
+          modelData: data._sourceBlob, // Blobデータ（Base64ではない）
+          mimeType: data.mimeType,
+          
+          // その他の設定データ
+          isActive: index === activeModelIndex,
+          visible: data.visible,
+          hasAnimations: data.hasAnimations || false,
+          position: { x: data.position.x, y: data.position.y, z: data.position.z },
+          rotation: {
+            x: THREE.MathUtils.radToDeg(data.rotation.x),
+            y: THREE.MathUtils.radToDeg(data.rotation.y),
+            z: THREE.MathUtils.radToDeg(data.rotation.z)
+          },
+          scale: { x: data.scale.x, y: data.scale.y, z: data.scale.z }
+        };
+      });
+      
+      console.log('✅ IndexedDB対応getAllModels() 結果:', {
+        resultCount: result.length,
+        modelsWithBlob: result.filter(m => m.modelData instanceof Blob).length,
+        totalBlobSize: result.reduce((sum, m) => sum + (m.modelData?.size || 0), 0)
+      });
+      
+      return result;
+    },
     getActiveModelIndex: () => activeModelIndex,
     setTransformMode: (mode) => {
       if (['translate', 'rotate', 'scale'].includes(mode)) {

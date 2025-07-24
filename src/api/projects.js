@@ -1,24 +1,35 @@
 // src/api/projects.js
-// プロジェクト関連のAPI機能
+// IndexedDB対応のプロジェクト関連API機能
 
-const STORAGE_KEY = 'miruwebAR_projects';
+import { 
+  saveModelToIDB, 
+  loadModelBlob, 
+  loadModelMeta, 
+  removeModel as removeModelFromIDB,
+  getAllModelIds,
+  getStorageInfo,
+  clearAllModels
+} from '../storage/indexeddb-storage.js';
+
+const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
 
 /**
- * プロジェクトデータの構造を生成
+ * プロジェクトデータの構造を生成（IndexedDB対応）
  * @param {Object} data - 保存するプロジェクトのデータ
  * @param {Object} viewerInstance - ARビューアインスタンス
  * @returns {Object} - 構造化されたプロジェクトデータ
  */
-function createProjectData(data, viewerInstance) {
+async function createProjectData(data, viewerInstance) {
     try {
-        console.log('🔄 createProjectData開始');
+        console.log('🔄 IndexedDB対応 createProjectData開始');
         
         // 新規プロジェクト用のIDを生成
         const projectId = data.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         console.log('✅ プロジェクトID:', projectId);
         
-        // 軽量化された3Dモデルデータを保存（Base64形式で圧縮）
+        // モデル設定を保存（実際のファイルはIndexedDBに）
         let modelSettings = [];
+        let savedModelIds = [];
         
         console.log('🔍 viewerInstance チェック:', {
             hasViewerInstance: !!viewerInstance,
@@ -36,57 +47,115 @@ function createProjectData(data, viewerInstance) {
                     console.error('❌ getAllModels()の戻り値が配列ではありません:', typeof allModels);
                     throw new Error('モデルデータの取得に失敗しました');
                 }
-        
-        modelSettings = allModels.map((model, index) => {
-            console.log(`🔍 モデル${index}の処理:`, {
-                fileName: model.fileName,
-                hasPosition: !!model.position,
-                hasRotation: !!model.rotation,
-                hasScale: !!model.scale,
-                hasAnimations: model.hasAnimations,
-                hasModelData: !!model.modelData
-            });
-            
-            // モデルデータと設定の両方を保存
-            const safeModel = {
-                // ファイル情報
-                fileName: String(model.fileName || `model_${index + 1}`).substring(0, 50),
-                fileSize: String(model.fileSize || 0).substring(0, 10),
-                // 3Dモデルデータ（Base64形式で保存）
-                modelData: model.modelData || null,
-                modelUrl: model.modelUrl || null,
-                // 変換設定
-                transform: {
-                    position: {
-                        x: Math.round((Number(model.position?.x || 0) || 0) * 100) / 100,
-                        y: Math.round((Number(model.position?.y || 0) || 0) * 100) / 100,
-                        z: Math.round((Number(model.position?.z || 0) || 0) * 100) / 100
-                    },
-                    rotation: {
-                        x: Math.round((Number(model.rotation?.x || 0) || 0) * 100) / 100,
-                        y: Math.round((Number(model.rotation?.y || 0) || 0) * 100) / 100,
-                        z: Math.round((Number(model.rotation?.z || 0) || 0) * 100) / 100
-                    },
-                    scale: {
-                        x: Math.round((Number(model.scale?.x || 1) || 1) * 100) / 100,
-                        y: Math.round((Number(model.scale?.y || 1) || 1) * 100) / 100,
-                        z: Math.round((Number(model.scale?.z || 1) || 1) * 100) / 100
+
+                // 各モデルをIndexedDBに保存
+                for (let index = 0; index < allModels.length; index++) {
+                    const model = allModels[index];
+                    console.log(`🔍 モデル${index}の処理:`, {
+                        fileName: model.fileName,
+                        hasPosition: !!model.position,
+                        hasRotation: !!model.rotation,
+                        hasScale: !!model.scale,
+                        hasAnimations: model.hasAnimations,
+                        hasModelData: !!model.modelData
+                    });
+                    
+                    // モデルIDを生成
+                    const modelId = `${projectId}_model_${index}_${Date.now()}`;
+                    
+                    // モデルデータをIndexedDBに保存
+                    if (model.modelData) {
+                        try {
+                            // データ形式を判定してBlobに変換
+                            let modelBlob;
+                            
+                            console.log(`🔍 モデル${index}データ形式チェック:`, {
+                                type: typeof model.modelData,
+                                isBlob: model.modelData instanceof Blob,
+                                isString: typeof model.modelData === 'string',
+                                size: model.modelData.size || model.modelData.length
+                            });
+                            
+                            if (model.modelData instanceof Blob) {
+                                // 既にBlobの場合はそのまま使用
+                                modelBlob = model.modelData;
+                                console.log(`✅ モデル${index} Blob直接使用:`, modelBlob.size, 'bytes');
+                            } else if (typeof model.modelData === 'string' && model.modelData.startsWith('data:')) {
+                                // Base64データの場合は変換
+                                console.log(`🔄 モデル${index} Base64 -> Blob変換開始...`);
+                                const response = await fetch(model.modelData);
+                                modelBlob = await response.blob();
+                                console.log(`✅ モデル${index} Base64変換完了:`, modelBlob.size, 'bytes');
+                            } else {
+                                console.warn(`⚠️ モデル${index} 不明なデータ形式:`, {
+                                    type: typeof model.modelData,
+                                    constructor: model.modelData?.constructor?.name,
+                                    preview: model.modelData?.toString?.()?.substring(0, 50)
+                                });
+                                continue;
+                            }
+                            
+                            // IndexedDBに保存
+                            await saveModelToIDB(modelId, modelBlob, {
+                                fileName: model.fileName,
+                                fileSize: model.fileSize,
+                                projectId: projectId,
+                                modelIndex: index,
+                                hasAnimations: model.hasAnimations || false,
+                                createdAt: Date.now()
+                            });
+                            
+                            savedModelIds.push(modelId);
+                            console.log(`✅ モデル${index} IndexedDB保存完了:`, modelId);
+                            
+                        } catch (saveError) {
+                            console.error(`❌ モデル${index} IndexedDB保存エラー:`, saveError);
+                            // エラーでも処理を継続
+                        }
                     }
-                },
-                visible: Boolean(model.visible !== false),
-                hasAnimations: Boolean(model.hasAnimations),
-                order: index
-            };
-            
-            console.log(`✅ モデル${index}の保存データ:`, {
-                fileName: safeModel.fileName,
-                hasModelData: !!safeModel.modelData,
-                hasModelUrl: !!safeModel.modelUrl
-            });
-            return safeModel;
-                 });
-         
-         console.log('保存する設定データ:', modelSettings);
+                    
+                    // 設定データのみを保存（軽量化）
+                    const modelSetting = {
+                        // ファイル情報
+                        fileName: String(model.fileName || `model_${index + 1}`).substring(0, 50),
+                        fileSize: String(model.fileSize || 0).substring(0, 10),
+                        modelId: modelId, // IndexedDBの参照ID
+                        
+                        // 変換設定
+                        transform: {
+                            position: {
+                                x: Math.round((Number(model.position?.x || 0) || 0) * 100) / 100,
+                                y: Math.round((Number(model.position?.y || 0) || 0) * 100) / 100,
+                                z: Math.round((Number(model.position?.z || 0) || 0) * 100) / 100
+                            },
+                            rotation: {
+                                x: Math.round((Number(model.rotation?.x || 0) || 0) * 100) / 100,
+                                y: Math.round((Number(model.rotation?.y || 0) || 0) * 100) / 100,
+                                z: Math.round((Number(model.rotation?.z || 0) || 0) * 100) / 100
+                            },
+                            scale: {
+                                x: Math.round((Number(model.scale?.x || 1) || 1) * 100) / 100,
+                                y: Math.round((Number(model.scale?.y || 1) || 1) * 100) / 100,
+                                z: Math.round((Number(model.scale?.z || 1) || 1) * 100) / 100
+                            }
+                        },
+                        visible: Boolean(model.visible !== false),
+                        hasAnimations: Boolean(model.hasAnimations),
+                        order: index
+                    };
+                    
+                    modelSettings.push(modelSetting);
+                    console.log(`✅ モデル${index}の設定データ:`, {
+                        fileName: modelSetting.fileName,
+                        modelId: modelSetting.modelId
+                    });
+                }
+                
+                console.log('✅ 全モデル処理完了:', { 
+                    modelCount: modelSettings.length,
+                    savedToIndexedDB: savedModelIds.length
+                });
+                
             } catch (modelError) {
                 console.error('❌ モデルデータ処理エラー:', modelError);
                 throw new Error(`モデルデータの処理に失敗しました: ${modelError.message}`);
@@ -94,34 +163,41 @@ function createProjectData(data, viewerInstance) {
         } else {
             console.log('ℹ️ モデルデータが利用できません（viewerInstanceまたはgetAllModelsが存在しない）');
         }
-    
-    // 超軽量化プロジェクトデータ（容量制限対策）
-    const lightweightProject = {
-        id: projectId,
-        name: String(data.name || 'Untitled').substring(0, 30), // 名前を30文字に制限
-        description: String(data.description || '').substring(0, 100), // 説明を100文字に制限
-        type: data.type || 'markerless',
         
-        // モデル設定のみ保存（実際のファイルは保存しない）
-        modelSettings: modelSettings,
-        modelCount: modelSettings.length,
+        // 軽量プロジェクトデータ（設定のみ、ファイルはIndexedDB）
+        const lightweightProject = {
+            id: projectId,
+            name: String(data.name || 'Untitled').substring(0, 50),
+            description: String(data.description || '').substring(0, 200),
+            type: data.type || 'markerless',
+            
+            // モデル設定（IndexedDB参照IDを含む）
+            modelSettings: modelSettings,
+            modelCount: modelSettings.length,
+            savedModelIds: savedModelIds, // IndexedDBに保存されたモデルID一覧
+            
+            // 基本設定
+            settings: {
+                arScale: Math.round((data.arScale || 1) * 100) / 100,
+                isPublic: Boolean(data.isPublic)
+            },
+            
+            // マーカー画像（Base64で保存、容量小）
+            markerImage: data.markerImage || null,
+            
+            created: data.created || Date.now(),
+            updated: Date.now()
+        };
         
-        // 最小限の設定
-        settings: {
-            arScale: Math.round((data.arScale || 1) * 100) / 100,
-            isPublic: Boolean(data.isPublic)
-        },
+        const dataSize = JSON.stringify(lightweightProject).length;
+        console.log('🔍 軽量化後のプロジェクトデータサイズ:', {
+            characters: dataSize,
+            KB: Math.round(dataSize / 1024),
+            MB: Math.round(dataSize / 1024 / 1024 * 100) / 100
+        });
         
-        // マーカー画像データを保存
-        markerImage: data.markerImage || null,
+        return lightweightProject;
         
-        created: data.created || Date.now(),
-        updated: Date.now()
-    };
-    
-    console.log('🔍 軽量化後のプロジェクトデータサイズ:', JSON.stringify(lightweightProject).length, 'characters');
-    
-    return lightweightProject;
     } catch (error) {
         console.error('❌ createProjectData エラー:', error);
         throw new Error(`プロジェクトデータの作成に失敗しました: ${error.message}`);
@@ -133,19 +209,24 @@ function createProjectData(data, viewerInstance) {
  * @returns {Array} - プロジェクトの配列
  */
 export function getProjects() {
-    const projectsJson = localStorage.getItem(STORAGE_KEY);
-    return projectsJson ? JSON.parse(projectsJson) : [];
+    try {
+        const projectsJson = localStorage.getItem(PROJECTS_STORAGE_KEY);
+        return projectsJson ? JSON.parse(projectsJson) : [];
+    } catch (error) {
+        console.error('❌ プロジェクト一覧取得エラー:', error);
+        return [];
+    }
 }
 
 /**
- * プロジェクトを保存
+ * IndexedDB対応プロジェクト保存
  * @param {Object} data - 保存するプロジェクトのデータ
  * @param {Object} viewerInstance - ARビューアインスタンス
  * @returns {Object} - 保存されたプロジェクトデータ
  */
-export function saveProject(data, viewerInstance) {
+export async function saveProject(data, viewerInstance) {
     try {
-        console.log('🔄 saveProject開始:', {
+        console.log('🔄 IndexedDB対応 saveProject開始:', {
             dataKeys: Object.keys(data || {}),
             hasViewerInstance: !!viewerInstance,
             viewerHasControls: !!viewerInstance?.controls
@@ -154,20 +235,34 @@ export function saveProject(data, viewerInstance) {
         const projects = getProjects();
         console.log('✅ 既存プロジェクト数:', projects.length);
         
-        const projectData = createProjectData(data, viewerInstance);
-        console.log('✅ プロジェクトデータ作成完了:', {
+        // 非同期でプロジェクトデータを作成
+        const projectData = await createProjectData(data, viewerInstance);
+        console.log('✅ IndexedDB対応プロジェクトデータ作成完了:', {
             id: projectData.id,
             name: projectData.name,
-            modelCount: projectData.modelSettings?.length || 0
+            modelCount: projectData.modelSettings?.length || 0,
+            indexedDBModels: projectData.savedModelIds?.length || 0
         });
-        
-        console.log('保存するプロジェクトデータのサイズ（概算）:', JSON.stringify(projectData).length, 'characters');
         
         // 既存プロジェクトの更新または新規追加
         const existingIndex = projects.findIndex(p => p.id === projectData.id);
         console.log('既存プロジェクトインデックス:', existingIndex);
         
         if (existingIndex >= 0) {
+            // 既存プロジェクトの古いモデルファイルをクリーンアップ
+            const oldProject = projects[existingIndex];
+            if (oldProject.savedModelIds && Array.isArray(oldProject.savedModelIds)) {
+                console.log('🧹 古いモデルファイルをクリーンアップ中...');
+                for (const oldModelId of oldProject.savedModelIds) {
+                    try {
+                        await removeModelFromIDB(oldModelId);
+                        console.log('✅ 古いモデル削除:', oldModelId);
+                    } catch (cleanupError) {
+                        console.warn('⚠️ 古いモデル削除失敗:', oldModelId, cleanupError);
+                    }
+                }
+            }
+            
             // 既存の作成日時を保持
             projectData.created = projects[existingIndex].created;
             projects[existingIndex] = projectData;
@@ -177,106 +272,43 @@ export function saveProject(data, viewerInstance) {
             console.log('✅ 新規プロジェクトを追加');
         }
         
-        // JSON変換のテスト
-        let dataToSave;
+        // プロジェクト設定のみlocalStorageに保存（軽量）
         try {
-            console.log('🔄 JSONシリアライゼーション開始...');
-            dataToSave = JSON.stringify(projects);
-            console.log('✅ JSONシリアライゼーション成功');
-        } catch (jsonError) {
-            console.error('❌ JSON変換エラー:', jsonError);
-            throw new Error(`プロジェクトデータのJSON変換に失敗しました: ${jsonError.message}`);
-        }
-        
-        const dataSizeKB = Math.round(dataToSave.length / 1024);
-        const dataSizeMB = Math.round(dataSizeKB / 1024 * 100) / 100;
-        console.log(`📊 データサイズ: ${dataToSave.length} characters (${dataSizeKB}KB / ${dataSizeMB}MB)`);
-        
-        // localStorageの推定容量チェック（約5-10MBが一般的な制限）
-        if (dataSizeKB > 5000) { // 5MB以上の場合は警告
-            console.warn('⚠️ データサイズが大きすぎます:', dataSizeKB, 'KB');
-            console.warn('プロジェクト数を減らすか、モデルを削除してください');
-        }
-        
-        // localStorageの容量制限チェック
-        console.log('🔄 localStorageへの保存を開始...');
-        try {
-            localStorage.setItem(STORAGE_KEY, dataToSave);
-            console.log('✅ localStorage保存成功');
-        } catch (storageError) {
-            console.error('❌ localStorage保存エラー:', storageError.name, storageError.message);
-            console.error('- エラー詳細:', storageError);
-            if (storageError.name === 'QuotaExceededError') {
-                console.error('❌ localStorage容量制限エラー発生');
-                console.log('🔄 容量制限対応を開始します...');
-                
-                // 現在の使用量を確認
-                const currentProjects = getProjects();
-                console.log('- 現在のプロジェクト数:', currentProjects.length);
-                
-                // 古いプロジェクトを削除して容量を確保
-                if (currentProjects.length > 5) {
-                    console.log('🧹 古いプロジェクトを削除して容量を確保中...');
-                    // 作成日時でソートして古い順に削除
-                    const sortedProjects = currentProjects.sort((a, b) => (a.created || 0) - (b.created || 0));
-                    const keepProjects = sortedProjects.slice(-3); // 最新3つのみ保持
-                    console.log('- 保持するプロジェクト数:', keepProjects.length);
-                    
-                    try {
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify(keepProjects));
-                        console.log('✅ 古いプロジェクト削除完了');
-                        
-                        // 現在のプロジェクトを追加
-                        const updatedProjects = [...keepProjects, projectData];
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects));
-                        console.log('✅ 新規プロジェクト保存成功（容量確保後）');
-                        return projectData;
-                    } catch (retryError) {
-                        console.error('❌ 容量確保後の保存も失敗:', retryError);
-                    }
-                }
-                
-                // 最終手段：全削除してから現在のプロジェクトのみ保存
-                console.log('🔄 最終手段：全削除してから現在のプロジェクトのみ保存');
-                localStorage.removeItem(STORAGE_KEY);
-                
-                try {
-                    // 現在のプロジェクトのみを保存
-                    const singleProjectArray = [projectData];
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(singleProjectArray));
-                    console.log('新規プロジェクトのみの保存に成功しました');
-                    return projectData;
-                } catch (singleSaveError) {
-                    console.error('単一プロジェクトの保存も失敗:', singleSaveError);
-                    
-                    // 最後の手段：非常に軽量化されたプロジェクトデータを作成
-                    const ultraLightProject = {
-                        id: projectData.id,
-                        name: projectData.name,
-                        description: projectData.description,
-                        type: projectData.type,
-                        modelCount: projectData.modelSettings.length,
-                        created: projectData.created,
-                        updated: projectData.updated
-                    };
-                    
-                    try {
-                        localStorage.setItem(STORAGE_KEY, JSON.stringify([ultraLightProject]));
-                        console.log('超軽量化プロジェクトの保存に成功しました');
-                        return ultraLightProject;
-                    } catch (ultraError) {
-                        console.error('超軽量化保存も失敗:', ultraError);
-                        throw new Error('プロジェクトデータが大きすぎて保存できません。ブラウザのlocalStorageをクリアしてください。');
-                    }
-                }
-            } else {
-                throw storageError;
+            const dataToSave = JSON.stringify(projects);
+            const dataSizeKB = Math.round(dataToSave.length / 1024);
+            console.log(`📊 localStorage保存データサイズ: ${dataSizeKB}KB`);
+            
+            localStorage.setItem(PROJECTS_STORAGE_KEY, dataToSave);
+            console.log('✅ localStorage保存成功（プロジェクト設定のみ）');
+            
+            // IndexedDBのストレージ情報を表示
+            try {
+                const storageInfo = await getStorageInfo();
+                console.log('📊 IndexedDBストレージ情報:', storageInfo);
+            } catch (infoError) {
+                console.warn('⚠️ ストレージ情報取得失敗:', infoError);
             }
+            
+        } catch (storageError) {
+            console.error('❌ localStorage保存エラー:', storageError);
+            // IndexedDBに保存済みのモデルをクリーンアップ
+            if (projectData.savedModelIds) {
+                console.log('🧹 エラー後のクリーンアップ開始...');
+                for (const modelId of projectData.savedModelIds) {
+                    try {
+                        await removeModelFromIDB(modelId);
+                    } catch (cleanupError) {
+                        console.warn('⚠️ クリーンアップ失敗:', modelId);
+                    }
+                }
+            }
+            throw new Error(`プロジェクト設定の保存に失敗しました: ${storageError.message}`);
         }
         
         return projectData;
+        
     } catch (error) {
-        console.error('プロジェクト保存処理でエラー:', error);
+        console.error('❌ IndexedDB対応プロジェクト保存エラー:', error);
         throw error;
     }
 }
@@ -287,24 +319,175 @@ export function saveProject(data, viewerInstance) {
  * @returns {Object|null} - プロジェクトデータ
  */
 export function getProject(id) {
-    const projects = getProjects();
-    return projects.find(p => p.id === id) || null;
+    try {
+        const projects = getProjects();
+        return projects.find(p => p.id === id) || null;
+    } catch (error) {
+        console.error('❌ プロジェクト取得エラー:', error);
+        return null;
+    }
 }
 
 /**
- * プロジェクトを削除
+ * IndexedDB対応プロジェクト削除
  * @param {string} id - プロジェクトID
  * @returns {boolean} - 削除成功の場合true
  */
-export function deleteProject(id) {
-    const projects = getProjects();
-    const filteredProjects = projects.filter(p => p.id !== id);
-    
-    // プロジェクト数が変わっていなければ削除失敗
-    if (filteredProjects.length === projects.length) {
+export async function deleteProject(id) {
+    try {
+        console.log('🔄 IndexedDB対応プロジェクト削除開始:', id);
+        
+        const projects = getProjects();
+        const projectIndex = projects.findIndex(p => p.id === id);
+        
+        if (projectIndex === -1) {
+            console.warn('⚠️ 削除対象プロジェクトが見つかりません:', id);
+            return false;
+        }
+        
+        const project = projects[projectIndex];
+        
+        // IndexedDBからモデルファイルを削除
+        if (project.savedModelIds && Array.isArray(project.savedModelIds)) {
+            console.log('🧹 関連モデルファイルを削除中...');
+            for (const modelId of project.savedModelIds) {
+                try {
+                    await removeModelFromIDB(modelId);
+                    console.log('✅ モデルファイル削除:', modelId);
+                } catch (modelDeleteError) {
+                    console.warn('⚠️ モデルファイル削除失敗:', modelId, modelDeleteError);
+                }
+            }
+        }
+        
+        // プロジェクト設定をlocalStorageから削除
+        const filteredProjects = projects.filter(p => p.id !== id);
+        localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(filteredProjects));
+        
+        console.log('✅ プロジェクト削除完了:', id);
+        return true;
+        
+    } catch (error) {
+        console.error('❌ プロジェクト削除エラー:', error);
         return false;
     }
-    
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredProjects));
-    return true;
+}
+
+/**
+ * プロジェクトのモデルデータを復元
+ * @param {string} projectId - プロジェクトID
+ * @returns {Promise<Array>} - モデルデータの配列
+ */
+export async function loadProjectModels(projectId) {
+    try {
+        console.log('🔄 プロジェクトモデル復元開始:', projectId);
+        
+        const project = getProject(projectId);
+        if (!project) {
+            console.warn('⚠️ プロジェクトが見つかりません:', projectId);
+            return [];
+        }
+        
+        const models = [];
+        
+        if (project.modelSettings && Array.isArray(project.modelSettings)) {
+            for (const modelSetting of project.modelSettings) {
+                if (modelSetting.modelId) {
+                    try {
+                        // IndexedDBからモデルBlobを取得
+                        const modelBlob = await loadModelBlob(modelSetting.modelId);
+                        const modelMeta = await loadModelMeta(modelSetting.modelId);
+                        
+                        if (modelBlob) {
+                            // Object URLを生成
+                            const objectUrl = URL.createObjectURL(modelBlob);
+                            
+                            models.push({
+                                ...modelSetting,
+                                modelBlob: modelBlob,
+                                objectUrl: objectUrl,
+                                meta: modelMeta
+                            });
+                            
+                            console.log('✅ モデル復元:', {
+                                fileName: modelSetting.fileName,
+                                modelId: modelSetting.modelId,
+                                size: modelBlob.size
+                            });
+                        } else {
+                            console.warn('⚠️ モデルBlobが見つかりません:', modelSetting.modelId);
+                        }
+                    } catch (modelLoadError) {
+                        console.error('❌ モデル読み込みエラー:', modelSetting.modelId, modelLoadError);
+                    }
+                }
+            }
+        }
+        
+        console.log('✅ プロジェクトモデル復元完了:', {
+            projectId,
+            modelCount: models.length
+        });
+        
+        return models;
+        
+    } catch (error) {
+        console.error('❌ プロジェクトモデル復元エラー:', error);
+        throw new Error(`プロジェクトモデルの復元に失敗しました: ${error.message}`);
+    }
+}
+
+/**
+ * 全プロジェクトを削除（IndexedDB含む）
+ * @returns {Promise<boolean>} - 削除成功の場合true
+ */
+export async function clearAllProjects() {
+    try {
+        console.log('🔄 全プロジェクト削除開始');
+        
+        // IndexedDBからすべてのモデルを削除
+        await clearAllModels();
+        console.log('✅ IndexedDB全モデル削除完了');
+        
+        // localStorageからプロジェクト設定を削除
+        localStorage.removeItem(PROJECTS_STORAGE_KEY);
+        console.log('✅ localStorage全プロジェクト削除完了');
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ 全プロジェクト削除エラー:', error);
+        throw new Error(`全プロジェクトの削除に失敗しました: ${error.message}`);
+    }
+}
+
+/**
+ * ストレージ使用状況を取得
+ * @returns {Promise<Object>} - ストレージ情報
+ */
+export async function getProjectStorageInfo() {
+    try {
+        const projects = getProjects();
+        const localStorageSize = JSON.stringify(projects).length;
+        
+        const indexedDBInfo = await getStorageInfo();
+        
+        return {
+            localStorage: {
+                projectCount: projects.length,
+                size: localStorageSize,
+                sizeKB: Math.round(localStorageSize / 1024),
+                sizeMB: Math.round(localStorageSize / 1024 / 1024 * 100) / 100
+            },
+            indexedDB: indexedDBInfo,
+            total: {
+                size: localStorageSize + indexedDBInfo.totalSize,
+                sizeKB: Math.round((localStorageSize + indexedDBInfo.totalSize) / 1024),
+                sizeMB: Math.round((localStorageSize + indexedDBInfo.totalSize) / 1024 / 1024 * 100) / 100
+            }
+        };
+    } catch (error) {
+        console.error('❌ ストレージ情報取得エラー:', error);
+        throw new Error(`ストレージ情報の取得に失敗しました: ${error.message}`);
+    }
 }

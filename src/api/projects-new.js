@@ -28,11 +28,22 @@ async function createProjectDataWithIDB(data, viewerInstance) {
     });
     
     if (viewerInstance && viewerInstance.controls && viewerInstance.controls.getAllModels) {
-      console.log('🔄 モデルデータ取得開始...');
+      console.log('🔄 モデルデータ取得開始 [IndexedDB対応]...');
       
       try {
         const allModels = viewerInstance.controls.getAllModels();
         console.log('✅ モデル数:', allModels.length);
+        console.log('🔍 取得したモデル一覧:');
+        allModels.forEach((model, i) => {
+          console.log(`  モデル${i}:`, {
+            fileName: model.fileName,
+            fileSize: model.fileSize,
+            hasSourceFile: !!model._sourceFile,
+            sourceFileType: model._sourceFile?.constructor?.name,
+            hasModelData: !!model.modelData,
+            hasModelUrl: !!model.modelUrl
+          });
+        });
         
         if (!Array.isArray(allModels)) {
           console.error('❌ getAllModels()の戻り値が配列ではありません:', typeof allModels);
@@ -64,7 +75,11 @@ async function createProjectDataWithIDB(data, viewerInstance) {
               
               // 元ファイルがある場合は優先的に使用
               if (model._sourceFile && model._sourceFile instanceof File) {
-                console.log(`🔄 元ファイルを使用してIndexedDBに保存: ${model.fileName}`);
+                console.log(`🔄 元ファイルを使用してIndexedDBに保存: ${model.fileName}`, {
+                  fileName: model._sourceFile.name,
+                  fileSize: model._sourceFile.size,
+                  fileType: model._sourceFile.type
+                });
                 modelBlob = model._sourceFile;
               } else if (typeof model.modelData === 'string' && model.modelData.startsWith('data:')) {
                 // Base64 データの場合
