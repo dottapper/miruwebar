@@ -55,15 +55,18 @@ async function createProjectDataWithIDB(data, viewerInstance) {
           let modelId = null;
           
           // モデルデータが存在する場合は IndexedDB に保存
-          if (model.modelData) {
+          if (model._sourceFile || model.modelData) {
             try {
               // モデル ID を生成
               modelId = `${projectId}_model_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
               
               let modelBlob = null;
               
-              // modelData の形式に応じて Blob を作成
-              if (typeof model.modelData === 'string' && model.modelData.startsWith('data:')) {
+              // 元ファイルがある場合は優先的に使用
+              if (model._sourceFile && model._sourceFile instanceof File) {
+                console.log(`🔄 元ファイルを使用してIndexedDBに保存: ${model.fileName}`);
+                modelBlob = model._sourceFile;
+              } else if (typeof model.modelData === 'string' && model.modelData.startsWith('data:')) {
                 // Base64 データの場合
                 console.log(`🔄 Base64データをBlobに変換: ${model.fileName}`);
                 const base64Data = model.modelData.split(',')[1];

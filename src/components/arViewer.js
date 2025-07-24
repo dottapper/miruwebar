@@ -511,7 +511,7 @@ export async function initARViewer(containerId, options = {}) {
   }
 
   // モデル読み込み関数を更新
-  async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0) {
+  async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0, sourceFile = null) {
     let createdObjectUrl = null;
     const loaderId = showLoading({
       message: `モデル "${fileName}" を読み込んでいます...`,
@@ -651,6 +651,16 @@ export async function initARViewer(containerId, options = {}) {
       console.log('- createdObjectUrl:', createdObjectUrl);
       
       const modelData = createModelData(model, storedModelData, fileName, fileSize, animations);
+      
+      // IndexedDB 保存用に元ファイルを保持
+      if (sourceFile) {
+        console.log('🔄 元ファイルをモデルデータに保持 [IndexedDB対応]:', {
+          fileName: sourceFile.name,
+          fileSize: sourceFile.size,
+          fileType: sourceFile.type
+        });
+        modelData._sourceFile = sourceFile;
+      }
       console.log('📦 createModelData 実行結果:');
       console.log('- modelData.animations:', modelData.animations);
       console.log('- modelData.hasAnimations:', modelData.hasAnimations);
@@ -1123,10 +1133,16 @@ export async function initARViewer(containerId, options = {}) {
 
   // 外部から利用するモデルコントロール群
   const modelControls = {
-    loadNewModel: async (modelSource, fileName, fileSize) => {
+    loadNewModel: async (modelSource, fileName, fileSize, sourceFile = null) => {
       try {
+        console.log('🔄 loadNewModel [IndexedDB対応] 開始:', {
+          modelSource: typeof modelSource,
+          fileName,
+          fileSize,
+          hasSourceFile: !!sourceFile
+        });
         loadingManager.showLoadingScreen();
-        const index = await loadModel(modelSource, fileName, fileSize);
+        const index = await loadModel(modelSource, fileName, fileSize, sourceFile);
         setActiveModel(index);
         return index;
       } catch (error) {
