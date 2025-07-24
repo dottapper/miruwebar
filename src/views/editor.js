@@ -2,7 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject } from '../api/projects.js'; // プロジェクト保存APIをインポート
+import { saveProject, getProject, getProjects, loadProjectWithModels, deleteProject } from '../api/projects-new.js'; // 新しい IndexedDB 対応 API をインポート
 
 /**
  * ファイルサイズを適切な単位でフォーマットする
@@ -18,11 +18,16 @@ function formatFileSize(bytes) {
 }
 
 export function showEditor(container) {
+  // 新しいコードが実行されていることを確認
+  console.log('🔥🔥🔥 新しいshowEditor関数が実行されました [v3.0] 🔥🔥🔥');
+  
   // URLパラメータからARタイプとプロジェクトIDを取得
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const arType = urlParams.get('type') || 'unknown';
   const projectId = urlParams.get('id') || null; // プロジェクトID取得
   const isMarkerMode = arType === 'marker';
+  
+  console.log('🔥 URLパラメータ解析結果:', { arType, projectId, isMarkerMode });
 
   // ARタイプに応じたタイトルとヘルプテキストを設定
   let title = 'AR エディター';
@@ -110,7 +115,7 @@ export function showEditor(container) {
             <div class="panel-section">
               <h3>マーカー画像（サムネイル）</h3>
               <div class="marker-thumbnail-container">
-                <img id="marker-thumbnail" alt="マーカー画像" src="/assets/sample-marker.jpg"> <button id="change-marker" class="btn-secondary">画像を変更</button>
+                <img id="marker-thumbnail" alt="マーカー画像" src="/assets/sample.png"> <button id="change-marker" class="btn-secondary">画像を変更</button>
               </div>
             </div>` : ''}
           </div>
@@ -167,6 +172,27 @@ export function showEditor(container) {
                 </svg>
                 すべてリセット
               </button>
+              
+              <!-- アニメーション制御 -->
+              <div id="animation-controls" class="control-group" style="margin-top: 15px; display: none;">
+                <label>アニメーション:</label>
+                <div class="animation-buttons" style="display: flex; gap: 5px; margin-top: 5px;">
+                  <button id="play-animation-button" class="btn-secondary" style="flex: 1;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    再生
+                  </button>
+                  <button id="stop-animation-button" class="btn-secondary" style="flex: 1;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="6" y="4" width="4" height="16"></rect>
+                      <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                    停止
+                  </button>
+                </div>
+                <div id="animation-list" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+              </div>
               <div class="control-group">
                 <label for="rotation-slider">回転 (Y軸):</label>
                 <div class="slider-with-value">
@@ -244,6 +270,14 @@ export function showEditor(container) {
   let rotateButton = document.querySelector('button[data-mode="rotate"]');
   let scaleButton = document.querySelector('button[data-mode="scale"]');
   let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
+  
+  // アニメーション制御用のDOM要素
+  let animationControls = document.getElementById('animation-controls');
+  let playAnimationButton = document.getElementById('play-animation-button');
+  let stopAnimationButton = document.getElementById('stop-animation-button');
+  let animationList = document.getElementById('animation-list');
+  
+  // アニメーション要素は正常に取得されました
 
   // --- 状態管理変数 ---
   let totalFileSize = 0;
@@ -306,7 +340,11 @@ export function showEditor(container) {
   
   async function initialize() {
     try {
-      console.log('エディタの初期化を開始...');
+      console.log('🚀 エディタの初期化を開始... [修正版 v2.0]');
+      console.log('🔧 デバッグモード: アニメーション機能付き');
+      console.log('🔍 projectId:', projectId);
+      console.log('🔍 arType:', arType);
+      console.log('🔍 isMarkerMode:', isMarkerMode);
       
       // DOM要素の存在確認
       const arViewerElement = document.getElementById('ar-viewer');
@@ -362,6 +400,19 @@ export function showEditor(container) {
       // 既存プロジェクトの場合は読み込み
       if (projectId) {
         console.log('既存プロジェクトの読み込みを開始:', projectId);
+        
+        // デバッグ: プロジェクトデータを直接確認
+        const debugProject = getProject(projectId);
+        console.log('🔍 デバッグ: プロジェクトデータ直接確認:', {
+          exists: !!debugProject,
+          id: debugProject?.id,
+          name: debugProject?.name,
+          type: debugProject?.type,
+          modelSettingsCount: debugProject?.modelSettings?.length || 0,
+          hasMarkerImage: !!debugProject?.markerImage,
+          markerImagePreview: debugProject?.markerImage?.substring(0, 50) || 'なし'
+        });
+        
         await loadExistingProject(projectId);
       }
 
@@ -375,55 +426,227 @@ export function showEditor(container) {
   // 既存プロジェクトの読み込み
   async function loadExistingProject(projectId) {
     try {
+      console.log('🔍 プロジェクト読み込み開始:', { projectId });
+      
       const project = getProject(projectId);
       if (!project) {
-        console.warn('プロジェクトが見つかりません:', projectId);
+        console.warn('❌ プロジェクトが見つかりません:', projectId);
+        
+        // デバッグ: 全プロジェクトを確認
+        const allProjects = getProjects();
+        console.log('📋 現在保存されているプロジェクト一覧:', allProjects.map(p => ({
+          id: p.id,
+          name: p.name,
+          modelCount: p.modelSettings?.length || 0,
+          hasMarker: !!p.markerImage
+        })));
         return;
       }
 
-      console.log('既存プロジェクトを読み込み中:', project);
+      console.log('✅ プロジェクトデータ読み込み成功:', {
+        id: project.id,
+        name: project.name,
+        type: project.type,
+        modelSettingsCount: project.modelSettings?.length || 0,
+        hasMarkerImage: !!project.markerImage,
+        markerImageType: typeof project.markerImage,
+        markerImageLength: project.markerImage?.length || 0
+      });
+      
+      console.log('🔍 詳細なプロジェクトデータ:', project);
+      
+      // デバッグログが出力されているかテスト
+      console.log('🔄 プロジェクトデータの復元を開始 - デバッグログテスト実行中');
+      console.log('🔄 プロジェクトデータの復元を開始:', project);
 
       // マーカー画像の復元（マーカーモードの場合）
-      if (isMarkerMode && project.markerImage) {
-        localStorage.setItem('markerImageUrl', project.markerImage);
-        if (markerThumbnail) {
-          markerThumbnail.src = project.markerImage;
+      if (isMarkerMode) {
+        console.log('📱 マーカー画像の復元処理開始');
+        console.log('- project.markerImage存在:', !!project.markerImage);
+        console.log('- project.markerImage型:', typeof project.markerImage);
+        console.log('- project.markerImageサイズ:', project.markerImage?.length || 0);
+        
+        let markerUrlToUse = null;
+        
+        if (project.markerImage && project.markerImage !== 'has_marker') {
+          // プロジェクトに保存されたマーカー画像を使用
+          markerUrlToUse = project.markerImage;
+          console.log('✅ プロジェクト保存のマーカー画像を使用');
+          
+          // Base64データかURLかを確認
+          if (project.markerImage.startsWith('data:')) {
+            console.log('- Base64マーカー画像を使用');
+          } else if (project.markerImage.startsWith('http') || project.markerImage.startsWith('/')) {
+            console.log('- URLマーカー画像を使用');
+          } else {
+            console.log('- 不明な形式のマーカー画像:', project.markerImage.substring(0, 50));
+          }
+        } else {
+          // 既存のlocalStorageからマーカー画像を取得
+          const existingMarkerUrl = localStorage.getItem('markerImageUrl');
+          console.log('- 既存のマーカーURL:', existingMarkerUrl);
+          
+          if (existingMarkerUrl) {
+            markerUrlToUse = existingMarkerUrl;
+            console.log('✅ localStorage保存のマーカー画像を使用');
+          } else {
+            // デフォルト画像を使用
+            markerUrlToUse = '/assets/sample.png';
+            console.log('⚠️ デフォルトマーカー画像を使用');
+          }
         }
-        if (viewerInstance?.controls?.setMarkerTexture) {
-          viewerInstance.controls.setMarkerTexture(project.markerImage);
-        }
-      }
-
-      // 3Dモデルの復元
-      if (project.models && project.models.length > 0) {
-        for (const modelData of project.models) {
-          if (modelData.objectUrl) {
-            try {
-              const modelIndex = await viewerInstance.controls.loadNewModel(
-                modelData.objectUrl,
-                modelData.fileName,
-                modelData.fileSize
-              );
-              
-              // ファイルリストに追加
-              const fileItem = createFileListItem({
-                name: modelData.fileName,
-                size: modelData.fileSize
-              }, modelData.objectUrl, modelIndex);
-              
-              const emptyText = fileListContainer.querySelector('.empty-text');
-              if (emptyText) {
-                emptyText.remove();
-              }
-              
-              fileListContainer.appendChild(fileItem);
-              totalFileSize += modelData.fileSize;
-            } catch (error) {
-              console.error('モデルの復元に失敗:', modelData.fileName, error);
+        
+        if (markerUrlToUse) {
+          try {
+            if (markerThumbnail) {
+              markerThumbnail.src = markerUrlToUse;
+              console.log('✅ マーカーサムネイル更新完了');
+            }
+            if (viewerInstance?.controls?.setMarkerTexture) {
+              viewerInstance.controls.setMarkerTexture(markerUrlToUse);
+              console.log('✅ ARビューアーマーカー設定完了');
+            }
+          } catch (markerError) {
+            console.error('❌ マーカー画像設定エラー:', markerError);
+            // エラーの場合はデフォルト画像にフォールバック
+            const fallbackUrl = '/assets/sample.png';
+            if (markerThumbnail) {
+              markerThumbnail.src = fallbackUrl;
+            }
+            if (viewerInstance?.controls?.setMarkerTexture) {
+              viewerInstance.controls.setMarkerTexture(fallbackUrl);
             }
           }
         }
-        updateTotalFileSizeDisplay();
+      }
+
+      // 3Dモデルの復元 - 保存されたモデルデータを復元
+      console.log('🎯 3Dモデルの復元処理開始');
+      console.log('- project.modelSettings:', project.modelSettings);
+      console.log('- modelSettings数:', project.modelSettings?.length || 0);
+      
+      if (project.modelSettings && project.modelSettings.length > 0) {
+        const emptyText = fileListContainer.querySelector('.empty-text');
+        if (emptyText) {
+          emptyText.remove();
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+
+        // 保存された各モデルを復元
+        for (let index = 0; index < project.modelSettings.length; index++) {
+          const modelSetting = project.modelSettings[index];
+          
+          try {
+            console.log(`🔄 モデル${index}の復元開始:`, {
+              fileName: modelSetting.fileName,
+              fileSize: modelSetting.fileSize,
+              hasModelData: !!modelSetting.modelData,
+              hasModelUrl: !!modelSetting.modelUrl,
+              modelDataType: typeof modelSetting.modelData,
+              modelDataLength: modelSetting.modelData?.length || 0,
+              modelUrlType: typeof modelSetting.modelUrl
+            });
+            
+            let modelIndex = null;
+            
+            if (modelSetting.modelData) {
+              // 保存されたモデルデータから復元
+              console.log('✅ 保存されたモデルデータから復元 - データ詳細:', {
+                dataPreview: modelSetting.modelData?.substring(0, 100) + '...',
+                isBase64: modelSetting.modelData?.startsWith('data:'),
+                isBlobUrl: modelSetting.modelData?.startsWith('blob:')
+              });
+              
+              try {
+                modelIndex = await viewerInstance.controls.loadNewModel(
+                  modelSetting.modelData,
+                  modelSetting.fileName,
+                  modelSetting.fileSize
+                );
+                console.log('✅ モデルデータからの読み込み成功:', modelIndex);
+              } catch (loadError) {
+                console.error('❌ モデルデータからの読み込み失敗:', loadError);
+                throw loadError;
+              }
+            } else if (modelSetting.modelUrl) {
+              // 保存されたモデルURLから復元
+              console.log('✅ 保存されたモデルURLから復元 - URL詳細:', {
+                url: modelSetting.modelUrl,
+                isBlobUrl: modelSetting.modelUrl?.startsWith('blob:'),
+                isHttpUrl: modelSetting.modelUrl?.startsWith('http')
+              });
+              
+              try {
+                modelIndex = await viewerInstance.controls.loadNewModel(
+                  modelSetting.modelUrl,
+                  modelSetting.fileName,
+                  modelSetting.fileSize
+                );
+                console.log('✅ モデルURLからの読み込み成功:', modelIndex);
+              } catch (loadError) {
+                console.error('❌ モデルURLからの読み込み失敗:', loadError);
+                throw loadError;
+              }
+            } else {
+              // モデルデータがない場合は設定情報のみ表示
+              console.log('⚠️ モデルデータなし - 設定情報のみ表示');
+              const infoItem = createModelInfoItem(modelSetting, index);
+              fileListContainer.appendChild(infoItem);
+              continue;
+            }
+
+            if (modelIndex !== null && modelIndex !== undefined) {
+              // ファイルリストアイテムを作成
+              const fileItem = createRestoredFileListItem(modelSetting, modelIndex);
+              fileListContainer.appendChild(fileItem);
+              
+              // 保存された設定を適用
+              setTimeout(() => {
+                if (viewerInstance?.controls?.setPosition && modelSetting.transform?.position) {
+                  viewerInstance.controls.setPosition(
+                    modelSetting.transform.position.x,
+                    modelSetting.transform.position.y,
+                    modelSetting.transform.position.z
+                  );
+                }
+                if (viewerInstance?.controls?.setRotationY && modelSetting.transform?.rotation) {
+                  viewerInstance.controls.setRotationY(modelSetting.transform.rotation.y);
+                }
+                if (viewerInstance?.controls?.setScale && modelSetting.transform?.scale) {
+                  viewerInstance.controls.setScale(modelSetting.transform.scale.x);
+                }
+                
+                console.log('✅ 保存された設定を適用しました:', modelSetting.transform);
+                updateAnimationInfo(); // アニメーション情報を更新
+              }, 500);
+              
+              successCount++;
+              console.log(`✅ モデル "${modelSetting.fileName}" の復元完了`);
+            }
+          } catch (error) {
+            errorCount++;
+            console.error(`❌ モデル "${modelSetting.fileName}" の復元に失敗:`, error);
+            
+            // エラーの場合は設定情報のみ表示
+            const infoItem = createModelInfoItem(modelSetting, index);
+            fileListContainer.appendChild(infoItem);
+          }
+        }
+        
+        // 復元結果の通知
+        const totalModels = project.modelSettings.length;
+        if (successCount > 0) {
+          showNotification(`${successCount}/${totalModels}個のモデルを復元しました`, 'success');
+        }
+        if (errorCount > 0) {
+          showNotification(`${errorCount}個のモデルは再アップロードが必要です`, 'info');
+        }
+        
+        console.log('✅ モデル復元処理完了:', { successCount, errorCount, totalModels });
+      } else {
+        console.log('ℹ️ 保存されたモデル設定がありません');
       }
 
       console.log('プロジェクトの読み込みが完了しました');
@@ -469,6 +692,11 @@ export function showEditor(container) {
         
         // ファイルアップロードを変更として記録
         markAsChanged();
+        
+        // アニメーション情報を更新
+        setTimeout(() => {
+          updateAnimationInfo();
+        }, 100);
         
         console.log(`モデル "${file.name}" (${fileSizeMB}MB) を読み込みました`);
       } catch (error) {
@@ -571,7 +799,7 @@ export function showEditor(container) {
         handleTransformChanged(event);
         markAsChanged(); // 変更を記録
       });
-      arViewerContainer.addEventListener('scaleReset', handleScaleReset);
+      // handleScaleReset関数は不要なので削除
       arViewerContainer.addEventListener('modelListChanged', () => {
         markAsChanged(); // モデルリスト変更を記録
       });
@@ -638,6 +866,14 @@ export function showEditor(container) {
         handleSaveProject();
       });
     }
+    
+    // アニメーション制御ボタン
+    if (playAnimationButton) {
+      playAnimationButton.addEventListener('click', handlePlayAnimation);
+    }
+    if (stopAnimationButton) {
+      stopAnimationButton.addEventListener('click', handleStopAnimation);
+    }
   }
 
   // --- 関数定義 ---
@@ -681,6 +917,156 @@ export function showEditor(container) {
       item.dataset.modelIndex = index;
       console.log(`ファイルアイテム "${item.querySelector('.file-name').textContent}" のインデックスを ${index} に更新`);
     });
+  }
+
+  // 復元されたモデル用のファイルリストアイテムを作成
+  function createRestoredFileListItem(modelSetting, modelIndex) {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.dataset.modelIndex = modelIndex;
+
+    const fileInfo = document.createElement('div');
+    fileInfo.className = 'file-info';
+    fileInfo.innerHTML = `
+      <span class="file-name">${modelSetting.fileName}</span>
+      <span class="file-size">${modelSetting.fileSize}MB (復元済み)</span>
+    `;
+
+    const fileActions = document.createElement('div');
+    fileActions.className = 'file-actions';
+    fileActions.innerHTML = `
+      <button class="btn-icon delete-model" title="モデルを削除">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    `;
+
+    fileItem.appendChild(fileInfo);
+    fileItem.appendChild(fileActions);
+
+    // 削除ボタンのイベントリスナー
+    const deleteButton = fileActions.querySelector('.delete-model');
+    deleteButton.addEventListener('click', () => {
+      try {
+        if (!confirm('このモデルを削除してもよろしいですか？')) {
+          return;
+        }
+
+        const currentModelIndex = parseInt(fileItem.dataset.modelIndex);
+        
+        if (viewerInstance?.controls?.removeModel) {
+          const removeResult = viewerInstance.controls.removeModel(currentModelIndex);
+          
+          if (removeResult) {
+            fileItem.remove();
+            
+            if (fileListContainer.children.length === 0) {
+              fileListContainer.innerHTML = '<p class="empty-text">まだファイルがありません</p>';
+            }
+
+            updateFileItemIndices();
+            markAsChanged();
+            showNotification('モデルを削除しました', 'success');
+          } else {
+            throw new Error(`モデルインデックス ${currentModelIndex} の削除に失敗しました`);
+          }
+        } else {
+          throw new Error('removeModel関数が利用できません');
+        }
+      } catch (error) {
+        console.error('モデルの削除に失敗しました:', error);
+        alert(`モデルの削除に失敗しました: ${error.message}`);
+      }
+    });
+
+    return fileItem;
+  }
+
+  // モデル情報のみのアイテムを作成（再アップロード促進用）
+  function createModelInfoItem(modelSetting, index) {
+    const infoItem = document.createElement('div');
+    infoItem.className = 'file-item saved-model-info';
+    infoItem.style.cssText = `
+      background: #f5f5f5;
+      border: 2px dashed #ccc;
+      opacity: 0.7;
+      position: relative;
+    `;
+    
+    infoItem.innerHTML = `
+      <div class="file-info">
+        <div class="file-name" title="${modelSetting.fileName}">${modelSetting.fileName}</div>
+        <div class="file-size">${modelSetting.fileSize}MB (要再アップロード)</div>
+        <div class="file-status" style="color: #666; font-size: 12px;">
+          📁 モデルファイルが必要です
+        </div>
+      </div>
+      <div class="file-actions">
+        <button class="btn-reupload" style="background: #2196F3; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-size: 12px;">
+          再アップロード
+        </button>
+      </div>
+    `;
+
+    // 再アップロードボタンのイベントリスナー
+    const reuploadButton = infoItem.querySelector('.btn-reupload');
+    reuploadButton.addEventListener('click', () => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.glb,.gltf';
+      fileInput.style.display = 'none';
+      
+      fileInput.onchange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        try {
+          infoItem.remove();
+          
+          const modelIndex = await viewerInstance.controls.loadNewModel(file, file.name, file.size);
+          const objectUrl = URL.createObjectURL(file);
+          const fileItem = createFileListItem(file, objectUrl, modelIndex);
+          
+          fileListContainer.appendChild(fileItem);
+          
+          // 保存された設定を適用
+          setTimeout(() => {
+            if (viewerInstance?.controls?.setPosition && modelSetting.transform?.position) {
+              viewerInstance.controls.setPosition(
+                modelSetting.transform.position.x,
+                modelSetting.transform.position.y,
+                modelSetting.transform.position.z
+              );
+            }
+            if (viewerInstance?.controls?.setRotationY && modelSetting.transform?.rotation) {
+              viewerInstance.controls.setRotationY(modelSetting.transform.rotation.y);
+            }
+            if (viewerInstance?.controls?.setScale && modelSetting.transform?.scale) {
+              viewerInstance.controls.setScale(modelSetting.transform.scale.x);
+            }
+            
+            console.log('✅ 保存された設定を適用しました:', modelSetting.transform);
+            markAsChanged();
+            updateAnimationInfo();
+          }, 500);
+          
+          totalFileSize += file.size;
+          updateTotalFileSizeDisplay();
+          
+          showNotification(`モデル "${file.name}" を復元しました`, 'success');
+          
+        } catch (error) {
+          console.error('モデルの再アップロードに失敗:', error);
+          alert('モデルの再アップロードに失敗しました: ' + error.message);
+        }
+      };
+      
+      fileInput.click();
+    });
+
+    return infoItem;
   }
 
   // ファイル一覧アイテムを作成し、イベントリスナーを設定する関数
@@ -970,6 +1356,11 @@ export function showEditor(container) {
           });
           fileItem.classList.add('active');
 
+          // アニメーション情報を更新
+          setTimeout(() => {
+            updateAnimationInfo();
+          }, 100);
+
         } catch (error) {
           console.error("モデルのロードまたはファイルリストへの追加中にエラー:", error);
           
@@ -1207,6 +1598,59 @@ export function showEditor(container) {
     }
   };
 
+  // アニメーション制御ハンドラー
+  const handlePlayAnimation = () => {
+    if (!viewerInstance?.controls?.playAnimation) {
+      console.warn('❌ アニメーション再生機能が利用できません');
+      return;
+    }
+    
+    const success = viewerInstance.controls.playAnimation(0);
+    if (success) {
+      showNotification('アニメーションを再生中', 'info');
+    } else {
+      showNotification('アニメーションが見つかりません', 'error');
+    }
+  };
+
+  const handleStopAnimation = () => {
+    if (!viewerInstance?.controls?.stopAnimation) {
+      console.warn('アニメーション停止機能が利用できません');
+      return;
+    }
+    
+    const success = viewerInstance.controls.stopAnimation();
+    if (success) {
+      showNotification('アニメーションを停止しました', 'info');
+    }
+  };
+
+    // アニメーション情報を更新する関数
+  const updateAnimationInfo = () => {
+    if (!viewerInstance?.controls?.hasAnimations || !viewerInstance?.controls?.getAnimationList) {
+      return;
+    }
+    
+    const hasAnims = viewerInstance.controls.hasAnimations();
+    
+    if (animationControls) {
+      animationControls.style.display = hasAnims ? 'block' : 'none';
+    }
+    
+    if (hasAnims && animationList) {
+      const animations = viewerInstance.controls.getAnimationList();
+      animationList.innerHTML = animations.map(anim => 
+        `${anim.name} (${anim.duration.toFixed(1)}s)`
+      ).join('<br>');
+       
+      // アニメーション発見の通知
+      showNotification(`アニメーション ${animations.length} 個を発見しました`, 'success');
+    } else {
+      // アニメーションがない場合の通知
+      showNotification('このモデルにはアニメーションが含まれていません', 'info');
+    }
+  };
+
   const handleQRCodeButtonClick = () => {
     showQRCodeModal({
       modelName: 'current-project'
@@ -1215,11 +1659,15 @@ export function showEditor(container) {
 
   // プロジェクト保存処理
   const handleSaveProject = () => {
+    console.log('🔥🔥🔥 プロジェクト保存処理開始 [v3.0] 🔥🔥🔥');
+    
     return new Promise((resolve, reject) => {
       // URLパラメータから現在のプロジェクトIDを取得
       const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
       const currentProjectId = urlParams.get('id');
       const isEdit = !!currentProjectId;
+      
+      console.log('🔥 保存処理パラメータ:', { currentProjectId, isEdit, arType, isMarkerMode });
       
       // 既存プロジェクトの場合は現在の情報を取得
       let currentProject = null;
@@ -1235,17 +1683,82 @@ export function showEditor(container) {
         currentDescription: currentProject?.description || ''
       }, (projectData) => {
       try {
+        console.log('保存処理開始:', projectData);
+        console.log('arType:', arType);
+        console.log('isMarkerMode:', isMarkerMode);
+        console.log('viewerInstance:', viewerInstance);
+        
+        // マーカー画像データを取得
+        const markerImageData = isMarkerMode ? localStorage.getItem('markerImageUrl') : null;
+        console.log('🔍 保存前のマーカー画像データ:', {
+          exists: !!markerImageData,
+          type: typeof markerImageData,
+          length: markerImageData?.length || 0,
+          preview: markerImageData?.substring(0, 50) || 'なし'
+        });
+        
         // プロジェクトデータを構築
         const saveData = {
           id: projectData.id,
           name: projectData.name,
           description: projectData.description,
           type: arType,
-          markerImage: isMarkerMode ? localStorage.getItem('markerImageUrl') : null
+          markerImage: markerImageData
         };
+        console.log('🔍 保存データ詳細:', {
+          id: saveData.id,
+          name: saveData.name,
+          type: saveData.type,
+          hasMarkerImage: !!saveData.markerImage,
+          markerImageSize: saveData.markerImage?.length || 0
+        });
 
         // プロジェクトを保存
-        const savedProject = saveProject(saveData, viewerInstance);
+        console.log('saveProject関数を呼び出し中...');
+        console.log('- 保存データ:', saveData);
+        console.log('- viewerInstance存在:', !!viewerInstance);
+        console.log('- viewerInstance.controls存在:', !!viewerInstance?.controls);
+        
+        // モデルデータの確認
+        if (viewerInstance?.controls?.getAllModels) {
+          const allModels = viewerInstance.controls.getAllModels();
+          console.log('🔥🔥🔥 保存前のモデルデータ確認 [v3.0] 🔥🔥🔥');
+          console.log('- getAllModels()戻り値:', allModels);
+          console.log('- モデル数:', allModels.length);
+          
+          if (allModels.length === 0) {
+            console.warn('⚠️ モデルが見つかりません - アップロードされたモデルがない可能性');
+          } else {
+            console.log('🔍 各モデルの詳細:');
+            allModels.forEach((model, index) => {
+              console.log(`  モデル${index}:`, {
+                fileName: model.fileName,
+                fileSize: model.fileSize,
+                hasModelData: !!model.modelData,
+                hasModelUrl: !!model.modelUrl,
+                modelDataType: typeof model.modelData,
+                modelDataSize: model.modelData?.length || 0,
+                modelUrlType: typeof model.modelUrl,
+                position: model.position,
+                rotation: model.rotation,
+                scale: model.scale
+              });
+            });
+          }
+        } else {
+          console.error('❌ viewerInstance.controls.getAllModels が利用できません');
+          console.log('- viewerInstance:', !!viewerInstance);
+          console.log('- viewerInstance.controls:', !!viewerInstance?.controls);
+        }
+        
+        let savedProject;
+        try {
+          savedProject = saveProject(saveData, viewerInstance);
+          console.log('✅ 保存完了:', savedProject);
+        } catch (saveError) {
+          console.error('❌ saveProject内でエラー:', saveError);
+          throw saveError; // 外側のcatchに再スロー
+        }
         
         // 保存成功の通知
         const notification = document.createElement('div');
@@ -1287,7 +1800,38 @@ export function showEditor(container) {
         markAsSaved(); // 保存完了をマーク
         resolve(savedProject); // Promise解決
       } catch (error) {
-        console.error('プロジェクト保存エラー:', error);
+        console.error('❌ プロジェクト保存エラー:', error);
+        console.error('- エラーの詳細:', error.message);
+        console.error('- エラースタック:', error.stack);
+        console.error('- エラータイプ:', error.name);
+        
+        // 具体的なエラーメッセージを生成
+        let errorMessage = 'プロジェクトの保存に失敗しました';
+        if (error.message.includes('QuotaExceededError') || error.message.includes('容量制限')) {
+          errorMessage = '容量制限エラー：古いプロジェクトを自動削除して再保存します';
+          
+          // 容量制限エラーの場合、ユーザーに容量クリア機能を提供
+          setTimeout(() => {
+            if (confirm('ブラウザの保存容量が不足しています。\n\n古いプロジェクトを削除して再保存しますか？\n\n※「キャンセル」を選ぶと手動でlocalStorageをクリアできます。')) {
+              // 再保存を試行
+              console.log('🔄 容量制限エラー後の再保存を試行...');
+              handleSaveProject();
+            } else {
+              // 手動でlocalStorageをクリア
+              if (confirm('すべての保存されたプロジェクトを削除してよろしいですか？\n\n※この操作は取り消せません。')) {
+                localStorage.removeItem('miruwebAR_projects');
+                alert('保存データを削除しました。再度保存を試してください。');
+                console.log('🧹 localStorage手動クリア完了');
+              }
+            }
+          }, 100);
+        } else if (error.message.includes('プロジェクトデータの作成に失敗')) {
+          errorMessage = '3Dモデルデータの処理に失敗しました';
+        } else if (error.message.includes('localStorage')) {
+          errorMessage = 'ブラウザの保存領域に問題があります';
+        } else if (error.message) {
+          errorMessage = `エラー: ${error.message}`;
+        }
         
         // エラー通知
         const errorNotification = document.createElement('div');
@@ -1303,7 +1847,7 @@ export function showEditor(container) {
           box-shadow: 0 2px 8px rgba(0,0,0,0.2);
           z-index: 10000;
         `;
-        errorNotification.textContent = 'プロジェクトの保存に失敗しました';
+        errorNotification.textContent = errorMessage;
         document.body.appendChild(errorNotification);
 
         setTimeout(() => {

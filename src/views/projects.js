@@ -1,6 +1,6 @@
 // src/views/projects.js
 import { showNewProjectModal, showConfirmDialog } from '../components/ui.js';
-import { getProjects, deleteProject } from '../api/projects.js';
+import { getProjects, deleteProject } from '../api/projects-new.js';
 import { showVersionInfoModal } from '../components/version-info.js';
 import '../styles/projects.css';
 import '../styles/version-info.css'; // バージョン情報モーダル用のスタイル
@@ -31,6 +31,8 @@ function createSampleProjects() {
         id: `project_${now}_1`,
         name: "サンプルプロジェクト1",
         type: "marker",
+        modelSettings: [],
+        modelCount: 0,
         settings: {
           isPublic: false
         },
@@ -44,6 +46,8 @@ function createSampleProjects() {
         id: `project_${now}_2`,
         name: "サンプルプロジェクト2",
         type: "markerless",
+        modelSettings: [],
+        modelCount: 0,
         settings: {
           isPublic: true
         },
@@ -295,6 +299,11 @@ export default function showProjects(container) {
           
           <div class="project-type">${AR_TYPE_NAMES[project.type] || project.type}</div>
           
+          <div class="project-info">
+            <span class="model-count">3Dモデル: ${project.modelCount || project.modelSettings?.length || project.models?.length || 0}個</span>
+            ${project.note ? `<div class="project-note" style="font-size: 0.8em; color: #888; margin-top: 0.5rem;">※ 編集時に3Dモデルの再アップロードが必要</div>` : ''}
+          </div>
+          
           <div class="card-footer">
             <div class="public-status">
               <label class="switch">
@@ -315,8 +324,14 @@ export default function showProjects(container) {
         </div>
       `;
       
-      // カードのクリックイベント - 編集画面に遷移
-      projectCard.querySelector('.card-content').addEventListener('click', () => {
+      // カードのクリックイベント - 編集画面に遷移（メニューボタン除外）
+      projectCard.querySelector('.card-content').addEventListener('click', (e) => {
+        // メニューボタンやドロップダウンがクリックされた場合は無視
+        if (e.target.closest('.card-menu') || e.target.closest('.card-menu-button') || e.target.closest('.card-menu-dropdown')) {
+          console.log('メニュー関連のクリックを検出 - カード遷移をキャンセル');
+          return;
+        }
+        console.log('カードクリック - プロジェクト編集画面に遷移:', project.name);
         window.location.hash = `#/editor?id=${project.id}&type=${project.type}`;
       });
       
@@ -334,6 +349,7 @@ export default function showProjects(container) {
         console.log('メニューボタンがクリックされました:', project.name);
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation(); // 追加：同一要素の他のイベントリスナーも停止
         
         // 他の全てのドロップダウンを閉じる
         document.querySelectorAll('.card-menu-dropdown.show').forEach(dropdown => {

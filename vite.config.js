@@ -2,11 +2,30 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // ★★★ optimizeDeps の設定を追加 ★★★
-  optimizeDeps: {
-    exclude: ['three'] // Three.js を事前バンドル対象から除外
+  // ★★★ キャッシュ無効化設定（緊急対策） ★★★
+  server: {
+    headers: {
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    }
   },
-  // ★★★ ここまで追加 ★★★
+  build: {
+    rollupOptions: {
+      output: {
+        // ファイル名にタイムスタンプを強制追加
+        entryFileNames: `assets/[name]-${Date.now()}.[hash].js`,
+        chunkFileNames: `assets/[name]-${Date.now()}.[hash].js`,
+        assetFileNames: `assets/[name]-${Date.now()}.[hash].[ext]`
+      }
+    }
+  },
+  // ★★★ optimizeDeps の設定 ★★★
+  optimizeDeps: {
+    exclude: ['three'], // Three.js を事前バンドル対象から除外
+    force: true // 依存関係を強制的に再ビルド
+  },
+  // ★★★ キャッシュ無効化 ★★★
   esbuild: {
     loader: {
       '.js': 'js'

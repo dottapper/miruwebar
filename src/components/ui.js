@@ -180,82 +180,87 @@ export function showNewProjectModal() {
   /**
    * プロジェクト保存用のモーダルを表示する
    * @param {Object} options - モーダルのオプション
-   * @param {Function} onSave - 保存時のコールバック
+   * @param {Function} callback - 保存時のコールバック
    */
-  export function showSaveProjectModal(options = {}, onSave) {
+  export function showSaveProjectModal(options = {}, callback) {
+    const { isEdit = false, projectId = null, currentName = '', currentDescription = '' } = options;
+    
+    // モーダルの背景（オーバーレイ）要素を作成
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'modal-overlay';
     
+    // モーダルのコンテンツを設定
     modalOverlay.innerHTML = `
         <div class="modal-content">
-            <h2>${options.isEdit ? 'プロジェクトを更新' : '新規プロジェクトを保存'}</h2>
-            <div class="form-group" style="margin-bottom: 1.5rem;">
-                <label for="project-name" style="display: block; margin-bottom: 0.5rem;">プロジェクト名 *</label>
-                <input type="text" 
-                    id="project-name" 
-                    class="form-input" 
-                    value="${options.currentName || ''}" 
-                    placeholder="プロジェクト名を入力"
-                    style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border);"
-                    required>
-            </div>
-            <div class="form-group" style="margin-bottom: 1.5rem;">
-                <label for="project-description" style="display: block; margin-bottom: 0.5rem;">説明</label>
-                <textarea 
-                    id="project-description" 
-                    class="form-input" 
-                    rows="3"
-                    placeholder="プロジェクトの説明を入力（任意）"
-                    style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border);"
-                >${options.currentDescription || ''}</textarea>
-            </div>
-            <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button id="save-project" class="primary-button" style="background: var(--gradient-primary); color: white; border: none; padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
-                    ${options.isEdit ? '更新' : '保存'}
-                </button>
-                <button id="cancel-save" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
-                    キャンセル
-                </button>
-            </div>
+            <h2>${isEdit ? 'プロジェクトを保存' : '新規プロジェクトとして保存'}</h2>
+            
+            <form id="save-project-form">
+                <div class="form-group">
+                    <label for="project-name">プロジェクト名:</label>
+                    <input type="text" id="project-name" value="${currentName}" placeholder="プロジェクト名を入力" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="project-description">説明（任意）:</label>
+                    <textarea id="project-description" placeholder="プロジェクトの説明を入力">${currentDescription}</textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" id="cancel-save" class="btn-secondary">キャンセル</button>
+                    <button type="submit" id="confirm-save" class="btn-primary">保存</button>
+                </div>
+            </form>
         </div>
     `;
     
+    // モーダルをDOMに追加
     document.body.appendChild(modalOverlay);
-
-    // イベントハンドラ
-    const handleSave = () => {
-        const nameInput = document.getElementById('project-name');
-        const descInput = document.getElementById('project-description');
+    
+    // フォーム送信処理
+    const form = document.getElementById('save-project-form');
+    const nameInput = document.getElementById('project-name');
+    const descriptionInput = document.getElementById('project-description');
+    
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
         
-        if (!nameInput.value.trim()) {
-            nameInput.classList.add('error');
-            nameInput.style.borderColor = 'var(--color-accent)';
+        const projectName = nameInput.value.trim();
+        if (!projectName) {
+            alert('プロジェクト名を入力してください。');
+            nameInput.focus();
             return;
         }
-
-        const projectData = {
-            name: nameInput.value.trim(),
-            description: descInput.value.trim(),
-            id: options.projectId || null,
-            timestamp: Date.now()
-        };
-
-        if (onSave) onSave(projectData);
+        
+        // コールバック関数を呼び出し
+        if (typeof callback === 'function') {
+            callback({
+                id: projectId || Date.now().toString(),
+                name: projectName,
+                description: descriptionInput.value.trim()
+            });
+        }
+        
+        // モーダルを閉じる
         document.body.removeChild(modalOverlay);
-    };
-
-    document.getElementById('save-project').addEventListener('click', handleSave);
+    });
+    
+    // キャンセルボタン処理
     document.getElementById('cancel-save').addEventListener('click', () => {
         document.body.removeChild(modalOverlay);
     });
-
-    // エラー表示のクリア
-    document.getElementById('project-name').addEventListener('input', (e) => {
-        if (e.target.value.trim()) {
-            e.target.classList.remove('error');
-            e.target.style.borderColor = '';
+    
+    // モーダル背景をクリックした時にも閉じる
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+            document.body.removeChild(modalOverlay);
         }
     });
+    
+    // 初期フォーカス
+    setTimeout(() => {
+        nameInput.focus();
+        nameInput.select();
+    }, 100);
   }
 
   /**
@@ -358,3 +363,4 @@ export function showNewProjectModal() {
         }
     });
   }
+

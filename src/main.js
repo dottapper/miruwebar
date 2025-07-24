@@ -10,6 +10,20 @@ import './styles/loading-screen.css'; // ローディング画面のスタイル
 // QRCode ライブラリを読み込み
 import QRCode from 'qrcode'
 
+// IndexedDB マイグレーション機能をインポート
+import { initializeMigration } from './storage/migrate.js';
+
+// デバッグ用の初期ログ
+console.log('🎯 メインアプリケーション開始');
+console.log('🔧 アニメーション機能デバッグモード有効');
+
+// アプリケーション初期化時にマイグレーションを実行
+initializeMigration().then((result) => {
+  console.log('🔄 マイグレーション初期化完了:', result);
+}).catch((error) => {
+  console.error('❌ マイグレーション初期化エラー:', error);
+});
+
 // ページごとのJSファイルをインポート
 import showLogin from './views/login.js';
 import showSelectAR from './views/select-ar.js';

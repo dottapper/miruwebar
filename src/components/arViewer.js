@@ -22,7 +22,8 @@ const updateLoadingProgress = loadingStub.updateProgress;
 const cleanupLoading = loadingStub.cleanup;
 
 export async function initARViewer(containerId, options = {}) {
-  console.log('initARViewer開始:', { containerId, options });
+  console.log('🎯 initARViewer開始:', { containerId, options });
+  console.log('🔧 アニメーション機能を初期化中...');
   
   const container = document.getElementById(containerId);
   console.log('コンテナ要素:', container);
@@ -125,6 +126,33 @@ export async function initARViewer(containerId, options = {}) {
 
   // GLTFLoaderにThree.jsのローディングマネージャーを設定
   const loader = new GLTFLoader(threeLoadingManager);
+  
+  // File/Blob データを Base64 に変換するヘルパー関数
+  async function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Blob URL から File データを取得するヘルパー関数
+  async function blobUrlToBase64(blobUrl) {
+    try {
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn('Blob URL to Base64 conversion failed:', error);
+      return null;
+    }
+  }
 
   // シーン・カメラ・レンダラーの初期化
   console.log('Three.jsシーンの初期化を開始...');
@@ -314,15 +342,27 @@ export async function initARViewer(containerId, options = {}) {
   scene.add(directionalLight);
   console.log('ライティング設定完了');
 
+  // モデル管理用変数
+  const modelList = [];
+  let activeModelIndex = -1;
+  let gridHelper = null; // グリッドヘルパーの参照を格納
+
   // グリッドヘルパー（設定で有効な場合のみ）
   console.log('グリッドの設定を開始...', { showGrid: config.showGrid });
-  if (config.showGrid) {
-    const gridHelper = new THREE.GridHelper(10, 10, 0x777777, 0xbbbbbb);
-    gridHelper.position.y = -0.01;
-    scene.add(gridHelper);
-    console.log('グリッドヘルパー追加完了');
-  } else {
-    console.log('グリッドは無効化されています');
+  try {
+    if (config.showGrid) {
+      console.log('Creating GridHelper...');
+      gridHelper = new THREE.GridHelper(10, 10, 0x777777, 0xbbbbbb);
+      console.log('GridHelper created successfully');
+      gridHelper.position.y = -0.01;
+      scene.add(gridHelper);
+      console.log('グリッドヘルパー追加完了');
+    } else {
+      console.log('グリッドは無効化されています');
+    }
+  } catch (error) {
+    console.error('GridHelper creation failed:', error);
+    console.log('Continuing without grid...');
   }
 
   // マーカー（ARマーカーモードの場合）
@@ -345,20 +385,41 @@ export async function initARViewer(containerId, options = {}) {
     markerPlane.position.y = 0;
     scene.add(markerPlane);
   }
-
-  // モデル管理用変数
-  const modelList = [];
-  let activeModelIndex = -1;
   const objectUrls = new Map();
+  
+  // アニメーション制御関連
+  const animationMixers = new Map(); // モデルごとのAnimationMixer
+  const animationClips = new Map(); // モデルごとのAnimationClip配列
+  const animationActions = new Map(); // モデルごとの再生中のAnimationAction
+  const clock = new THREE.Clock(); // アニメーション用の時間管理
   // 選択オブジェクト表示用のBoxHelper
   let boundingBox = null;
 
-  function createModelData(model, objectUrl, fileName, fileSize) {
-    return {
+  function createModelData(model, objectUrl, fileName, fileSize, animations = []) {
+    console.log('🔥🔥🔥 createModelData実行 [IndexedDB版 v4.0] 🔥🔥🔥');
+    console.log('- fileName:', fileName);
+    console.log('- fileSize:', fileSize);
+    console.log('- objectUrl:', objectUrl);
+    console.log('- objectUrl type:', typeof objectUrl);
+    console.log('- isBlobUrl:', objectUrl && objectUrl.startsWith('blob:'));
+    console.log('- isDataUrl:', objectUrl && objectUrl.startsWith('data:'));
+    
+    const modelData = {
       model,
       objectUrl,
       fileName,
       fileSize,
+      
+      // 新しい IndexedDB システム用のデータ保存
+      // modelData は保存時に IndexedDB に移動されるため、ここでは一時的に保持
+      modelData: null, // Base64 データは IndexedDB に移行済みのため null
+      modelUrl: objectUrl && !objectUrl.startsWith('data:') && !objectUrl.startsWith('blob:') ? objectUrl : null,
+      modelId: null, // 保存時に IndexedDB のモデル ID が設定される
+      
+      // TODO: IndexedDB 保存用のソースデータ（一時保存）
+      _sourceBlob: null, // ファイルから読み込んだ場合の元 Blob
+      _sourceFile: null, // ファイルオブジェクト（ファイル選択時）
+      
       position: model.position.clone(),
       rotation: model.rotation.clone(),
       scale: model.scale.clone(),
@@ -366,8 +427,26 @@ export async function initARViewer(containerId, options = {}) {
       initialPosition: model.position.clone(),
       initialRotation: model.rotation.clone(),
       initialScale: model.scale.clone(),
-      visible: true
+      initialCameraPosition: null, // カメラ初期位置（後で設定）
+      initialCameraTarget: null,   // カメラ初期ターゲット（後で設定）
+      visible: true,
+      // アニメーション情報
+      animations: animations,
+      hasAnimations: animations.length > 0,
+      
+      // IndexedDB メタデータ
+      mimeType: 'model/gltf-binary',
+      lastModified: Date.now()
     };
+    
+    console.log('🔍 作成されたmodelData [IndexedDB版]:', {
+      fileName: modelData.fileName,
+      hasModelId: !!modelData.modelId,
+      hasObjectUrl: !!modelData.objectUrl,
+      mimeType: modelData.mimeType
+    });
+    
+    return modelData;
   }
 
   function disposeModelResources(modelData) {
@@ -440,16 +519,81 @@ export async function initARViewer(containerId, options = {}) {
     });
     
     try {
-      // モデルのURLを準備
+      let storedModelData = null;
+      
+      // モデルのURLを準備とデータ保存の準備
       if (modelUrl instanceof Blob || modelUrl instanceof File) {
         createdObjectUrl = URL.createObjectURL(modelUrl);
+        
+        // 保存用にBase64データを生成
+        try {
+          console.log('📦 Base64データ変換開始...');
+          const originalFileSize = modelUrl.size || 0;
+          console.log('- 元ファイルサイズ:', (originalFileSize / 1024).toFixed(2), 'KB');
+          
+          storedModelData = await fileToBase64(modelUrl);
+          const base64Size = storedModelData.length;
+          console.log('✅ Base64データ変換完了:', {
+            base64Size: (base64Size / 1024).toFixed(2) + 'KB',
+            compressionRatio: (base64Size / originalFileSize).toFixed(2) + 'x'
+          });
+          
+          // 500KB制限をチェック（localStorage容量制限対策）
+          if (base64Size > 500 * 1024) {
+            console.warn('⚠️ Base64データが500KBを超えています - 設定のみ保存');
+            storedModelData = null; // データを保存せず、設定のみ保存
+          }
+        } catch (error) {
+          console.warn('⚠️ Base64変換に失敗、設定のみ保存:', error);
+          storedModelData = null;
+        }
+        
         modelUrl = createdObjectUrl;
+      } else if (typeof modelUrl === 'string' && modelUrl.startsWith('blob:')) {
+        // Blob URLの場合もBase64に変換を試行
+        try {
+          console.log('📦 Blob URL -> Base64変換開始...');
+          storedModelData = await blobUrlToBase64(modelUrl);
+          const base64Size = storedModelData?.length || 0;
+          console.log('✅ Blob URL -> Base64変換完了:', (base64Size / 1024).toFixed(2) + 'KB');
+          
+          // 500KB制限をチェック
+          if (base64Size > 500 * 1024) {
+            console.warn('⚠️ Base64データが500KBを超えています - 設定のみ保存');
+            storedModelData = null;
+          }
+        } catch (error) {
+          console.warn('⚠️ Blob URL変換に失敗、設定のみ保存:', error);
+          storedModelData = null;
+        }
+      } else {
+        // 通常のURLの場合
+        storedModelData = modelUrl;
       }
       
       // モデルを読み込む
       updateLoadingProgress(loaderId, 20, 'モデルデータを解析中...');
       const gltf = await loader.loadAsync(modelUrl);
       const model = gltf.scene;
+      
+      // アニメーション情報を取得
+      const animations = gltf.animations || [];
+      console.log(`🎬 モデル "${fileName}" のアニメーション検出:`);
+      console.log('- gltf オブジェクト:', gltf);
+      console.log('- gltf.animations:', gltf.animations);
+      console.log('- animations配列:', animations);
+      console.log('- アニメーション数:', animations.length);
+      console.log('- animations配列の型:', typeof animations);
+      console.log('- animations.length存在:', animations.hasOwnProperty('length'));
+      
+      if (animations.length > 0) {
+        console.log('✅ アニメーションが発見されました！');
+        animations.forEach((anim, index) => {
+          console.log(`  ${index}: "${anim.name}" (${anim.duration}s, tracks: ${anim.tracks.length})`);
+        });
+      } else {
+        console.log('❌ アニメーションが見つかりませんでした');
+      }
       
       let storedObjectUrl = null;
       if (modelUrl.startsWith('blob:')) {
@@ -500,10 +644,69 @@ export async function initARViewer(containerId, options = {}) {
         model.position.set(0, 0, 0);
       }
 
-      const modelData = createModelData(model, storedObjectUrl, fileName, fileSize);
+      // createModelDataに正しいデータを渡す
+      console.log('🔥 createModelData呼び出し前の確認:');
+      console.log('- storedModelData type:', typeof storedModelData);
+      console.log('- storedModelData preview:', storedModelData?.substring(0, 50));
+      console.log('- createdObjectUrl:', createdObjectUrl);
+      
+      const modelData = createModelData(model, storedModelData, fileName, fileSize, animations);
+      console.log('📦 createModelData 実行結果:');
+      console.log('- modelData.animations:', modelData.animations);
+      console.log('- modelData.hasAnimations:', modelData.hasAnimations);
+      console.log('- modelData作成完了');
+      
       modelData.position.copy(model.position);
       modelData.rotation.copy(model.rotation);
       modelData.scale.copy(model.scale);
+      
+      // アニメーションセットアップ
+      console.log('🎭 アニメーションセットアップ開始:');
+      console.log('- アニメーション数:', animations.length);
+      if (animations.length > 0) {
+        try {
+          console.log('🔄 AnimationMixer作成開始...');
+          const mixer = new THREE.AnimationMixer(model);
+          
+          console.log('🔄 アニメーションクリップ検証...');
+          const validAnimations = animations.filter(clip => {
+            if (!clip) {
+              console.warn('⚠️ null/undefinedアニメーションクリップを除外');
+              return false;
+            }
+            if (!clip.tracks || clip.tracks.length === 0) {
+              console.warn('⚠️ トラックが空のアニメーションクリップを除外:', clip.name);
+              return false;
+            }
+            return true;
+          });
+          
+          if (validAnimations.length === 0) {
+            console.warn('⚠️ 有効なアニメーションクリップが見つかりません');
+          } else {
+            animationMixers.set(model, mixer);
+            animationClips.set(model, validAnimations);
+            
+            // 最初のアニメーションを準備（再生はしない）
+            console.log('🔄 最初のアニメーションアクション作成...');
+            const firstAction = mixer.clipAction(validAnimations[0]);
+            animationActions.set(model, [firstAction]);
+            
+            console.log(`✅ アニメーションMixerを設定: ${validAnimations[0].name}`);
+            console.log('- animationMixers.size:', animationMixers.size);
+            console.log('- animationClips.size:', animationClips.size);
+            console.log('- 有効なアニメーション数:', validAnimations.length);
+          }
+        } catch (error) {
+          console.error('❌ アニメーションミキサー初期化エラー:', error);
+          console.error('- エラー詳細:', error.message);
+          console.error('- model:', model);
+          console.error('- animations:', animations);
+          // アニメーションエラーでもモデル読み込みは継続
+        }
+      } else {
+        console.log('❌ アニメーションが見つかりませんでした');
+      }
       
       // カメラを適切な位置に調整してからその位置を保存
       adjustCameraToModel(model);  
@@ -554,6 +757,17 @@ export async function initARViewer(containerId, options = {}) {
 
   // アクティブモデルの設定
   function setActiveModel(index) {
+    console.log('🎯 setActiveModel() 呼び出し:');
+    console.log('- 新しいインデックス:', index);
+    console.log('- 現在のactiveModelIndex:', activeModelIndex);
+    console.log('- modelList長さ:', modelList.length);
+    if (index >= 0 && index < modelList.length) {
+      const modelData = modelList[index];
+      console.log('- 設定予定モデル:', modelData.fileName);
+      console.log('- アニメーション有り:', modelData.hasAnimations);
+      console.log('- アニメーション数:', modelData.animations?.length || 0);
+    }
+    
     if (index === activeModelIndex) return false;
     const previousActiveIndex = activeModelIndex;
     if (previousActiveIndex >= 0 && previousActiveIndex < modelList.length) {
@@ -867,8 +1081,15 @@ export async function initARViewer(containerId, options = {}) {
   // アニメーションループを修正して方向キューブも更新
   let animationFrameId = null;
   let lastWidth = container.clientWidth, lastHeight = container.clientHeight;
-  function animate(time) {
+  function animate() {
     animationFrameId = requestAnimationFrame(animate);
+    
+    // AnimationMixerを更新
+    const delta = clock.getDelta();
+    animationMixers.forEach(mixer => {
+      mixer.update(delta);
+    });
+    
     if (container && (lastWidth !== container.clientWidth || lastHeight !== container.clientHeight)) {
       lastWidth = container.clientWidth;
       lastHeight = container.clientHeight;
@@ -920,8 +1141,12 @@ export async function initARViewer(containerId, options = {}) {
       index,
       fileName: data.fileName,
       fileSize: data.fileSize,
+      // モデルデータを保存用に含める
+      modelData: data.modelData,
+      modelUrl: data.modelUrl,
       isActive: index === activeModelIndex,
       visible: data.visible,
+      hasAnimations: data.hasAnimations || false,
       position: { x: data.position.x, y: data.position.y, z: data.position.z },
       rotation: {
         x: THREE.MathUtils.radToDeg(data.rotation.x),
@@ -1257,7 +1482,150 @@ export async function initARViewer(containerId, options = {}) {
     hideLoadingScreen: () => loadingManager.hideLoadingScreen(),
     updateLoadingProgress: (percent, message) => loadingManager.updateProgress(percent, message),
     // アクティブモデルデータ取得関数を追加
-    getActiveModelData: getActiveModelData
+    getActiveModelData: getActiveModelData,
+    
+    // アニメーション制御関数を追加
+    playAnimation: (animationIndex = 0) => {
+      console.log('🎮 playAnimation() 開始');
+      console.log('- animationIndex:', animationIndex);
+      
+      try {
+        const modelData = getActiveModelData();
+        if (!modelData) {
+          console.warn('❌ アクティブなモデルデータがありません');
+          return false;
+        }
+        
+        console.log('- modelData.hasAnimations:', modelData.hasAnimations);
+        console.log('- modelData.animations?.length:', modelData.animations?.length);
+        
+        if (!modelData.hasAnimations || !modelData.animations || modelData.animations.length === 0) {
+          console.warn('❌ アクティブなモデルにアニメーションがありません');
+          return false;
+        }
+        
+        const model = modelData.model;
+        const mixer = animationMixers.get(model);
+        const clips = animationClips.get(model);
+        
+        console.log('- mixer存在:', !!mixer);
+        console.log('- clips存在:', !!clips);
+        console.log('- clips.length:', clips?.length);
+        
+        if (!mixer) {
+          console.warn('❌ AnimationMixerが見つかりません');
+          return false;
+        }
+        
+        if (!clips || clips.length === 0) {
+          console.warn('❌ アニメーションClipが見つかりません');
+          return false;
+        }
+        
+        // アニメーションインデックスの検証
+        if (animationIndex < 0 || animationIndex >= clips.length) {
+          console.warn(`❌ 無効なアニメーションインデックス: ${animationIndex} (0-${clips.length - 1})`);
+          return false;
+        }
+        
+        // 現在のアクションを停止
+        const currentActions = animationActions.get(model) || [];
+        currentActions.forEach(action => {
+          try {
+            action.stop();
+          } catch (stopError) {
+            console.warn('アニメーション停止エラー:', stopError);
+          }
+        });
+        
+        // 新しいアクションを開始
+        const targetClip = clips[animationIndex];
+        const newAction = mixer.clipAction(targetClip);
+        newAction.reset();
+        newAction.setLoop(THREE.LoopRepeat);
+        newAction.play();
+        
+        animationActions.set(model, [newAction]);
+        console.log(`✅ アニメーション "${targetClip.name}" を再生開始`);
+        return true;
+        
+      } catch (error) {
+        console.error('❌ playAnimation エラー:', error);
+        console.error('- エラー詳細:', error.message);
+        return false;
+      }
+    },
+    
+    stopAnimation: () => {
+      try {
+        const modelData = getActiveModelData();
+        if (!modelData || !modelData.hasAnimations) {
+          console.warn('❌ 停止するアニメーションがありません');
+          return false;
+        }
+        
+        const model = modelData.model;
+        const currentActions = animationActions.get(model) || [];
+        currentActions.forEach(action => {
+          try {
+            action.stop();
+          } catch (stopError) {
+            console.warn('アニメーション停止エラー:', stopError);
+          }
+        });
+        
+        console.log('✅ アニメーションを停止しました');
+        return true;
+      } catch (error) {
+        console.error('❌ stopAnimation エラー:', error);
+        return false;
+      }
+    },
+    
+    getAnimationList: () => {
+      try {
+        const modelData = getActiveModelData();
+        if (!modelData || !modelData.hasAnimations) {
+          return [];
+        }
+        
+        if (!modelData.animations || !Array.isArray(modelData.animations)) {
+          console.warn('⚠️ アニメーションデータが不正です');
+          return [];
+        }
+        
+        return modelData.animations.map((clip, index) => ({
+          index,
+          name: clip.name || `Animation ${index + 1}`,
+          duration: clip.duration || 0
+        }));
+      } catch (error) {
+        console.error('❌ getAnimationList エラー:', error);
+        return [];
+      }
+    },
+    
+    hasAnimations: () => {
+      try {
+        const modelData = getActiveModelData();
+        console.log('🔍 hasAnimations() チェック:');
+        console.log('- activeModelIndex:', activeModelIndex);
+        console.log('- modelList長さ:', modelList.length);
+        console.log('- modelData存在:', !!modelData);
+        if (modelData) {
+          console.log('- modelData.fileName:', modelData.fileName);
+          console.log('- modelData.hasAnimations:', modelData.hasAnimations);
+          console.log('- modelData.animations型:', typeof modelData.animations);
+          console.log('- modelData.animations長さ:', modelData.animations?.length);
+        }
+        const result = modelData && modelData.hasAnimations;
+        console.log('🔍 hasAnimations() 結果:', result);
+        return result;
+      } catch (error) {
+        console.error('❌ hasAnimations エラー:', error);
+        return false;
+      }
+    }
   };
 
   console.log('ARビューアーの初期化完了、コントロールを返却します');

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>保存機能テスト</title>
+</head>
+<body>
+    <h1>保存機能テスト</h1>
+    <button onclick="testSave()">テストプロジェクトを保存</button>
+    <button onclick="showProjects()">保存されたプロジェクトを表示</button>
+    <button onclick="clearProjects()">プロジェクトをクリア</button>
+    <button onclick="clearAllLocalStorage()">localStorage全削除</button>
+    <button onclick="checkStorageSize()">容量使用状況を確認</button>
+    <div id="output"></div>
+
+    <script>
+        function testSave() {
+            const testProject = {
+                id: `project_${Date.now()}`,
+                name: "テストプロジェクト",
+                description: "保存機能のテスト用プロジェクト",
+                type: "markerless",
+                models: [],
+                settings: {
+                    arScale: 1,
+                    isPublic: false,
+                },
+                stats: {
+                    views: 0
+                },
+                markerImage: null,
+                thumbnail: null,
+                created: Date.now(),
+                updated: Date.now()
+            };
+
+            const projects = JSON.parse(localStorage.getItem('miruwebAR_projects') || '[]');
+            projects.push(testProject);
+            localStorage.setItem('miruwebAR_projects', JSON.stringify(projects));
+            
+            console.log('テストプロジェクトを保存しました:', testProject);
+            document.getElementById('output').innerHTML = '<p>テストプロジェクトを保存しました</p>';
+        }
+
+        function showProjects() {
+            const projects = JSON.parse(localStorage.getItem('miruwebAR_projects') || '[]');
+            console.log('保存されているプロジェクト:', projects);
+            
+            const output = document.getElementById('output');
+            if (projects.length === 0) {
+                output.innerHTML = '<p>保存されているプロジェクトはありません</p>';
+            } else {
+                output.innerHTML = '<h3>保存されているプロジェクト:</h3>' + 
+                    projects.map(p => `<p>ID: ${p.id}, 名前: ${p.name}, 作成日: ${new Date(p.created).toLocaleString()}</p>`).join('');
+            }
+        }
+
+        function clearProjects() {
+            localStorage.removeItem('miruwebAR_projects');
+            document.getElementById('output').innerHTML = '<p>プロジェクトをクリアしました</p>';
+            console.log('プロジェクトをクリアしました');
+        }
+
+        function clearAllLocalStorage() {
+            localStorage.clear();
+            document.getElementById('output').innerHTML = '<p>localStorage全体をクリアしました</p>';
+            console.log('localStorage全体をクリアしました');
+        }
+
+        function checkStorageSize() {
+            let totalSize = 0;
+            const results = [];
+            
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    const size = localStorage[key].length;
+                    totalSize += size;
+                    results.push(`${key}: ${(size / 1024).toFixed(2)} KB`);
+                }
+            }
+            
+            const output = document.getElementById('output');
+            output.innerHTML = `
+                <h3>localStorage使用状況:</h3>
+                <p>合計サイズ: ${(totalSize / 1024).toFixed(2)} KB</p>
+                <ul>${results.map(r => '<li>' + r + '</li>').join('')}</ul>
+                <p>一般的な制限: 約5-10MB</p>
+            `;
+            console.log('localStorage合計サイズ:', totalSize, 'characters');
+        }
+    </script>
+</body>
+</html>

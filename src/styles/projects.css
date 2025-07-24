@@ -318,7 +318,8 @@
   position: absolute;
   top: 0;
   right: 0;
-  z-index: 50;
+  z-index: 150; /* カードコンテンツより確実に上に表示 */
+  pointer-events: auto; /* メニューボタンのクリックを確保 */
 }
 
 .card-menu-button {
@@ -333,6 +334,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 200; /* ボタン自体も高いz-index */
+  position: relative;
 }
 
 .card-menu-button:hover {
