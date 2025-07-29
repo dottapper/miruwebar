@@ -3,23 +3,156 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 
-// ローディング関連の関数をスタブとして実装
-const loadingStub = {
-  showLoadingScreen: (msg) => {
-    console.log('Loading (disabled):', msg);
-    return 'stub-loader-id';
-  },
-  hideLoadingScreen: (id) => console.log('Hide loading (disabled):', id),
-  updateProgress: (percent, message) => console.log('Progress (disabled):', percent, message),
-  cleanup: () => console.log('Cleanup (disabled)'),
-  getLoadingState: () => 'hidden'
-};
+// ローディング画面の管理クラス
+class LoadingManager {
+  constructor() {
+    this.activeLoaders = new Map();
+    this.loaderId = 0;
+  }
+
+  showLoadingScreen(options = {}) {
+    const id = `loader-${++this.loaderId}`;
+    const { message = 'モデルを読み込んでいます...', container = document.body } = options;
+    
+    // ローディング要素を作成
+    const loadingElement = document.createElement('div');
+    loadingElement.className = 'loading-screen';
+    loadingElement.id = id;
+    loadingElement.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      color: white;
+      font-family: Arial, sans-serif;
+    `;
+    
+    loadingElement.innerHTML = `
+      <div class="loading-spinner" style="
+        width: 40px;
+        height: 40px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+      "></div>
+      <div class="loading-message" style="font-size: 14px; text-align: center;">${message}</div>
+      <div class="loading-progress" style="
+        width: 200px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        margin-top: 12px;
+        overflow: hidden;
+      ">
+        <div class="progress-bar" style="
+          width: 0%;
+          height: 100%;
+          background: #4CAF50;
+          border-radius: 2px;
+          transition: width 0.3s ease;
+        "></div>
+      </div>
+    `;
+    
+    // スピン アニメーションのCSSを追加
+    if (!document.getElementById('loading-styles')) {
+      const style = document.createElement('style');
+      style.id = 'loading-styles';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // コンテナに追加
+    const targetContainer = typeof container === 'string' 
+      ? document.getElementById(container) 
+      : container;
+    
+    if (targetContainer) {
+      targetContainer.style.position = targetContainer.style.position || 'relative';
+      targetContainer.appendChild(loadingElement);
+    }
+    
+    this.activeLoaders.set(id, {
+      element: loadingElement,
+      container: targetContainer
+    });
+    
+    return id;
+  }
+
+  hideLoadingScreen(id, delay = 0) {
+    const hideLoader = () => {
+      const loader = this.activeLoaders.get(id);
+      if (loader && loader.element && loader.element.parentNode) {
+        loader.element.style.transition = 'opacity 0.3s ease';
+        loader.element.style.opacity = '0';
+        
+        setTimeout(() => {
+          if (loader.element && loader.element.parentNode) {
+            loader.element.parentNode.removeChild(loader.element);
+          }
+          this.activeLoaders.delete(id);
+        }, 300);
+      }
+    };
+    
+    if (delay > 0) {
+      setTimeout(hideLoader, delay);
+    } else {
+      hideLoader();
+    }
+  }
+
+  updateProgress(id, percent, message) {
+    const loader = this.activeLoaders.get(id);
+    if (!loader) return;
+    
+    const progressBar = loader.element.querySelector('.progress-bar');
+    const messageElement = loader.element.querySelector('.loading-message');
+    
+    if (progressBar) {
+      progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    }
+    
+    if (messageElement && message) {
+      messageElement.textContent = message;
+    }
+  }
+
+  cleanup() {
+    this.activeLoaders.forEach((loader, id) => {
+      this.hideLoadingScreen(id);
+    });
+    this.activeLoaders.clear();
+  }
+
+  getLoadingState() {
+    return this.activeLoaders.size > 0 ? 'active' : 'hidden';
+  }
+}
+
+// グローバルローディングマネージャーのインスタンス
+const globalLoadingManager = new LoadingManager();
 
 // エクスポートする関数
-const showLoading = loadingStub.showLoadingScreen;
-const hideLoading = loadingStub.hideLoadingScreen;
-const updateLoadingProgress = loadingStub.updateProgress;
-const cleanupLoading = loadingStub.cleanup;
+const showLoading = (options) => globalLoadingManager.showLoadingScreen(options);
+const hideLoading = (id, delay) => globalLoadingManager.hideLoadingScreen(id, delay);
+const updateLoadingProgress = (id, percent, message) => globalLoadingManager.updateProgress(id, percent, message);
+const cleanupLoading = () => globalLoadingManager.cleanup();
 
 export async function initARViewer(containerId, options = {}) {
   console.log('🎯 initARViewer開始:', { containerId, options });
@@ -52,10 +185,10 @@ export async function initARViewer(containerId, options = {}) {
 
   // ローディングマネージャーの初期化（コンテナIDを渡す）
   const loadingManager = {
-    showLoadingScreen: showLoading,
+    showLoadingScreen: (message) => showLoading({ message, container }),
     hideLoadingScreen: hideLoading,
     updateProgress: updateLoadingProgress,
-    getLoadingState: () => 'hidden'
+    getLoadingState: () => globalLoadingManager.getLoadingState()
   };
 
   // Three.jsのローディングマネージャーを作成
@@ -110,10 +243,7 @@ export async function initARViewer(containerId, options = {}) {
     // onProgress
     (url, itemsLoaded, itemsTotal) => {
       const progressPercent = (itemsLoaded / itemsTotal) * 100;
-      if (loadingManager && typeof loadingManager.updateProgress === 'function') {
-        loadingManager.updateProgress(progressPercent, `モデルを読み込んでいます... ${Math.floor(progressPercent)}%`);
-      }
-      console.log(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files.`);
+      console.log(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files (${Math.floor(progressPercent)}%)`);
     },
     // onError
     (url) => {
@@ -396,14 +526,6 @@ export async function initARViewer(containerId, options = {}) {
   let boundingBox = null;
 
   function createModelData(model, objectUrl, fileName, fileSize, animations = [], sourceFile = null) {
-    console.log('🔥🔥🔥 IndexedDB対応createModelData実行 [v5.0] 🔥🔥🔥');
-    console.log('- fileName:', fileName);
-    console.log('- fileSize:', fileSize);
-    console.log('- objectUrl:', objectUrl);
-    console.log('- objectUrl type:', typeof objectUrl);
-    console.log('- isBlobUrl:', objectUrl && objectUrl.startsWith('blob:'));
-    console.log('- sourceFile:', sourceFile?.name);
-    
     const modelData = {
       model,
       objectUrl,
@@ -437,15 +559,6 @@ export async function initARViewer(containerId, options = {}) {
       lastModified: Date.now(),
       uploadedAt: Date.now()
     };
-    
-    console.log('🔍 作成されたmodelData [IndexedDB対応版]:', {
-      fileName: modelData.fileName,
-      fileSize: modelData.fileSize,
-      hasObjectUrl: !!modelData.objectUrl,
-      hasSourceFile: !!modelData._sourceFile,
-      hasAnimations: modelData.hasAnimations,
-      animationCount: modelData.animations.length
-    });
     
     return modelData;
   }
@@ -514,10 +627,7 @@ export async function initARViewer(containerId, options = {}) {
   // IndexedDB対応モデル読み込み関数
   async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0, sourceFile = null) {
     let createdObjectUrl = null;
-    const loaderId = showLoading({
-      message: `モデル "${fileName}" を読み込んでいます...`,
-      container: container
-    });
+    const loaderId = loadingManager.showLoadingScreen(`モデル "${fileName}" を読み込んでいます...`);
     
     try {
       let storedModelBlob = null;
@@ -528,53 +638,28 @@ export async function initARViewer(containerId, options = {}) {
         
         // IndexedDB保存用にBlobを保持
         storedModelBlob = modelUrl;
-        console.log('📦 IndexedDB保存用Blob準備完了:', {
-          fileName: fileName,
-          blobSize: (storedModelBlob.size / 1024).toFixed(2) + 'KB',
-          blobType: storedModelBlob.type
-        });
-        
         modelUrl = createdObjectUrl;
       } else if (typeof modelUrl === 'string' && modelUrl.startsWith('blob:')) {
         // Blob URLの場合はfetchでBlobを取得
         try {
-          console.log('📦 Blob URL -> Blob変換開始...');
           const response = await fetch(modelUrl);
           storedModelBlob = await response.blob();
-          console.log('✅ Blob URL -> Blob変換完了:', (storedModelBlob.size / 1024).toFixed(2) + 'KB');
         } catch (error) {
           console.warn('⚠️ Blob URL変換に失敗:', error);
           storedModelBlob = null;
         }
       } else {
         // 通常のURLの場合（外部URL等）
-        console.log('🌐 外部URL使用:', modelUrl.substring(0, 100));
         storedModelBlob = null;
       }
       
       // モデルを読み込む
-      updateLoadingProgress(loaderId, 20, 'モデルデータを解析中...');
+      loadingManager.updateProgress(loaderId, 20, 'モデルデータを解析中...');
       const gltf = await loader.loadAsync(modelUrl);
       const model = gltf.scene;
       
       // アニメーション情報を取得
       const animations = gltf.animations || [];
-      console.log(`🎬 モデル "${fileName}" のアニメーション検出:`);
-      console.log('- gltf オブジェクト:', gltf);
-      console.log('- gltf.animations:', gltf.animations);
-      console.log('- animations配列:', animations);
-      console.log('- アニメーション数:', animations.length);
-      console.log('- animations配列の型:', typeof animations);
-      console.log('- animations.length存在:', animations.hasOwnProperty('length'));
-      
-      if (animations.length > 0) {
-        console.log('✅ アニメーションが発見されました！');
-        animations.forEach((anim, index) => {
-          console.log(`  ${index}: "${anim.name}" (${anim.duration}s, tracks: ${anim.tracks.length})`);
-        });
-      } else {
-        console.log('❌ アニメーションが見つかりませんでした');
-      }
       
       let storedObjectUrl = null;
       if (modelUrl.startsWith('blob:')) {
@@ -583,7 +668,7 @@ export async function initARViewer(containerId, options = {}) {
       }
       
       // モデルの設定
-      updateLoadingProgress(loaderId, 40, 'モデルを設定中...');
+      loadingManager.updateProgress(loaderId, 40, 'モデルを設定中...');
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;
@@ -592,7 +677,7 @@ export async function initARViewer(containerId, options = {}) {
       });
 
       // バウンディングボックス計算とスケール・位置調整
-      updateLoadingProgress(loaderId, 60, 'モデルのサイズを調整中...');
+      loadingManager.updateProgress(loaderId, 60, 'モデルのサイズを調整中...');
       const box = new THREE.Box3().setFromObject(model);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -626,29 +711,14 @@ export async function initARViewer(containerId, options = {}) {
       }
 
       // IndexedDB対応createModelDataに正しいデータを渡す
-      console.log('🔥 IndexedDB対応createModelData呼び出し前の確認:');
-      console.log('- storedModelBlob type:', typeof storedModelBlob);
-      console.log('- storedModelBlob size:', storedModelBlob?.size);
-      console.log('- createdObjectUrl:', createdObjectUrl);
-      
       const modelData = createModelData(model, createdObjectUrl, fileName, fileSize, animations, sourceFile);
       
       // IndexedDB保存用のBlobを設定
       if (storedModelBlob) {
         modelData._sourceBlob = storedModelBlob;
-        console.log('✅ IndexedDB保存用Blob設定完了:', storedModelBlob.size, 'bytes');
       }
       
-      // デバッグ: 元ファイルが正しく設定されているかチェック
-      console.log('🔍 modelData作成後の_sourceFileチェック:', {
-        hasSourceFile: !!modelData._sourceFile,
-        sourceFileName: modelData._sourceFile?.name,
-        sourceFileSize: modelData._sourceFile?.size
-      });
-      console.log('📦 createModelData 実行結果:');
-      console.log('- modelData.animations:', modelData.animations);
-      console.log('- modelData.hasAnimations:', modelData.hasAnimations);
-      console.log('- modelData作成完了');
+      
       
       modelData.position.copy(model.position);
       modelData.rotation.copy(model.rotation);
@@ -709,12 +779,12 @@ export async function initARViewer(containerId, options = {}) {
       
       modelList.push(modelData);
 
-      updateLoadingProgress(loaderId, 80, 'モデルを配置中...');
+      loadingManager.updateProgress(loaderId, 80, 'モデルを配置中...');
       scene.add(model);
       
       // ローディング完了 - 即時非表示
-      updateLoadingProgress(loaderId, 100, 'モデルの読み込みが完了しました');
-      hideLoading(loaderId, 0); // 遅延なしで非表示
+      loadingManager.updateProgress(loaderId, 100, 'モデルの読み込みが完了しました');
+      loadingManager.hideLoadingScreen(loaderId, 0); // 遅延なしで非表示
       
       return modelList.length - 1;
     } catch (error) {
@@ -726,8 +796,8 @@ export async function initARViewer(containerId, options = {}) {
       }
       
       // エラーメッセージを表示
-      updateLoadingProgress(loaderId, 0, `エラーが発生しました: ${error.message}`);
-      hideLoading(loaderId, 0); // エラー時も即時非表示
+      loadingManager.updateProgress(loaderId, 0, `エラーが発生しました: ${error.message}`);
+      loadingManager.hideLoadingScreen(loaderId, 0); // エラー時も即時非表示
       
       throw error;
     }
@@ -1138,52 +1208,27 @@ export async function initARViewer(containerId, options = {}) {
     },
     switchToModel: (index) => setActiveModel(index),
     getAllModels: () => {
-      console.log('🔍 IndexedDB対応getAllModels() 呼び出し:', {
-        modelListLength: modelList.length,
-        activeModelIndex
-      });
-      
-      const result = modelList.map((data, index) => {
-        console.log(`🔍 モデル${index}データ詳細 [IndexedDB版]:`, {
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          hasSourceBlob: !!data._sourceBlob,
-          sourceBlobSize: data._sourceBlob?.size,
-          hasSourceFile: !!data._sourceFile,
-          sourceFileName: data._sourceFile?.name,
-          mimeType: data.mimeType
-        });
+      return modelList.map((data, index) => ({
+        index,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
         
-        return {
-          index,
-          fileName: data.fileName,
-          fileSize: data.fileSize,
-          
-          // IndexedDB対応：Blobデータを保存用に含める
-          modelData: data._sourceBlob, // Blobデータ（Base64ではない）
-          mimeType: data.mimeType,
-          
-          // その他の設定データ
-          isActive: index === activeModelIndex,
-          visible: data.visible,
-          hasAnimations: data.hasAnimations || false,
-          position: { x: data.position.x, y: data.position.y, z: data.position.z },
-          rotation: {
-            x: THREE.MathUtils.radToDeg(data.rotation.x),
-            y: THREE.MathUtils.radToDeg(data.rotation.y),
-            z: THREE.MathUtils.radToDeg(data.rotation.z)
-          },
-          scale: { x: data.scale.x, y: data.scale.y, z: data.scale.z }
-        };
-      });
-      
-      console.log('✅ IndexedDB対応getAllModels() 結果:', {
-        resultCount: result.length,
-        modelsWithBlob: result.filter(m => m.modelData instanceof Blob).length,
-        totalBlobSize: result.reduce((sum, m) => sum + (m.modelData?.size || 0), 0)
-      });
-      
-      return result;
+        // IndexedDB対応：Blobデータを保存用に含める
+        modelData: data._sourceBlob, // Blobデータ（Base64ではない）
+        mimeType: data.mimeType,
+        
+        // その他の設定データ
+        isActive: index === activeModelIndex,
+        visible: data.visible,
+        hasAnimations: data.hasAnimations || false,
+        position: { x: data.position.x, y: data.position.y, z: data.position.z },
+        rotation: {
+          x: THREE.MathUtils.radToDeg(data.rotation.x),
+          y: THREE.MathUtils.radToDeg(data.rotation.y),
+          z: THREE.MathUtils.radToDeg(data.rotation.z)
+        },
+        scale: { x: data.scale.x, y: data.scale.y, z: data.scale.z }
+      }));
     },
     getActiveModelIndex: () => activeModelIndex,
     setTransformMode: (mode) => {

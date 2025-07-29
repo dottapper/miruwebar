@@ -17,8 +17,17 @@ import {
 import { updatePreview, adjustPreviewScroll } from '../components/loading-screen/preview.js';
 
 export default function showLoadingScreenEditor(container) {
+  console.log('🚨 showLoadingScreenEditor が呼び出されました', {
+    currentHash: window.location.hash,
+    timestamp: new Date().toISOString(),
+    container: container
+  });
+
   // 現在の設定を保持
   let currentSettings = JSON.parse(JSON.stringify(defaultSettings));
+  
+  // タイマーIDを保持するための変数
+  let verifyLayoutTimeoutId = null;
 
   // エディタの初期化
   function initializeEditor() {
@@ -62,7 +71,7 @@ export default function showLoadingScreenEditor(container) {
           }
           
           // レイアウト検証を実行
-          setTimeout(verifyLayout, 500);
+          verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
         });
       } catch (error) {
         console.error('初期化中にエラーが発生しました:', error);
@@ -151,16 +160,37 @@ export default function showLoadingScreenEditor(container) {
 
   // レイアウト検証
   function verifyLayout() {
+    // 現在のハッシュが loading-screen でない場合はスキップ
+    const currentHash = window.location.hash || '';
+    if (!currentHash.includes('loading-screen')) {
+      console.log('ローディング画面エディタではないため、レイアウト検証をスキップします', {
+        currentHash: currentHash,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    console.log('ローディング画面エディタのレイアウト検証を開始します', {
+      currentHash: currentHash,
+      timestamp: new Date().toISOString()
+    });
+
     const editor = document.querySelector('.loading-screen-editor');
     const preview = document.querySelector('.loading-screen-editor__preview');
     const sidebar = document.querySelector('.loading-screen-editor__sidebar');
 
     if (!editor || !preview || !sidebar) {
-      console.error('必要なレイアウト要素が見つかりません');
+      console.error('❌ 必要なレイアウト要素が見つかりません', {
+        editor: !!editor,
+        preview: !!preview,
+        sidebar: !!sidebar,
+        currentHash: currentHash,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
-    console.log('レイアウト検証完了');
+    console.log('✅ レイアウト検証完了');
     
     // プレビューの初期表示を更新（既に初期化時に実行済みなのでコメントアウト）
     // updatePreview('startScreen');
@@ -169,6 +199,13 @@ export default function showLoadingScreenEditor(container) {
   // クリーンアップ処理
   function cleanup() {
     console.log('ローディング画面エディタをクリーンアップしています...');
+    
+    // 実行中のタイマーをクリア
+    if (verifyLayoutTimeoutId) {
+      clearTimeout(verifyLayoutTimeoutId);
+      verifyLayoutTimeoutId = null;
+      console.log('verifyLayout タイマーをクリアしました');
+    }
     
     // コンテナの内容をクリア
     if (container) {

@@ -4,6 +4,10 @@ import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
 import { saveProject, getProject, getProjects, loadProjectModels, deleteProject } from '../api/projects.js'; // IndexedDB 対応 API をインポート
 
+// CSSファイルのインポート
+import '../styles/common.css';
+import '../styles/editor.css';
+
 /**
  * ファイルサイズを適切な単位でフォーマットする
  * @param {number} bytes - バイト単位のファイルサイズ
@@ -18,16 +22,11 @@ function formatFileSize(bytes) {
 }
 
 export function showEditor(container) {
-  // 新しいコードが実行されていることを確認
-  console.log('🔥🔥🔥 新しいshowEditor関数が実行されました [v3.0] 🔥🔥🔥');
-  
   // URLパラメータからARタイプとプロジェクトIDを取得
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const arType = urlParams.get('type') || 'unknown';
   const projectId = urlParams.get('id') || null; // プロジェクトID取得
   const isMarkerMode = arType === 'marker';
-  
-  console.log('🔥 URLパラメータ解析結果:', { arType, projectId, isMarkerMode });
 
   // ARタイプに応じたタイトルとヘルプテキストを設定
   let title = 'AR エディター';
@@ -125,8 +124,16 @@ export function showEditor(container) {
           </div>
 
           <div class="controls-panel">
-            <div class="panel-section">
-              <h3>モデル調整</h3>
+            <!-- タブナビゲーション -->
+            <div class="panel-tabs">
+              <button class="panel-tab active" data-tab="model-controls">モデル調整</button>
+              <button class="panel-tab" data-tab="loading-settings">ローディング設定</button>
+            </div>
+
+            <!-- モデル調整タブのコンテンツ -->
+            <div id="model-controls-panel" class="panel-content active">
+              <div class="panel-section">
+                <h3>モデル調整</h3>
               <div class="control-group">
                 <label>操作モード:</label>
                 <div class="transform-mode-controls">
@@ -228,7 +235,80 @@ export function showEditor(container) {
                 </select>
               </div>` : ''}
             </div>
-          </div></div></div></div>`;
+            </div>
+
+            <!-- ローディング設定タブのコンテンツ -->
+            <div id="loading-settings-panel" class="panel-content">
+              <div class="panel-section">
+                <h3>ローディング設定</h3>
+                
+                <!-- ローディング画面の有効/無効 -->
+                <div class="control-group">
+                  <label>
+                    <input type="checkbox" id="loading-enabled" checked>
+                    ローディング画面を有効にする
+                  </label>
+                </div>
+                
+                <!-- ローディング画面エディタへのリンク -->
+                <div class="control-group">
+                  <label>ローディング画面の詳細設定:</label>
+                  <button id="open-loading-editor" class="btn-secondary" style="width: 100%; margin-top: 5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    ローディング画面エディタを開く
+                  </button>
+                </div>
+                
+                <!-- 現在のローディング設定の表示 -->
+                <div class="control-group">
+                  <label>現在の設定:</label>
+                  <div id="current-loading-settings" class="settings-summary">
+                    <div class="setting-item">
+                      <span class="setting-label">テンプレート:</span>
+                      <span id="current-template" class="setting-value">デフォルト</span>
+                    </div>
+                    <div class="setting-item">
+                      <span class="setting-label">メッセージ:</span>
+                      <span id="current-message" class="setting-value">モデルを読み込んでいます...</span>
+                    </div>
+                    <div class="setting-item">
+                      <span class="setting-label">ロゴ:</span>
+                      <span id="current-logo" class="setting-value">なし</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- プレビューボタン -->
+                <div class="control-group">
+                  <button id="loading-preview-button" class="btn-primary" style="width: 100%;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    ローディング画面をプレビュー
+                  </button>
+                </div>
+                
+                <!-- 設定の説明 -->
+                <div class="control-group">
+                  <div class="info-box">
+                    <p style="font-size: 0.9rem; color: var(--color-text-secondary); margin: 0;">
+                      💡 ローディング画面の詳細設定は専用エディタで行います。<br>
+                      設定後、このプロジェクトに紐付けられます。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
 
   // --- DOM要素取得 (HTML生成後に行う) ---
   let modelFileInput = document.getElementById('model-file-input');
@@ -243,15 +323,28 @@ export function showEditor(container) {
   let shareButton = document.getElementById('share-button');
   let previewButton = document.getElementById('preview-button');
   let qrcodeButton = document.getElementById('qrcode-button');
+  let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
 
-  // デバッグ: DOM要素の取得状況をログ出力
-  console.log('DOM要素の取得状況:', {
+  // 基本DOM要素の取得状況をログ出力
+  console.log('基本DOM要素の取得状況:', {
     backButton: !!backButton,
     saveButton: !!saveButton,
     qrcodeButton: !!qrcodeButton,
     uploadArea: !!uploadArea,
-    fileListContainer: !!fileListContainer
+    fileListContainer: !!fileListContainer,
+    arViewerContainer: !!arViewerContainer
   });
+
+  // 重要な要素が見つからない場合の警告
+  if (!uploadArea) {
+    console.error('❌ 重要なDOM要素が見つかりません: model-upload-area');
+  }
+  if (!fileListContainer) {
+    console.error('❌ 重要なDOM要素が見つかりません: file-list');
+  }
+  if (!arViewerContainer) {
+    console.error('❌ 重要なDOM要素が見つかりません: ar-viewer');
+  }
   let scaleSlider = document.getElementById('scale-slider');
   let scaleValue = document.getElementById('scale-value');
   let scaleSizeLabel = document.getElementById('scale-size-label');
@@ -269,7 +362,6 @@ export function showEditor(container) {
   let translateButton = document.querySelector('button[data-mode="translate"]');
   let rotateButton = document.querySelector('button[data-mode="rotate"]');
   let scaleButton = document.querySelector('button[data-mode="scale"]');
-  let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
   
   // アニメーション制御用のDOM要素
   let animationControls = document.getElementById('animation-controls');
@@ -277,7 +369,32 @@ export function showEditor(container) {
   let stopAnimationButton = document.getElementById('stop-animation-button');
   let animationList = document.getElementById('animation-list');
   
-  // アニメーション要素は正常に取得されました
+  // ローディング設定用のDOM要素
+  let loadingEnabled = document.getElementById('loading-enabled');
+  let loadingTemplate = document.getElementById('loading-template');
+  let loadingMessage = document.getElementById('loading-message');
+  let loadingBgColor = document.getElementById('loading-bg-color');
+  let loadingBgColorText = document.getElementById('loading-bg-color-text');
+  let loadingTextColor = document.getElementById('loading-text-color');
+  let loadingTextColorText = document.getElementById('loading-text-color-text');
+  let loadingProgressColor = document.getElementById('loading-progress-color');
+  let loadingProgressColorText = document.getElementById('loading-progress-color-text');
+  let loadingLogoInput = document.getElementById('loading-logo-input');
+  let loadingLogoButton = document.getElementById('loading-logo-button');
+  let loadingLogoPreview = document.getElementById('loading-logo-preview');
+  let loadingLogoImg = document.getElementById('loading-logo-img');
+  let loadingLogoRemove = document.getElementById('loading-logo-remove');
+  let loadingShowProgress = document.getElementById('loading-show-progress');
+  let loadingPreviewButton = document.getElementById('loading-preview-button');
+  
+  // ローディング設定要素の取得状況をログ出力
+  console.log('ローディング設定要素の取得状況:', {
+    loadingEnabled: !!loadingEnabled,
+    loadingTemplate: !!loadingTemplate,
+    loadingMessage: !!loadingMessage,
+    loadingBgColor: !!loadingBgColor,
+    loadingPreviewButton: !!loadingPreviewButton
+  });
 
   // --- 状態管理変数 ---
   let totalFileSize = 0;
@@ -416,6 +533,11 @@ export function showEditor(container) {
         await loadExistingProject(projectId);
       }
 
+      // ローディング設定の表示を更新
+      setTimeout(() => {
+        updateLoadingSettingsDisplay();
+      }, 100);
+
       console.log('エディタの初期化が完了しました');
     } catch (error) {
       console.error('エディタの初期化に失敗しました:', error);
@@ -423,41 +545,22 @@ export function showEditor(container) {
     }
   }
 
-  // 既存プロジェクトの読み込み
+  // IndexedDB対応：既存プロジェクトの読み込み
   async function loadExistingProject(projectId) {
     try {
-      console.log('🔍 プロジェクト読み込み開始:', { projectId });
-      
-      console.log('🔄 IndexedDB対応プロジェクト読み込み開始:', projectId);
-      
-      // まず基本プロジェクトデータを取得
+      // 基本プロジェクトデータを取得
       const basicProject = getProject(projectId);
       if (!basicProject) {
         console.warn('❌ プロジェクトが見つかりません:', projectId);
-        
-        // デバッグ: 全プロジェクトを確認
-        const allProjects = getProjects();
-        console.log('📋 現在保存されているプロジェクト一覧:', allProjects.map(p => ({
-          id: p.id,
-          name: p.name,
-          modelCount: p.modelSettings?.length || 0,
-          hasMarker: !!p.markerImage
-        })));
         return;
       }
       
       // IndexedDB からモデルデータを読み込み
       let modelData = [];
       try {
-        console.log('🔄 IndexedDB からモデルデータ読み込み中...');
         modelData = await loadProjectModels(projectId);
-        console.log('✅ IndexedDB対応モデル読み込み完了:', {
-          modelCount: modelData.length,
-          restoredModels: modelData.filter(m => m.objectUrl).length
-        });
       } catch (loadError) {
         console.error('❌ IndexedDB モデル読み込みエラー:', loadError);
-        console.log('⚠️ モデルなしで継続します');
       }
       
       // プロジェクトデータにモデルデータを追加
@@ -465,57 +568,25 @@ export function showEditor(container) {
         ...basicProject,
         modelData: modelData
       };
-
-      console.log('✅ プロジェクトデータ読み込み成功:', {
-        id: project.id,
-        name: project.name,
-        type: project.type,
-        modelSettingsCount: project.modelSettings?.length || 0,
-        hasMarkerImage: !!project.markerImage,
-        markerImageType: typeof project.markerImage,
-        markerImageLength: project.markerImage?.length || 0
-      });
       
-      console.log('🔍 詳細なプロジェクトデータ:', project);
       
-      // デバッグログが出力されているかテスト
-      console.log('🔄 プロジェクトデータの復元を開始 - デバッグログテスト実行中');
-      console.log('🔄 プロジェクトデータの復元を開始:', project);
 
       // マーカー画像の復元（マーカーモードの場合）
       if (isMarkerMode) {
-        console.log('📱 マーカー画像の復元処理開始');
-        console.log('- project.markerImage存在:', !!project.markerImage);
-        console.log('- project.markerImage型:', typeof project.markerImage);
-        console.log('- project.markerImageサイズ:', project.markerImage?.length || 0);
-        
         let markerUrlToUse = null;
         
         if (project.markerImage && project.markerImage !== 'has_marker') {
           // プロジェクトに保存されたマーカー画像を使用
           markerUrlToUse = project.markerImage;
-          console.log('✅ プロジェクト保存のマーカー画像を使用');
-          
-          // Base64データかURLかを確認
-          if (project.markerImage.startsWith('data:')) {
-            console.log('- Base64マーカー画像を使用');
-          } else if (project.markerImage.startsWith('http') || project.markerImage.startsWith('/')) {
-            console.log('- URLマーカー画像を使用');
-          } else {
-            console.log('- 不明な形式のマーカー画像:', project.markerImage.substring(0, 50));
-          }
         } else {
           // 既存のlocalStorageからマーカー画像を取得
           const existingMarkerUrl = localStorage.getItem('markerImageUrl');
-          console.log('- 既存のマーカーURL:', existingMarkerUrl);
           
           if (existingMarkerUrl) {
             markerUrlToUse = existingMarkerUrl;
-            console.log('✅ localStorage保存のマーカー画像を使用');
           } else {
             // デフォルト画像を使用
             markerUrlToUse = '/assets/sample.png';
-            console.log('⚠️ デフォルトマーカー画像を使用');
           }
         }
         
@@ -523,11 +594,9 @@ export function showEditor(container) {
           try {
             if (markerThumbnail) {
               markerThumbnail.src = markerUrlToUse;
-              console.log('✅ マーカーサムネイル更新完了');
             }
             if (viewerInstance?.controls?.setMarkerTexture) {
               viewerInstance.controls.setMarkerTexture(markerUrlToUse);
-              console.log('✅ ARビューアーマーカー設定完了');
             }
           } catch (markerError) {
             console.error('❌ マーカー画像設定エラー:', markerError);
@@ -544,9 +613,6 @@ export function showEditor(container) {
       }
 
       // 3Dモデルの復元 - IndexedDB から読み込まれたモデルデータを復元
-      console.log('🎯 IndexedDB対応 3Dモデル復元処理開始');
-      console.log('- project.modelData:', project.modelData);
-      console.log('- 復元対象モデル数:', project.modelData?.length || 0);
       
       if (project.modelData && project.modelData.length > 0) {
         const emptyText = fileListContainer.querySelector('.empty-text');
@@ -562,24 +628,9 @@ export function showEditor(container) {
           const modelData = project.modelData[index];
           
           try {
-            console.log(`🔄 モデル${index}の復元開始 [IndexedDB版]:`, {
-              fileName: modelData.fileName,
-              fileSize: modelData.fileSize,
-              hasObjectUrl: !!modelData.objectUrl,
-              hasModelBlob: !!modelData.modelBlob,
-              modelId: modelData.modelId,
-              blobSize: modelData.modelBlob?.size
-            });
-            
             let modelIndex = null;
             
             if (modelData.objectUrl && modelData.modelBlob) {
-              console.log('✅ IndexedDB復元データを使用:', {
-                objectUrl: modelData.objectUrl.substring(0, 50) + '...',
-                fileName: modelData.fileName,
-                blobSize: modelData.modelBlob.size
-              });
-              
               try {
                 // ARビューアにモデルを読み込み
                 modelIndex = await viewerInstance.controls.loadNewModel(
@@ -587,7 +638,6 @@ export function showEditor(container) {
                   modelData.fileName,
                   modelData.fileSize
                 );
-                console.log('✅ IndexedDB モデル読み込み成功:', modelIndex);
                 
                 // ファイルリストにアイテムを追加
                 const fileItem = createFileListItem(
@@ -616,7 +666,6 @@ export function showEditor(container) {
                     if (viewerInstance?.controls?.setScale && modelData.transform.scale) {
                       viewerInstance.controls.setScale(modelData.transform.scale.x);
                     }
-                    console.log('✅ 変形設定適用:', modelData.transform);
                   }, 500);
                 }
                 
@@ -624,7 +673,6 @@ export function showEditor(container) {
                 totalFileSize += modelData.modelBlob.size;
                 
                 successCount++;
-                console.log(`✅ モデル "${modelData.fileName}" の復元完了`);
                 
               } catch (loadError) {
                 console.error('❌ IndexedDB モデル読み込み失敗:', loadError);
@@ -632,11 +680,7 @@ export function showEditor(container) {
               }
             } else {
               // モデルデータがない場合（エラー処理）
-              console.warn('⚠️ IndexedDB復元データが不完全:', {
-                hasObjectUrl: !!modelData.objectUrl,
-                hasModelBlob: !!modelData.modelBlob,
-                modelId: modelData.modelId
-              });
+              console.warn(`⚠️ モデル ${modelData.fileName} の復元データが不完全`);
               
               // 設定情報のみ表示
               const infoItem = createModelInfoItem(modelData, index);
@@ -671,15 +715,40 @@ export function showEditor(container) {
         if (errorCount > 0) {
           showNotification(`${errorCount}個のモデルは再アップロードが必要です`, 'info');
         }
-        
-        console.log('✅ IndexedDB対応モデル復元処理完了:', { successCount, errorCount, totalModels });
-      } else {
-        console.log('ℹ️ 保存されたモデル設定がありません');
       }
 
-      console.log('プロジェクトの読み込みが完了しました');
+      // ローディング設定をUIに反映
+      if (project.loadingScreen) {
+        loadLoadingSettingsToUI(project.loadingScreen);
+      }
     } catch (error) {
       console.error('プロジェクト読み込みエラー:', error);
+    }
+  }
+
+  // ローディング設定をUIに読み込む関数
+  function loadLoadingSettingsToUI(settings) {
+    try {
+      if (loadingEnabled) loadingEnabled.checked = settings.enabled ?? true;
+      if (loadingTemplate) loadingTemplate.value = settings.template ?? 'default';
+      if (loadingMessage) loadingMessage.value = settings.message ?? 'ARコンテンツを準備中...';
+      if (loadingBgColor) loadingBgColor.value = settings.backgroundColor ?? '#1a1a1a';
+      if (loadingBgColorText) loadingBgColorText.value = settings.backgroundColor ?? '#1a1a1a';
+      if (loadingTextColor) loadingTextColor.value = settings.textColor ?? '#ffffff';
+      if (loadingTextColorText) loadingTextColorText.value = settings.textColor ?? '#ffffff';
+      if (loadingProgressColor) loadingProgressColor.value = settings.progressColor ?? '#4CAF50';
+      if (loadingProgressColorText) loadingProgressColorText.value = settings.progressColor ?? '#4CAF50';
+      if (loadingShowProgress) loadingShowProgress.checked = settings.showProgress ?? true;
+      
+      // ロゴ画像の復元
+      if (settings.logoImage && loadingLogoImg && loadingLogoPreview) {
+        loadingLogoImg.src = settings.logoImage;
+        loadingLogoPreview.style.display = 'block';
+      }
+      
+      console.log('✅ ローディング設定をUIに復元しました');
+    } catch (error) {
+      console.error('❌ ローディング設定の復元エラー:', error);
     }
   }
 
@@ -736,9 +805,50 @@ export function showEditor(container) {
     fileInput.click();
   }
 
+  // タブ切り替え機能の設定
+  function setupTabSwitching() {
+    console.log('🔧 タブ切り替え機能を設定中...');
+    
+    const tabButtons = document.querySelectorAll('.panel-tab');
+    const tabContents = document.querySelectorAll('.panel-content');
+    
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.getAttribute('data-tab');
+        
+        // すべてのタブボタンからアクティブクラスを削除
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // すべてのタブコンテンツを非表示
+        tabContents.forEach(content => {
+          content.classList.remove('active');
+          content.style.display = 'none';
+        });
+        
+        // クリックされたタブをアクティブに
+        button.classList.add('active');
+        
+        // 対応するコンテンツを表示
+        const targetContent = document.getElementById(`${targetTab}-panel`);
+        if (targetContent) {
+          targetContent.classList.add('active');
+          targetContent.style.display = 'block';
+          console.log(`✅ タブ "${targetTab}" に切り替えました`);
+        } else {
+          console.warn(`⚠️ タブコンテンツ "${targetTab}-panel" が見つかりません`);
+        }
+      });
+    });
+    
+    console.log('✅ タブ切り替え機能の設定が完了しました');
+  }
+
   // イベントリスナーのセットアップを関数にまとめる
   function setupEventListeners() {
     console.log('イベントリスナーの設定を開始...');
+    
+    // タブ切り替え機能
+    setupTabSwitching();
     
     // イベント委譲を使用した戻るボタンの設定（フォールバック）
     container.addEventListener('click', async (event) => {
@@ -902,9 +1012,267 @@ export function showEditor(container) {
     if (stopAnimationButton) {
       stopAnimationButton.addEventListener('click', handleStopAnimation);
     }
+    
+    // ローディング設定のイベントリスナー
   }
 
   // --- 関数定義 ---
+
+
+  // ローディング設定のイベントリスナー設定
+  function setupLoadingSettingsEventListeners() {
+    console.log('🔧 ローディング設定イベントリスナーを設定中...');
+    
+    // ローディング画面の有効/無効切り替え
+    const loadingEnabled = document.getElementById('loading-enabled');
+    if (loadingEnabled) {
+      loadingEnabled.addEventListener('change', () => {
+        markAsChanged();
+        updateLoadingSettingsDisplay();
+      });
+    }
+
+    // ローディング画面エディタを開くボタン
+    const openLoadingEditor = document.getElementById('open-loading-editor');
+    if (openLoadingEditor) {
+      openLoadingEditor.addEventListener('click', () => {
+        // 現在のプロジェクトIDを取得
+        const currentProjectId = getCurrentProjectId();
+        if (currentProjectId) {
+          // ローディング画面エディタにプロジェクトIDを渡して開く
+          window.location.hash = `#/loading-screen?project=${currentProjectId}`;
+        } else {
+          // プロジェクトIDがない場合は通常のローディング画面エディタを開く
+          window.location.hash = '#/loading-screen';
+        }
+      });
+    }
+
+    // プレビューボタン
+    const loadingPreviewButton = document.getElementById('loading-preview-button');
+    if (loadingPreviewButton) {
+      loadingPreviewButton.addEventListener('click', showLoadingPreview);
+    }
+
+    console.log('✅ ローディング設定イベントリスナーの設定が完了しました');
+  }
+
+  // 現在のプロジェクトIDを取得する関数
+  function getCurrentProjectId() {
+    // URLからプロジェクトIDを取得
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('project') || localStorage.getItem('currentProjectId');
+  }
+
+  // ローディング設定の表示を更新する関数
+  function updateLoadingSettingsDisplay() {
+    console.log('🔄 ローディング設定の表示を更新中...');
+    
+    const currentTemplate = document.getElementById('current-template');
+    const currentMessage = document.getElementById('current-message');
+    const currentLogo = document.getElementById('current-logo');
+    const loadingEnabled = document.getElementById('loading-enabled');
+    
+    // 現在のプロジェクトIDを取得
+    const projectId = getCurrentProjectId();
+    
+    if (projectId) {
+      // プロジェクト固有のローディング設定を取得
+      fetch(`/api/projects/${projectId}/loading-settings`)
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          } else {
+            // プロジェクト固有の設定がない場合はデフォルト設定を使用
+            return getDefaultLoadingSettings();
+          }
+        })
+        .then(settings => {
+          // 設定を表示に反映
+          if (currentTemplate) {
+            currentTemplate.textContent = getTemplateDisplayName(settings.template || 'default');
+          }
+          if (currentMessage) {
+            currentMessage.textContent = settings.message || 'モデルを読み込んでいます...';
+          }
+          if (currentLogo) {
+            currentLogo.textContent = settings.logoImage ? 'あり' : 'なし';
+          }
+          if (loadingEnabled) {
+            loadingEnabled.checked = settings.enabled !== false;
+          }
+          
+          console.log('✅ ローディング設定の表示を更新しました');
+        })
+        .catch(error => {
+          console.error('❌ ローディング設定の取得に失敗しました:', error);
+          // エラーの場合はデフォルト設定を表示
+          updateLoadingSettingsDisplayWithDefaults();
+        });
+    } else {
+      // プロジェクトIDがない場合はデフォルト設定を表示
+      updateLoadingSettingsDisplayWithDefaults();
+    }
+  }
+
+  // デフォルト設定で表示を更新する関数
+  function updateLoadingSettingsDisplayWithDefaults() {
+    const currentTemplate = document.getElementById('current-template');
+    const currentMessage = document.getElementById('current-message');
+    const currentLogo = document.getElementById('current-logo');
+    const loadingEnabled = document.getElementById('loading-enabled');
+    
+    if (currentTemplate) currentTemplate.textContent = 'デフォルト';
+    if (currentMessage) currentMessage.textContent = 'モデルを読み込んでいます...';
+    if (currentLogo) currentLogo.textContent = 'なし';
+    if (loadingEnabled) loadingEnabled.checked = true;
+  }
+
+  // テンプレート名を表示用に変換する関数
+  function getTemplateDisplayName(template) {
+    const templateNames = {
+      'default': 'デフォルト',
+      'minimal': 'ミニマル',
+      'modern': 'モダン'
+    };
+    return templateNames[template] || 'デフォルト';
+  }
+
+  // デフォルトのローディング設定を取得する関数
+  function getDefaultLoadingSettings() {
+    return {
+      enabled: true,
+      template: 'default',
+      message: 'モデルを読み込んでいます...',
+      backgroundColor: '#1a1a1a',
+      textColor: '#ffffff',
+      progressColor: '#4CAF50',
+      showProgress: true,
+      logoImage: null
+    };
+  }
+
+  // ローディング設定関連のDOM要素を削除する関数
+  function cleanupLoadingSettingsElements() {
+    console.log('🧹 ローディング設定関連のDOM要素を削除中...');
+    
+    // ローディング設定関連の要素を削除
+    const loadingElements = [
+      'loading-enabled',
+      'loading-template',
+      'loading-message',
+      'loading-bg-color',
+      'loading-bg-color-text',
+      'loading-text-color',
+      'loading-text-color-text',
+      'loading-progress-color',
+      'loading-progress-color-text',
+      'loading-logo-input',
+      'loading-logo-button',
+      'loading-logo-preview',
+      'loading-logo-img',
+      'loading-logo-remove',
+      'loading-show-progress',
+      'loading-preview-button'
+    ];
+
+    loadingElements.forEach(id => {
+      const element = document.getElementById(id);
+      if (element) {
+        // イベントリスナーを削除
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+        console.log(`✅ ${id} のイベントリスナーを削除しました`);
+      }
+    });
+
+    // ローディング設定タブの削除
+    const loadingSettingsTab = document.querySelector('[data-tab="loading-settings"]');
+    if (loadingSettingsTab) {
+      loadingSettingsTab.remove();
+      console.log('✅ ローディング設定タブを削除しました');
+    }
+
+    // ローディング設定パネルの削除
+    const loadingSettingsPanel = document.querySelector('#loading-settings-panel');
+    if (loadingSettingsPanel) {
+      loadingSettingsPanel.remove();
+      console.log('✅ ローディング設定パネルを削除しました');
+    }
+
+    // タブナビゲーションが空になった場合の処理
+    const panelTabs = document.querySelector('.panel-tabs');
+    if (panelTabs && panelTabs.children.length === 0) {
+      panelTabs.remove();
+      console.log('✅ 空になったタブナビゲーションを削除しました');
+    }
+
+    console.log('✅ ローディング設定関連のDOM要素の削除が完了しました');
+  }
+
+  // ローディング設定のイベントリスナーを削除する関数
+  function removeLoadingSettingsEventListeners() {
+    console.log('🔧 ローディング設定イベントリスナーを削除中...');
+    
+    // カラーピッカーとテキスト入力の同期イベントを削除
+    if (loadingBgColor && loadingBgColorText) {
+      const newBgColor = loadingBgColor.cloneNode(true);
+      const newBgColorText = loadingBgColorText.cloneNode(true);
+      loadingBgColor.parentNode.replaceChild(newBgColor, loadingBgColor);
+      loadingBgColorText.parentNode.replaceChild(newBgColorText, loadingBgColorText);
+      console.log('✅ 背景色の同期イベントを削除しました');
+    }
+
+    if (loadingTextColor && loadingTextColorText) {
+      const newTextColor = loadingTextColor.cloneNode(true);
+      const newTextColorText = loadingTextColorText.cloneNode(true);
+      loadingTextColor.parentNode.replaceChild(newTextColor, loadingTextColor);
+      loadingTextColorText.parentNode.replaceChild(newTextColorText, loadingTextColorText);
+      console.log('✅ テキスト色の同期イベントを削除しました');
+    }
+
+    if (loadingProgressColor && loadingProgressColorText) {
+      const newProgressColor = loadingProgressColor.cloneNode(true);
+      const newProgressColorText = loadingProgressColorText.cloneNode(true);
+      loadingProgressColor.parentNode.replaceChild(newProgressColor, loadingProgressColor);
+      loadingProgressColorText.parentNode.replaceChild(newProgressColorText, loadingProgressColorText);
+      console.log('✅ プログレス色の同期イベントを削除しました');
+    }
+
+    // その他の設定の変更監視イベントを削除
+    [loadingEnabled, loadingTemplate, loadingMessage, loadingShowProgress].forEach(element => {
+      if (element) {
+        const newElement = element.cloneNode(true);
+        element.parentNode.replaceChild(newElement, element);
+        console.log(`✅ ${element.id} のイベントリスナーを削除しました`);
+      }
+    });
+
+    // ロゴ画像関連のイベントリスナーを削除
+    if (loadingLogoButton && loadingLogoInput) {
+      const newLogoButton = loadingLogoButton.cloneNode(true);
+      const newLogoInput = loadingLogoInput.cloneNode(true);
+      loadingLogoButton.parentNode.replaceChild(newLogoButton, loadingLogoButton);
+      loadingLogoInput.parentNode.replaceChild(newLogoInput, loadingLogoInput);
+      console.log('✅ ロゴ画像関連のイベントリスナーを削除しました');
+    }
+
+    // ロゴ画像削除ボタンのイベントリスナーを削除
+    if (loadingLogoRemove) {
+      const newLogoRemove = loadingLogoRemove.cloneNode(true);
+      loadingLogoRemove.parentNode.replaceChild(newLogoRemove, loadingLogoRemove);
+      console.log('✅ ロゴ画像削除ボタンのイベントリスナーを削除しました');
+    }
+
+    // プレビューボタンのイベントリスナーを削除
+    if (loadingPreviewButton) {
+      const newPreviewButton = loadingPreviewButton.cloneNode(true);
+      loadingPreviewButton.parentNode.replaceChild(newPreviewButton, loadingPreviewButton);
+      console.log('✅ プレビューボタンのイベントリスナーを削除しました');
+    }
+
+    console.log('✅ ローディング設定イベントリスナーの削除が完了しました');
+  }
 
   // 合計ファイルサイズ表示更新
   function updateTotalFileSizeDisplay() {
@@ -1522,6 +1890,35 @@ export function showEditor(container) {
       scaleValue.textContent = '1.0';
       updateRealSizeDisplay(1);
     }
+
+    // ローディング設定のクリーンアップ
+    console.log('🧹 UIリセット時にローディング設定をクリーンアップ中...');
+    
+    // ローディング設定のイベントリスナーを削除
+    removeLoadingSettingsEventListeners();
+    
+    // ローディング設定関連のDOM要素を削除
+    cleanupLoadingSettingsElements();
+    
+    // ローディング設定の変数をリセット
+    loadingEnabled = null;
+    loadingTemplate = null;
+    loadingMessage = null;
+    loadingBgColor = null;
+    loadingBgColorText = null;
+    loadingTextColor = null;
+    loadingTextColorText = null;
+    loadingProgressColor = null;
+    loadingProgressColorText = null;
+    loadingLogoInput = null;
+    loadingLogoButton = null;
+    loadingLogoPreview = null;
+    loadingLogoImg = null;
+    loadingLogoRemove = null;
+    loadingShowProgress = null;
+    loadingPreviewButton = null;
+    
+    console.log('✅ UIリセット時のローディング設定クリーンアップが完了しました');
   }
 
   // 通知表示関数
@@ -1690,6 +2087,101 @@ export function showEditor(container) {
     }
   };
 
+  // ローディング画面のロゴアップロード処理
+  const handleLoadingLogoUpload = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // ファイルサイズチェック (2MB制限)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+      alert('ロゴ画像のサイズは2MB以下にしてください。');
+      return;
+    }
+
+    // 画像ファイルかチェック
+    if (!file.type.startsWith('image/')) {
+      alert('画像ファイルを選択してください。');
+      return;
+    }
+
+    // Base64に変換
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64Data = e.target.result;
+      
+      // プレビュー表示
+      if (loadingLogoImg && loadingLogoPreview) {
+        loadingLogoImg.src = base64Data;
+        loadingLogoPreview.style.display = 'block';
+      }
+      
+      markAsChanged();
+      console.log('ローディングロゴをアップロードしました:', file.name);
+    };
+    
+    reader.onerror = () => {
+      alert('画像の読み込みに失敗しました。');
+    };
+    
+    reader.readAsDataURL(file);
+  };
+
+  // ローディング画面のプレビュー機能
+  const showLoadingPreview = () => {
+    if (!viewerInstance?.controls) {
+      alert('ARビューアが初期化されていません。');
+      return;
+    }
+
+    // 現在の設定を取得
+    const settings = getCurrentLoadingSettings();
+    
+    // プレビュー用のローディング画面を表示
+    const previewId = viewerInstance.controls.showLoadingScreen();
+    
+    // 設定を適用（スタイルを動的に変更）
+    setTimeout(() => {
+      const loadingElement = document.getElementById(previewId);
+      if (loadingElement) {
+        loadingElement.style.backgroundColor = settings.backgroundColor;
+        loadingElement.style.color = settings.textColor;
+        
+        const messageElement = loadingElement.querySelector('.loading-message');
+        if (messageElement) {
+          messageElement.textContent = settings.message;
+        }
+        
+        const progressBar = loadingElement.querySelector('.progress-bar');
+        if (progressBar) {
+          progressBar.style.backgroundColor = settings.progressColor;
+          progressBar.style.display = settings.showProgress ? 'block' : 'none';
+        }
+        
+        // 3秒後に自動で閉じる
+        setTimeout(() => {
+          viewerInstance.controls.hideLoadingScreen(previewId);
+        }, 3000);
+      }
+    }, 100);
+    
+    console.log('ローディング画面をプレビュー表示しました');
+  };
+
+  // 現在のローディング設定を取得
+  const getCurrentLoadingSettings = () => {
+    return {
+      enabled: loadingEnabled?.checked ?? true,
+      template: loadingTemplate?.value ?? 'default',
+      backgroundColor: loadingBgColor?.value ?? '#1a1a1a',
+      textColor: loadingTextColor?.value ?? '#ffffff',
+      progressColor: loadingProgressColor?.value ?? '#4CAF50',
+      logoImage: loadingLogoImg?.src && loadingLogoImg.src.startsWith('data:') ? loadingLogoImg.src : null,
+      message: loadingMessage?.value ?? 'ARコンテンツを準備中...',
+      showProgress: loadingShowProgress?.checked ?? true
+    };
+  };
+
   const handleQRCodeButtonClick = () => {
     showQRCodeModal({
       modelName: 'current-project'
@@ -1698,15 +2190,11 @@ export function showEditor(container) {
 
   // IndexedDB対応プロジェクト保存処理
   const handleSaveProject = () => {
-    console.log('🔥🔥🔥 IndexedDB対応プロジェクト保存処理開始 [v4.0] 🔥🔥🔥');
-    
     return new Promise(async (resolve, reject) => {
       // URLパラメータから現在のプロジェクトIDを取得
       const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
       const currentProjectId = urlParams.get('id');
       const isEdit = !!currentProjectId;
-      
-      console.log('🔥 保存処理パラメータ:', { currentProjectId, isEdit, arType, isMarkerMode });
       
       // 既存プロジェクトの場合は現在の情報を取得
       let currentProject = null;
@@ -1742,7 +2230,9 @@ export function showEditor(container) {
           name: projectData.name,
           description: projectData.description,
           type: arType,
-          markerImage: markerImageData
+          markerImage: markerImageData,
+          // ローディング設定を保存（現在のUI設定を反映）
+          loadingScreen: getCurrentLoadingSettings()
         };
         console.log('🔍 保存データ詳細:', {
           id: saveData.id,
@@ -1753,51 +2243,13 @@ export function showEditor(container) {
         });
 
         // プロジェクトを保存
-        console.log('saveProject関数を呼び出し中...');
-        console.log('- 保存データ:', saveData);
-        console.log('- viewerInstance存在:', !!viewerInstance);
-        console.log('- viewerInstance.controls存在:', !!viewerInstance?.controls);
-        
-        // モデルデータの確認
-        if (viewerInstance?.controls?.getAllModels) {
-          const allModels = viewerInstance.controls.getAllModels();
-          console.log('🔥🔥🔥 保存前のモデルデータ確認 [v3.0] 🔥🔥🔥');
-          console.log('- getAllModels()戻り値:', allModels);
-          console.log('- モデル数:', allModels.length);
-          
-          if (allModels.length === 0) {
-            console.warn('⚠️ モデルが見つかりません - アップロードされたモデルがない可能性');
-          } else {
-            console.log('🔍 各モデルの詳細:');
-            allModels.forEach((model, index) => {
-              console.log(`  モデル${index}:`, {
-                fileName: model.fileName,
-                fileSize: model.fileSize,
-                hasModelData: !!model.modelData,
-                hasModelUrl: !!model.modelUrl,
-                modelDataType: typeof model.modelData,
-                modelDataSize: model.modelData?.length || 0,
-                modelUrlType: typeof model.modelUrl,
-                position: model.position,
-                rotation: model.rotation,
-                scale: model.scale
-              });
-            });
-          }
-        } else {
-          console.error('❌ viewerInstance.controls.getAllModels が利用できません');
-          console.log('- viewerInstance:', !!viewerInstance);
-          console.log('- viewerInstance.controls:', !!viewerInstance?.controls);
-        }
         
         let savedProject;
         try {
-          console.log('🔄 IndexedDB対応 saveProject 呼び出し開始...');
           savedProject = await saveProject(saveData, viewerInstance);
-          console.log('✅ IndexedDB対応 保存完了:', savedProject);
         } catch (saveError) {
-          console.error('❌ IndexedDB対応 saveProject内でエラー:', saveError);
-          throw saveError; // 外側のcatchに再スロー
+          console.error('❌ プロジェクト保存エラー:', saveError);
+          throw saveError;
         }
         
         // 保存成功の通知
@@ -2027,6 +2479,35 @@ export function showEditor(container) {
     rotateButton = null;
     scaleButton = null;
     arViewerContainer = null;
+
+    // ローディング設定のクリーンアップ
+    console.log("🧹 ローディング設定のクリーンアップを実行中...");
+    
+    // ローディング設定のイベントリスナーを削除
+    removeLoadingSettingsEventListeners();
+    
+    // ローディング設定関連のDOM要素を削除
+    cleanupLoadingSettingsElements();
+    
+    // ローディング設定の変数をクリア
+    loadingEnabled = null;
+    loadingTemplate = null;
+    loadingMessage = null;
+    loadingBgColor = null;
+    loadingBgColorText = null;
+    loadingTextColor = null;
+    loadingTextColorText = null;
+    loadingProgressColor = null;
+    loadingProgressColorText = null;
+    loadingLogoInput = null;
+    loadingLogoButton = null;
+    loadingLogoPreview = null;
+    loadingLogoImg = null;
+    loadingLogoRemove = null;
+    loadingShowProgress = null;
+    loadingPreviewButton = null;
+    
+    console.log("✅ ローディング設定のクリーンアップが完了しました");
 
     console.log("エディタービューのクリーンアップが完了しました。");
   };
