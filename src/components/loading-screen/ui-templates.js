@@ -387,6 +387,46 @@ export function createMainEditorTemplate() {
       </div>
       
       <div class="loading-screen-editor__container">
+        <!-- 左サイドバー：テンプレート一覧 -->
+        <div class="loading-screen-editor__sidebar">
+          <div class="loading-screen-editor__sidebar-header">
+            <h2>テンプレート</h2>
+          </div>
+          
+          <div class="loading-screen-editor__template-list">
+            <!-- 新規作成ボタン -->
+            <div class="loading-screen-editor__template-item loading-screen-editor__template-item--new" id="new-template-btn">
+              <div class="loading-screen-editor__template-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </div>
+              <div class="loading-screen-editor__template-info">
+                <div class="loading-screen-editor__template-name">新規作成</div>
+              </div>
+            </div>
+            
+            <!-- デフォルトテンプレート -->
+            <div class="loading-screen-editor__template-item loading-screen-editor__template-item--active" data-template-id="default">
+              <div class="loading-screen-editor__template-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                </svg>
+              </div>
+              <div class="loading-screen-editor__template-info">
+                <div class="loading-screen-editor__template-name">デフォルト</div>
+                <div class="loading-screen-editor__template-desc">標準テンプレート</div>
+              </div>
+            </div>
+            
+            <!-- 保存されたテンプレート一覧がここに動的に追加される -->
+            <div id="saved-templates-list">
+              <!-- JavaScript で動的に追加 -->
+            </div>
+          </div>
+        </div>
+
         <!-- 設定パネル -->
         <div class="loading-screen-editor__settings-panel">
           <!-- メインタブ -->

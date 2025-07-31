@@ -12,7 +12,8 @@ import {
   setupFileDropzones, 
   initializeSliders, 
   setupButtons,
-  setupLogoTypeHandlers
+  setupLogoTypeHandlers,
+  setupTemplateSidebar
 } from '../components/loading-screen/event-handlers.js';
 import { updatePreview, adjustPreviewScroll } from '../components/loading-screen/preview.js';
 
@@ -34,11 +35,39 @@ export default function showLoadingScreenEditor(container) {
     console.log('ローディング画面エディタを初期化中...');
 
     // メインテンプレートを作成してDOMに追加
+    const templateHTML = createMainEditorTemplate();
+    console.log('HTMLテンプレート生成完了:', templateHTML.length, '文字');
+    
     const editorContainer = document.createElement('div');
-    editorContainer.innerHTML = createMainEditorTemplate();
+    editorContainer.innerHTML = templateHTML;
     container.appendChild(editorContainer);
     
     console.log('エディタのDOM構造を追加しました');
+    
+    // DOMに追加されたかチェック
+    setTimeout(() => {
+      const addedEditor = document.querySelector('.loading-screen-editor');
+      const addedSidebar = document.querySelector('.loading-screen-editor__sidebar');
+      const addedPreview = document.querySelector('.loading-screen-editor__preview-panel');
+      
+      console.log('DOM追加確認:', {
+        editor: !!addedEditor,
+        sidebar: !!addedSidebar,
+        preview: !!addedPreview,
+        containerChildren: container.children.length,
+        containerHTML: container.innerHTML.substring(0, 200) + '...'
+      });
+      
+      // DOM構造をさらに詳しく調査
+      if (addedEditor) {
+        console.log('エディタ要素のクラス:', addedEditor.className);
+        const containerEl = addedEditor.querySelector('.loading-screen-editor__container');
+        if (containerEl) {
+          console.log('コンテナの子要素数:', containerEl.children.length);
+          console.log('コンテナの子要素:', Array.from(containerEl.children).map(el => el.className));
+        }
+      }
+    }, 10);
 
     // DOM要素が確実に存在する状態でイベントリスナーを設定
     setTimeout(() => {
@@ -53,6 +82,7 @@ export default function showLoadingScreenEditor(container) {
         initializeSliders();
         setupButtons();
         setupLogoTypeHandlers();
+        setupTemplateSidebar();
         
         console.log('全てのイベントリスナーを設定しました');
 
@@ -176,7 +206,7 @@ export default function showLoadingScreenEditor(container) {
     });
 
     const editor = document.querySelector('.loading-screen-editor');
-    const preview = document.querySelector('.loading-screen-editor__preview');
+    const preview = document.querySelector('.loading-screen-editor__preview-panel');
     const sidebar = document.querySelector('.loading-screen-editor__sidebar');
 
     if (!editor || !preview || !sidebar) {

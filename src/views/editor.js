@@ -369,32 +369,6 @@ export function showEditor(container) {
   let stopAnimationButton = document.getElementById('stop-animation-button');
   let animationList = document.getElementById('animation-list');
   
-  // ローディング設定用のDOM要素
-  let loadingEnabled = document.getElementById('loading-enabled');
-  let loadingTemplate = document.getElementById('loading-template');
-  let loadingMessage = document.getElementById('loading-message');
-  let loadingBgColor = document.getElementById('loading-bg-color');
-  let loadingBgColorText = document.getElementById('loading-bg-color-text');
-  let loadingTextColor = document.getElementById('loading-text-color');
-  let loadingTextColorText = document.getElementById('loading-text-color-text');
-  let loadingProgressColor = document.getElementById('loading-progress-color');
-  let loadingProgressColorText = document.getElementById('loading-progress-color-text');
-  let loadingLogoInput = document.getElementById('loading-logo-input');
-  let loadingLogoButton = document.getElementById('loading-logo-button');
-  let loadingLogoPreview = document.getElementById('loading-logo-preview');
-  let loadingLogoImg = document.getElementById('loading-logo-img');
-  let loadingLogoRemove = document.getElementById('loading-logo-remove');
-  let loadingShowProgress = document.getElementById('loading-show-progress');
-  let loadingPreviewButton = document.getElementById('loading-preview-button');
-  
-  // ローディング設定要素の取得状況をログ出力
-  console.log('ローディング設定要素の取得状況:', {
-    loadingEnabled: !!loadingEnabled,
-    loadingTemplate: !!loadingTemplate,
-    loadingMessage: !!loadingMessage,
-    loadingBgColor: !!loadingBgColor,
-    loadingPreviewButton: !!loadingPreviewButton
-  });
 
   // --- 状態管理変数 ---
   let totalFileSize = 0;
@@ -1019,43 +993,6 @@ export function showEditor(container) {
   // --- 関数定義 ---
 
 
-  // ローディング設定のイベントリスナー設定
-  function setupLoadingSettingsEventListeners() {
-    console.log('🔧 ローディング設定イベントリスナーを設定中...');
-    
-    // ローディング画面の有効/無効切り替え
-    const loadingEnabled = document.getElementById('loading-enabled');
-    if (loadingEnabled) {
-      loadingEnabled.addEventListener('change', () => {
-        markAsChanged();
-        updateLoadingSettingsDisplay();
-      });
-    }
-
-    // ローディング画面エディタを開くボタン
-    const openLoadingEditor = document.getElementById('open-loading-editor');
-    if (openLoadingEditor) {
-      openLoadingEditor.addEventListener('click', () => {
-        // 現在のプロジェクトIDを取得
-        const currentProjectId = getCurrentProjectId();
-        if (currentProjectId) {
-          // ローディング画面エディタにプロジェクトIDを渡して開く
-          window.location.hash = `#/loading-screen?project=${currentProjectId}`;
-        } else {
-          // プロジェクトIDがない場合は通常のローディング画面エディタを開く
-          window.location.hash = '#/loading-screen';
-        }
-      });
-    }
-
-    // プレビューボタン
-    const loadingPreviewButton = document.getElementById('loading-preview-button');
-    if (loadingPreviewButton) {
-      loadingPreviewButton.addEventListener('click', showLoadingPreview);
-    }
-
-    console.log('✅ ローディング設定イベントリスナーの設定が完了しました');
-  }
 
   // 現在のプロジェクトIDを取得する関数
   function getCurrentProjectId() {

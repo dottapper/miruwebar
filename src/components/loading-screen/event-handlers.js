@@ -4,6 +4,14 @@
 
 import { settingsAPI, validateAndFixColor } from './settings.js';
 import { updatePreview } from './preview.js';
+import { 
+  getAllTemplates, 
+  getTemplate, 
+  saveTemplate, 
+  deleteTemplate, 
+  duplicateTemplate,
+  generateTemplateListHTML 
+} from './template-manager.js';
 
 // タブ名を画面タイプに変換する関数
 function convertTabNameToScreenType(tabName) {
@@ -487,6 +495,234 @@ export function setupLogoTypeHandlers() {
       updatePreview(currentScreenType);
     });
   });
+}
+
+// テンプレートサイドバーの設定
+export function setupTemplateSidebar() {
+  console.log('テンプレートサイドバーの設定を開始...');
+  
+  // テンプレート一覧を読み込み
+  loadTemplateList();
+  
+  // 新規作成ボタン
+  const newTemplateBtn = document.getElementById('new-template-btn');
+  if (newTemplateBtn) {
+    newTemplateBtn.addEventListener('click', () => {
+      const templateName = prompt('新しいテンプレート名を入力してください:');
+      if (templateName && templateName.trim()) {
+        createNewTemplate(templateName.trim());
+      }
+    });
+  }
+}
+
+// テンプレート一覧を読み込み
+function loadTemplateList() {
+  const templateListContainer = document.getElementById('saved-templates-list');
+  if (!templateListContainer) {
+    console.warn('テンプレート一覧コンテナが見つかりません');
+    return;
+  }
+  
+  try {
+    const currentTemplateId = getCurrentActiveTemplateId();
+    const templateListHTML = generateTemplateListHTML(currentTemplateId);
+    templateListContainer.innerHTML = templateListHTML;
+    
+    // テンプレートアイテムのイベントリスナーを設定
+    setupTemplateItemHandlers();
+    
+    console.log('テンプレート一覧を読み込みました');
+  } catch (error) {
+    console.error('テンプレート一覧の読み込みに失敗しました:', error);
+  }
+}
+
+// テンプレートアイテムのイベントハンドラー設定
+function setupTemplateItemHandlers() {
+  const templateItems = document.querySelectorAll('.loading-screen-editor__template-item[data-template-id]');
+  
+  templateItems.forEach(item => {
+    const templateId = item.dataset.templateId;
+    
+    // クリックでテンプレートを選択
+    item.addEventListener('click', () => {
+      selectTemplate(templateId);
+    });
+    
+    // 右クリックでコンテキストメニュー（将来的に実装）
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      // TODO: コンテキストメニュー（複製、削除など）を表示
+      console.log('テンプレート右クリック:', templateId);
+    });
+  });
+}
+
+// テンプレートを選択
+function selectTemplate(templateId) {
+  try {
+    const template = getTemplate(templateId);
+    if (!template) {
+      console.error('テンプレートが見つかりません:', templateId);
+      return;
+    }
+    
+    // 現在の設定をテンプレートの設定で上書き
+    if (template.settings) {
+      loadTemplateSettings(template.settings);
+    }
+    
+    // アクティブなテンプレートを更新
+    updateActiveTemplate(templateId);
+    
+    // プレビューを更新
+    const currentScreenType = getCurrentActiveScreenType();
+    updatePreview(currentScreenType);
+    
+    console.log('テンプレートを選択しました:', template.name);
+  } catch (error) {
+    console.error('テンプレート選択に失敗しました:', error);
+  }
+}
+
+// テンプレート設定をフォームに読み込み
+function loadTemplateSettings(settings) {
+  try {
+    // 各画面タイプの設定を読み込み
+    ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
+      const screenSettings = settings[screenType];
+      if (!screenSettings) return;
+      
+      // 各プロパティをフォーム要素に設定
+      Object.entries(screenSettings).forEach(([key, value]) => {
+        const inputId = `${screenType}-${key}`;
+        const input = document.getElementById(inputId);
+        
+        if (input) {
+          if (input.type === 'color') {
+            input.value = value || '';
+            // カラーテキスト入力も更新
+            const textInput = document.getElementById(`${inputId}Text`);
+            if (textInput) {
+              textInput.value = value || '';
+            }
+          } else if (input.type === 'range') {
+            input.value = value || input.min;
+            // スライダーの値表示も更新
+            const valueDisplay = input.parentElement.querySelector('.loading-screen-editor__value-display');
+            if (valueDisplay) {
+              const unit = input.id.includes('Position') ? '%' : 'x';
+              valueDisplay.textContent = value + unit;
+            }
+          } else {
+            input.value = value || '';
+          }
+        }
+      });
+    });
+    
+    // ロゴタイプラジオボタンの設定
+    if (settings.loadingScreen && settings.loadingScreen.logoType) {
+      const logoTypeRadio = document.querySelector(`input[name="loadingLogoType"][value="${settings.loadingScreen.logoType}"]`);
+      if (logoTypeRadio) {
+        logoTypeRadio.checked = true;
+        
+        // UI表示の更新
+        const customLogoSection = document.getElementById('loading-custom-logo-section');
+        const logoControls = document.getElementById('loading-logo-controls');
+        const logoSizeControls = document.getElementById('loading-logo-size-controls');
+        
+        const logoType = settings.loadingScreen.logoType;
+        if (customLogoSection) {
+          customLogoSection.style.display = logoType === 'custom' ? 'block' : 'none';
+        }
+        if (logoControls) {
+          logoControls.style.display = logoType !== 'none' ? 'block' : 'none';
+        }
+        if (logoSizeControls) {
+          logoSizeControls.style.display = logoType !== 'none' ? 'block' : 'none';
+        }
+      }
+    }
+  } catch (error) {
+    console.error('テンプレート設定の読み込みに失敗しました:', error);
+  }
+}
+
+// アクティブなテンプレートを更新
+function updateActiveTemplate(templateId) {
+  // 全てのテンプレートアイテムからアクティブクラスを削除
+  document.querySelectorAll('.loading-screen-editor__template-item').forEach(item => {
+    item.classList.remove('loading-screen-editor__template-item--active');
+  });
+  
+  // 選択されたテンプレートにアクティブクラスを追加
+  const selectedItem = document.querySelector(`.loading-screen-editor__template-item[data-template-id="${templateId}"]`);
+  if (selectedItem) {
+    selectedItem.classList.add('loading-screen-editor__template-item--active');
+  }
+  
+  // 現在のテンプレートIDをストレージに保存（オプション）
+  try {
+    sessionStorage.setItem('miruwebAR_current_template', templateId);
+  } catch (error) {
+    console.warn('現在のテンプレートID保存に失敗:', error);
+  }
+}
+
+// 現在のアクティブテンプレートIDを取得
+function getCurrentActiveTemplateId() {
+  try {
+    // セッションストレージから取得を試みる
+    const stored = sessionStorage.getItem('miruwebAR_current_template');
+    if (stored) {
+      return stored;
+    }
+    
+    // アクティブなDOM要素から取得を試みる
+    const activeItem = document.querySelector('.loading-screen-editor__template-item--active');
+    if (activeItem && activeItem.dataset.templateId) {
+      return activeItem.dataset.templateId;
+    }
+    
+    // デフォルトを返す
+    return 'default';
+  } catch (error) {
+    console.error('現在のテンプレートID取得に失敗:', error);
+    return 'default';
+  }
+}
+
+// 新しいテンプレートを作成
+function createNewTemplate(templateName) {
+  try {
+    // 現在の設定を取得
+    const currentSettings = getCurrentSettings();
+    
+    // 新しいテンプレートデータを作成
+    const newTemplate = {
+      name: templateName,
+      description: 'カスタムテンプレート',
+      settings: currentSettings,
+      isDefault: false
+    };
+    
+    // テンプレートを保存
+    const savedTemplate = saveTemplate(newTemplate);
+    
+    // テンプレート一覧を更新
+    loadTemplateList();
+    
+    // 作成したテンプレートを選択
+    selectTemplate(savedTemplate.id);
+    
+    console.log('新しいテンプレートを作成しました:', savedTemplate.name);
+    showNotification(`テンプレート「${savedTemplate.name}」を作成しました`, 'success');
+  } catch (error) {
+    console.error('テンプレート作成に失敗しました:', error);
+    showNotification('テンプレートの作成に失敗しました', 'error');
+  }
 }
 
 // ボタンの設定
