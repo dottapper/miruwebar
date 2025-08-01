@@ -378,153 +378,169 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
   `;
 }
 
-// メインエディタのHTMLテンプレート
+// メインエディタのHTMLテンプレート - projectsと同じレイアウト
 export function createMainEditorTemplate() {
   return `
-    <div class="loading-screen-editor">
-      <div class="loading-screen-editor__header">
-        <h1 class="loading-screen-editor__title">ローディング画面エディタ</h1>
-      </div>
-      
-      <div class="loading-screen-editor__container">
-        <!-- 左サイドバー：テンプレート一覧 -->
-        <div class="loading-screen-editor__sidebar">
-          <div class="loading-screen-editor__sidebar-header">
-            <h2>テンプレート</h2>
-          </div>
-          
-          <div class="loading-screen-editor__template-list">
-            <!-- 新規作成ボタン -->
-            <div class="loading-screen-editor__template-item loading-screen-editor__template-item--new" id="new-template-btn">
-              <div class="loading-screen-editor__template-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-              </div>
-              <div class="loading-screen-editor__template-info">
-                <div class="loading-screen-editor__template-name">新規作成</div>
-              </div>
-            </div>
-            
-            <!-- デフォルトテンプレート -->
-            <div class="loading-screen-editor__template-item loading-screen-editor__template-item--active" data-template-id="default">
-              <div class="loading-screen-editor__template-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
-                </svg>
-              </div>
-              <div class="loading-screen-editor__template-info">
-                <div class="loading-screen-editor__template-name">デフォルト</div>
-                <div class="loading-screen-editor__template-desc">標準テンプレート</div>
-              </div>
-            </div>
-            
-            <!-- 保存されたテンプレート一覧がここに動的に追加される -->
-            <div id="saved-templates-list">
-              <!-- JavaScript で動的に追加 -->
-            </div>
-          </div>
-        </div>
-
-        <!-- 設定パネル -->
-        <div class="loading-screen-editor__settings-panel">
-          <!-- メインタブ -->
-          <div class="loading-screen-editor__main-tabs">
-            <button class="loading-screen-editor__main-tab loading-screen-editor__main-tab--active" data-tab="start">
-              スタート画面
-            </button>
-            <button class="loading-screen-editor__main-tab" data-tab="loading">
-              ローディング画面
-            </button>
-            <button class="loading-screen-editor__main-tab" data-tab="guide">
-              ガイド画面
-            </button>
-          </div>
-          
-          <!-- タブコンテンツ -->
-          <div class="loading-screen-editor__content-container">
-            <!-- スタート画面タブ -->
-            <div class="loading-screen-editor__main-content loading-screen-editor__main-content--active" data-tab="start">
-              ${createStartTabContent()}
-            </div>
-            
-            <!-- ローディング画面タブ -->
-            <div class="loading-screen-editor__main-content" data-tab="loading" style="display: none;">
-              <!-- ローディング画面のサブタブ -->
-              <div class="loading-screen-editor__sub-tabs">
-                <button class="loading-screen-editor__sub-tab loading-screen-editor__sub-tab--active" data-subtab="general">
-                  一般設定
-                </button>
-                <button class="loading-screen-editor__sub-tab" data-subtab="text">
-                  テキスト
-                </button>
-                <button class="loading-screen-editor__sub-tab" data-subtab="animation">
-                  アニメーション
-                </button>
-              </div>
-              
-              <!-- サブタブコンテンツ -->
-              <div class="loading-screen-editor__subcontent-container">
-                <div class="loading-screen-editor__sub-content loading-screen-editor__sub-content--active" data-subtab="general">
-                  ${createGeneralTabContent()}
-                </div>
-                <div class="loading-screen-editor__sub-content" data-subtab="text" style="display: none;">
-                  ${createTextTabContent()}
-                </div>
-                <div class="loading-screen-editor__sub-content" data-subtab="animation" style="display: none;">
-                  ${createAnimationTabContent()}
-                </div>
-              </div>
-            </div>
-            
-            <!-- ガイド画面タブ -->
-            <div class="loading-screen-editor__main-content" data-tab="guide" style="display: none;">
-              ${createGuideTabContent()}
-            </div>
-          </div>
+    <div class="app-layout">
+      <!-- サイドメニュー - projectsと同じ構造 -->
+      <div class="side-menu">
+        <div class="logo-container">
+          <div class="logo">Miru WebAR</div>
         </div>
         
-        <!-- プレビューパネル -->
-        <div class="loading-screen-editor__preview-panel">
-          <!-- プレビューヘッダー -->
-          <div class="loading-screen-editor__preview-header">
-            <h3 class="loading-screen-editor__preview-title">プレビュー</h3>
-            <div class="loading-screen-editor__orientation-toggle">
-              <button class="loading-screen-editor__orientation-button loading-screen-editor__orientation-button--active" data-orientation="portrait">
-                📱 縦向き
+        <div class="menu-item" id="projects-menu-item">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          プロジェクト
+        </div>
+        
+        <div class="menu-item" id="media-menu-item">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          メディア一覧
+        </div>
+        
+        <div class="menu-item" id="analytics-menu-item">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18"/>
+            <path d="M18.4 9l-1.3 1.3"/>
+            <path d="M8 9h.01"/>
+            <path d="M18 20V9"/>
+            <path d="M8 5v4"/>
+            <path d="M12 5v14"/>
+            <path d="M16 13v7"/>
+          </svg>
+          分析
+        </div>
+        
+        <div class="menu-item active" id="loading-screen-menu">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+          </svg>
+          ローディング画面
+        </div>
+        
+        <div class="menu-spacer"></div>
+        
+        <div class="menu-item" id="logout-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          ログアウト
+        </div>
+      </div>
+      
+      <!-- メインコンテンツ -->
+      <div class="main-content">
+        <div class="content-header">
+          <h1>ローディング画面エディタ</h1>
+          <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
+            ← プロジェクト一覧に戻る
+          </button>
+        </div>
+        
+        <div class="loading-screen-editor__editor-container">
+          <!-- 設定パネル -->
+          <div class="loading-screen-editor__settings-panel">
+            <!-- メインタブ -->
+            <div class="loading-screen-editor__main-tabs">
+              <button class="loading-screen-editor__main-tab loading-screen-editor__main-tab--active" data-tab="start">
+                スタート画面
               </button>
-              <button class="loading-screen-editor__orientation-button" data-orientation="landscape">
-                📱 横向き
+              <button class="loading-screen-editor__main-tab" data-tab="loading">
+                ローディング画面
+              </button>
+              <button class="loading-screen-editor__main-tab" data-tab="guide">
+                ガイド画面
+              </button>
+            </div>
+            
+            <!-- タブコンテンツ -->
+            <div class="loading-screen-editor__content-container">
+              <!-- スタート画面タブ -->
+              <div class="loading-screen-editor__tab-content loading-screen-editor__tab-content--active" data-tab="start">
+                ${createStartTabContent()}
+              </div>
+              
+              <!-- ローディング画面タブ -->
+              <div class="loading-screen-editor__tab-content" data-tab="loading" style="display: none;">
+                <!-- ローディング画面のサブタブ -->
+                <div class="loading-screen-editor__sub-tabs">
+                  <button class="loading-screen-editor__sub-tab loading-screen-editor__sub-tab--active" data-subtab="general">
+                    一般設定
+                  </button>
+                  <button class="loading-screen-editor__sub-tab" data-subtab="text">
+                    テキスト
+                  </button>
+                  <button class="loading-screen-editor__sub-tab" data-subtab="animation">
+                    アニメーション
+                  </button>
+                </div>
+                
+                <!-- サブタブコンテンツ -->
+                <div class="loading-screen-editor__subcontent-container">
+                  <div class="loading-screen-editor__sub-content loading-screen-editor__sub-content--active" data-subtab="general">
+                    ${createGeneralTabContent()}
+                  </div>
+                  <div class="loading-screen-editor__sub-content" data-subtab="text" style="display: none;">
+                    ${createTextTabContent()}
+                  </div>
+                  <div class="loading-screen-editor__sub-content" data-subtab="animation" style="display: none;">
+                    ${createAnimationTabContent()}
+                  </div>
+                </div>
+              </div>
+              
+              <!-- ガイド画面タブ -->
+              <div class="loading-screen-editor__tab-content" data-tab="guide" style="display: none;">
+                ${createGuideTabContent()}
+              </div>
+            </div>
+            
+            <!-- 保存ボタン -->
+            <div class="loading-screen-editor__footer-actions">
+              <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
+                キャンセル
+              </button>
+              <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
+                保存
               </button>
             </div>
           </div>
           
-          <!-- プレビューコンテナ -->
-          <div class="loading-screen-editor__phone-container">
-            <div class="loading-screen-editor__phone-frame" id="phone-frame">
-              <div class="loading-screen-editor__phone-screen">
-                <div class="loading-screen-editor__preview-screen" id="preview-screen">
-                  <!-- プレビューコンテンツがここに動的に挿入される -->
+          <!-- プレビューパネル -->
+          <div class="loading-screen-editor__preview-panel">
+            <!-- プレビューヘッダー -->
+            <div class="loading-screen-editor__preview-header">
+              <h3 class="loading-screen-editor__preview-title">プレビュー</h3>
+              <div class="loading-screen-editor__orientation-toggle">
+                <button class="loading-screen-editor__orientation-button loading-screen-editor__orientation-button--active" data-orientation="portrait">
+                  📱 縦向き
+                </button>
+                <button class="loading-screen-editor__orientation-button" data-orientation="landscape">
+                  📱 横向き
+                </button>
+              </div>
+            </div>
+            
+            <!-- プレビューコンテナ -->
+            <div class="loading-screen-editor__phone-container">
+              <div class="loading-screen-editor__phone-frame" id="phone-frame">
+                <div class="loading-screen-editor__phone-screen">
+                  <div class="loading-screen-editor__preview-screen" id="preview-screen">
+                    <!-- プレビューコンテンツがここに動的に挿入される -->
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-      
-      <!-- フッター -->
-      <div class="loading-screen-editor__fixed-footer">
-        <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
-          ← プロジェクト一覧に戻る
-        </button>
-        <div class="loading-screen-editor__footer-right">
-          <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
-            キャンセル
-          </button>
-          <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
-            保存
-          </button>
         </div>
       </div>
     </div>

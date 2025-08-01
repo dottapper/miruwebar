@@ -13,9 +13,9 @@ import {
   initializeSliders, 
   setupButtons,
   setupLogoTypeHandlers,
-  setupTemplateSidebar
+  setupSidebarMenuHandlers
 } from '../components/loading-screen/event-handlers.js';
-import { updatePreview, adjustPreviewScroll } from '../components/loading-screen/preview.js';
+import { updatePreview } from '../components/loading-screen/preview.js';
 
 export default function showLoadingScreenEditor(container) {
   console.log('🚨 showLoadingScreenEditor が呼び出されました', {
@@ -46,8 +46,8 @@ export default function showLoadingScreenEditor(container) {
     
     // DOMに追加されたかチェック
     setTimeout(() => {
-      const addedEditor = document.querySelector('.loading-screen-editor');
-      const addedSidebar = document.querySelector('.loading-screen-editor__sidebar');
+      const addedEditor = document.querySelector('.app-layout');
+      const addedSidebar = document.querySelector('.side-menu');
       const addedPreview = document.querySelector('.loading-screen-editor__preview-panel');
       
       console.log('DOM追加確認:', {
@@ -61,10 +61,14 @@ export default function showLoadingScreenEditor(container) {
       // DOM構造をさらに詳しく調査
       if (addedEditor) {
         console.log('エディタ要素のクラス:', addedEditor.className);
-        const containerEl = addedEditor.querySelector('.loading-screen-editor__container');
-        if (containerEl) {
-          console.log('コンテナの子要素数:', containerEl.children.length);
-          console.log('コンテナの子要素:', Array.from(containerEl.children).map(el => el.className));
+        const mainContentEl = addedEditor.querySelector('.main-content');
+        if (mainContentEl) {
+          console.log('メインコンテンツの子要素数:', mainContentEl.children.length);
+          console.log('メインコンテンツの子要素:', Array.from(mainContentEl.children).map(el => el.className));
+        }
+        const settingsPanel = addedEditor.querySelector('.loading-screen-editor__settings-panel');
+        if (settingsPanel) {
+          console.log('設定パネルが見つかりました');
         }
       }
     }, 10);
@@ -82,7 +86,7 @@ export default function showLoadingScreenEditor(container) {
         initializeSliders();
         setupButtons();
         setupLogoTypeHandlers();
-        setupTemplateSidebar();
+        setupSidebarMenuHandlers();
         
         console.log('全てのイベントリスナーを設定しました');
 
@@ -113,7 +117,7 @@ export default function showLoadingScreenEditor(container) {
   async function loadSettings() {
     try {
       // ローディング状態を表示
-      const editor = document.querySelector('.loading-screen-editor');
+      const editor = document.querySelector('.app-layout');
       if (editor) {
         editor.classList.add('loading-screen-editor--loading');
       }
@@ -134,7 +138,7 @@ export default function showLoadingScreenEditor(container) {
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
     } finally {
       // ローディング状態を解除
-      const editor = document.querySelector('.loading-screen-editor');
+      const editor = document.querySelector('.app-layout');
       if (editor) {
         editor.classList.remove('loading-screen-editor--loading');
       }
@@ -205,18 +209,24 @@ export default function showLoadingScreenEditor(container) {
       timestamp: new Date().toISOString()
     });
 
-    const editor = document.querySelector('.loading-screen-editor');
+    const editor = document.querySelector('.app-layout');
     const preview = document.querySelector('.loading-screen-editor__preview-panel');
-    const sidebar = document.querySelector('.loading-screen-editor__sidebar');
+    const sidebar = document.querySelector('.side-menu');
+    const mainContent = document.querySelector('.main-content');
+    const settingsPanel = document.querySelector('.loading-screen-editor__settings-panel');
 
-    if (!editor || !preview || !sidebar) {
-      console.error('❌ 必要なレイアウト要素が見つかりません', {
-        editor: !!editor,
-        preview: !!preview,
-        sidebar: !!sidebar,
-        currentHash: currentHash,
-        timestamp: new Date().toISOString()
-      });
+    console.log('レイアウト要素の状態:', {
+      editor: !!editor,
+      preview: !!preview,
+      sidebar: !!sidebar,
+      mainContent: !!mainContent,
+      settingsPanel: !!settingsPanel,
+      currentHash: currentHash,
+      timestamp: new Date().toISOString()
+    });
+
+    if (!editor || !preview || !sidebar || !mainContent) {
+      console.error('❌ 必要なレイアウト要素が見つかりません');
       return;
     }
 

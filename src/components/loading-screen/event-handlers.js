@@ -85,7 +85,7 @@ export function setupTabHandlers() {
   console.log('タブハンドラーの設定を開始...');
   
   const mainTabs = document.querySelectorAll('.loading-screen-editor__main-tab');
-  const mainContents = document.querySelectorAll('.loading-screen-editor__main-content');
+  const mainContents = document.querySelectorAll('.loading-screen-editor__tab-content');
 
   if (mainTabs.length === 0 || mainContents.length === 0) {
     console.error('タブ要素が見つかりません');
@@ -100,18 +100,18 @@ export function setupTabHandlers() {
       
       mainTabs.forEach(t => t.classList.remove('loading-screen-editor__main-tab--active'));
       mainContents.forEach(c => {
-        c.classList.remove('loading-screen-editor__main-content--active');
+        c.classList.remove('loading-screen-editor__tab-content--active');
         c.style.display = 'none';
       });
 
       tab.classList.add('loading-screen-editor__main-tab--active');
       const tabName = tab.dataset.tab;
       
-      const mainContent = document.querySelector(`.loading-screen-editor__main-content[data-tab="${tabName}"]`);
+      const mainContent = document.querySelector(`.loading-screen-editor__tab-content[data-tab="${tabName}"]`);
       if (mainContent) {
         mainContent.style.display = 'block';
         setTimeout(() => {
-          mainContent.classList.add('loading-screen-editor__main-content--active');
+          mainContent.classList.add('loading-screen-editor__tab-content--active');
         }, 10);
         
         // ローディング画面タブの場合はサブタブを設定
@@ -497,22 +497,50 @@ export function setupLogoTypeHandlers() {
   });
 }
 
-// テンプレートサイドバーの設定
-export function setupTemplateSidebar() {
-  console.log('テンプレートサイドバーの設定を開始...');
+// サイドバーメニューの設定
+export function setupSidebarMenuHandlers() {
+  console.log('サイドバーメニューの設定を開始...');
   
-  // テンプレート一覧を読み込み
-  loadTemplateList();
-  
-  // 新規作成ボタン
-  const newTemplateBtn = document.getElementById('new-template-btn');
-  if (newTemplateBtn) {
-    newTemplateBtn.addEventListener('click', () => {
-      const templateName = prompt('新しいテンプレート名を入力してください:');
-      if (templateName && templateName.trim()) {
-        createNewTemplate(templateName.trim());
-      }
-    });
+  try {
+    // プロジェクト一覧メニュー
+    const projectsMenu = document.getElementById('projects-menu-item');
+    if (projectsMenu) {
+      projectsMenu.addEventListener('click', () => {
+        window.location.hash = '#/projects';
+      });
+    }
+    
+    // メディア一覧メニュー
+    const mediaMenu = document.getElementById('media-menu-item');
+    if (mediaMenu) {
+      mediaMenu.addEventListener('click', () => {
+        // TODO: メディア一覧画面への遷移
+        console.log('メディア一覧クリック（未実装）');
+      });
+    }
+    
+    // 分析メニュー
+    const analyticsMenu = document.getElementById('analytics-menu-item');
+    if (analyticsMenu) {
+      analyticsMenu.addEventListener('click', () => {
+        // TODO: 分析画面への遷移
+        console.log('分析クリック（未実装）');
+      });
+    }
+    
+    // ログアウトボタン
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (confirm('ログアウトしますか？')) {
+          window.location.hash = '#/login';
+        }
+      });
+    }
+    
+    console.log('サイドバーメニューの設定が完了しました');
+  } catch (error) {
+    console.error('サイドバーメニューの設定中にエラーが発生しました:', error);
   }
 }
 
