@@ -261,9 +261,9 @@ export default function showProjects(container) {
           <div class="card-header">
             <div class="project-date">
               <div class="date-row">
-                <span>作成: ${formatDate(project.created)}</span>
-                <span class="date-separator">|</span>
-                <span>更新: ${formatDate(project.updated)}</span>
+                <span class="date-item">作成 ${formatDate(project.created)}</span>
+                <span class="date-separator">•</span>
+                <span class="date-item">更新 ${formatDate(project.updated)}</span>
               </div>
             </div>
             <div class="card-menu">
@@ -416,6 +416,11 @@ export default function showProjects(container) {
       projectList.appendChild(projectCard);
     }
     
+    // 全てのメニューが確実に閉じられているようにする
+    document.querySelectorAll('.card-menu-dropdown').forEach(dropdown => {
+      dropdown.classList.remove('show');
+    });
+    
     // ページネーションの更新
     updatePagination(page, projects.length);
   }
@@ -508,4 +513,11 @@ export default function showProjects(container) {
       });
     }
   });
+
+  // 初期化時に全てのメニューが閉じられていることを確保
+  setTimeout(() => {
+    document.querySelectorAll('.card-menu-dropdown').forEach(dropdown => {
+      dropdown.classList.remove('show');
+    });
+  }, 100);
 }

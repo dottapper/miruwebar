@@ -106,6 +106,10 @@ export default function showLoadingScreenEditor(container) {
           
           // レイアウト検証を実行
           verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
+        }).catch((error) => {
+          console.error('❌ 設定の読み込みに失敗しました:', error);
+          // エラーが発生してもレイアウト検証は実行
+          verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
         });
       } catch (error) {
         console.error('初期化中にエラーが発生しました:', error);
@@ -226,7 +230,18 @@ export default function showLoadingScreenEditor(container) {
     });
 
     if (!editor || !preview || !sidebar || !mainContent) {
-      console.error('❌ 必要なレイアウト要素が見つかりません');
+      console.error('❌ 必要なレイアウト要素が見つかりません:', {
+        editor: !!editor,
+        preview: !!preview,
+        sidebar: !!sidebar,
+        mainContent: !!mainContent,
+        missingSelectors: {
+          editor: !editor ? '.loading-screen-editor' : null,
+          preview: !preview ? '.loading-screen-editor__preview' : null,
+          sidebar: !sidebar ? '.loading-screen-editor__sidebar' : null,
+          mainContent: !mainContent ? '.main-content' : null
+        }
+      });
       return;
     }
 

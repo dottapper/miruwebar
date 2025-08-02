@@ -1,6 +1,6 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 
@@ -8,84 +8,438 @@ alwaysApply: true
 
 - You can @ files here
 - You can use markdown but dont have to
+
 # プロジェクトルール
 
-## レスポンシブデザインの方針
+# ミルウェブ AR プロジェクトルール
 
-### 1. 基本方針
+## 1. アーキテクチャルルール
 
-- このプロジェクトはパソコンでの AR コンテンツ編集を主目的とする
-- 管理画面やデザインツール自体はモバイル対応を必須としない
-- ブラウザのウィンドウサイズ変更には対応する
+### 1.1 ファイル構造
 
-### 2. 対応範囲
+src/
+├── views/ # ページレベルのコンポーネント
+├── components/ # 再利用可能なコンポーネント
+│ └── loading-screen/ # ローディング画面関連
+├── storage/ # データ永続化ロジック
+├── api/ # 外部 API 通信
+├── utils/ # ユーティリティ関数
+├── styles/ # CSS ファイル
+└── loader/ # アセット読み込み関連
 
-- 最小幅: 1024px（一般的なノート PC の画面幅）
-- 最大幅: 2560px（一般的な 4K モニターの画面幅）
-- 高さ: 画面の高さに応じて適切にスケーリング
+### 1.2 命名規則
 
-### 3. レイアウトの原則
+- **ファイル名**: kebab-case (`ar-viewer.js`, `project-store.js`)
+- **関数名**: camelCase (`initARViewer`, `saveProject`)
+- **定数**: UPPER_SNAKE_CASE (`STORAGE_KEY`, `MAX_FILE_SIZE`)
+- **クラス名**: PascalCase (`LoadingManager`, `ProjectStore`)
+- **CSS クラス**: kebab-case (`.editor-container`, `.loading-screen`)
 
-- 固定幅のレイアウトを使用せず、フレキシブルなレイアウトを採用
-- グリッドシステムやフレックスボックスを活用
-- コンテンツの最小幅を設定し、スクロールバーを表示
+### 1.3 モジュール設計
 
-### 4. コンポーネントの設計
+- **単一責任の原則**: 各ファイルは 1 つの明確な責任を持つ
+- **依存関係の最小化**: 循環依存を避ける
+- **インターフェース分離**: 大きなモジュールは小さな機能に分割
 
-- 各コンポーネントは親要素の幅に応じて適切にスケーリング
-- 絶対位置指定は最小限に抑え、相対位置指定を優先
-- フォントサイズは相対単位（rem, em）を使用
+## 2. コーディングルール
 
-### 5. プレビュー表示
+### 2.1 JavaScript 基本ルール
 
-- AR コンテンツのプレビューは固定アスペクト比を維持
-- スマートフォンのフレームは画面サイズに応じてスケーリング
-- プレビューエリアの最小サイズを設定
+```javascript
+// ✅ 良い例
+export async function loadModel(
+  modelUrl,
+  fileName = "model.glb",
+  fileSize = 0
+) {
+  try {
+    console.log("🔄 モデル読み込み開始:", { fileName, fileSize });
+    const result = await processModel(modelUrl);
+    console.log("✅ モデル読み込み完了");
+    return result;
+  } catch (error) {
+    console.error("❌ モデル読み込みエラー:", error);
+    throw new Error(`モデルの読み込みに失敗しました: ${error.message}`);
+  }
+}
 
-### 6. パフォーマンス
+// ❌ 悪い例
+function loadModel(modelUrl) {
+  // エラーハンドリングなし
+  // ログなし
+  // 非同期処理なし
+}
+```
 
-- ウィンドウリサイズ時の処理を最適化
-- 不要な再レンダリングを避ける
-- メモリリークを防止
+### 2.2 Three.js 関連ルール
 
-## 最強の WEBAR 編集ツールの要件
+```javascript
+// ✅ リソース管理の例
+function disposeModelResources(modelData) {
+  if (modelData.model) {
+    // ジオメトリの破棄
+    if (modelData.model.geometry) {
+      modelData.model.geometry.dispose();
+    }
 
-### 7.1 コード品質
+    // マテリアルの破棄
+    if (modelData.model.material) {
+      if (Array.isArray(modelData.model.material)) {
+        modelData.model.material.forEach((material) =>
+          disposeMaterial(material)
+        );
+      } else {
+        disposeMaterial(modelData.model.material);
+      }
+    }
 
-- 美しいコードを書くことを心がける
-- 適切なコメントとドキュメントを残す
-- コードの可読性と保守性を重視
-- パフォーマンスを考慮した実装
-- エラーハンドリングを徹底
+    // テクスチャの破棄
+    if (modelData.model.material) {
+      const materials = Array.isArray(modelData.model.material)
+        ? modelData.model.material
+        : [modelData.model.material];
 
-### 7.2 UI デザイン
+      materials.forEach((material) => {
+        if (material.map) material.map.dispose();
+        if (material.normalMap) material.normalMap.dispose();
+        if (material.roughnessMap) material.roughnessMap.dispose();
+      });
+    }
+  }
+}
+```
 
-- 超かっこいい UI デザインを追求
-- モダンで洗練された見た目
-- 直感的な操作性
-- アニメーションやトランジションを効果的に使用
-- 一貫性のあるデザインシステム
+### 2.3 データ管理ルール
 
-### 7.3 使いやすさ
+```javascript
+// ✅ IndexedDB 使用例
+export async function saveModelToIDB(modelId, data, meta = {}) {
+  try {
+    console.log("�� IndexedDB へモデル保存開始:", {
+      modelId,
+      dataSize: data?.size,
+    });
 
-- 軽快な動作を実現
-- シンプルで分かりやすい操作
-- 効率的なワークフロー
-- ユーザーフレンドリーなエラーメッセージ
-- 快適な編集体験
+    const enhancedMeta = {
+      ...meta,
+      modelId,
+      size: data.size,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
 
-### 7.4 機能性
+    await Promise.all([
+      set(`${MODEL_KEY_PREFIX}${modelId}`, data),
+      set(`${META_KEY_PREFIX}${modelId}`, enhancedMeta),
+    ]);
 
-- 必要な機能を過不足なく実装
-- 拡張性を考慮した設計
-- 柔軟なカスタマイズ性
-- リアルタイムプレビュー
-- 効率的なアセット管理
+    console.log("✅ IndexedDB モデル保存完了");
+    return modelId;
+  } catch (error) {
+    console.error("❌ IndexedDB モデル保存エラー:", error);
+    throw new Error(`モデルの保存に失敗しました: ${error.message}`);
+  }
+}
+```
 
-### 7.5 品質管理
+## 3. レスポンシブデザインルール
 
-- テストを徹底
-- バグの早期発見と修正
-- パフォーマンスの継続的な改善
-- ユーザーフィードバックの反映
-- 品質の維持と向上
+### 3.1 基本方針
+
+- **主目的**: パソコンでの AR コンテンツ編集
+- **モバイル対応**: 管理画面は必須としない
+- **ウィンドウリサイズ**: 対応必須
+
+### 3.2 対応範囲
+
+```css
+/* 最小幅: 1024px（ノートPC） */
+@media (max-width: 1023px) {
+  .editor-container {
+    min-width: 1024px;
+    overflow-x: auto;
+  }
+}
+
+/* 最大幅: 2560px（4Kモニター） */
+@media (min-width: 2561px) {
+  .editor-container {
+    max-width: 2560px;
+    margin: 0 auto;
+  }
+}
+```
+
+### 3.3 レイアウト原則
+
+```css
+/* ✅ フレキシブルレイアウト */
+.editor-grid-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  gap: 20px;
+  min-height: 100vh;
+}
+
+/* ✅ 相対単位使用 */
+.editor-title {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+/* ❌ 固定幅を避ける */
+.editor-container {
+  /* width: 1200px; ← 避ける */
+}
+```
+
+## 4. UI/UX ルール
+
+### 4.1 インタラクション設計
+
+```javascript
+// ✅ ドラッグ&ドロップ対応
+function setupDragAndDrop(uploadArea) {
+  uploadArea.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    uploadArea.classList.add("highlight");
+  });
+
+  uploadArea.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    uploadArea.classList.remove("highlight");
+
+    const files = Array.from(event.dataTransfer.files);
+    await handleFileUpload(files);
+  });
+}
+```
+
+### 4.2 ローディング表示
+
+```javascript
+// ✅ 適切なローディング表示
+class LoadingManager {
+  showLoadingScreen(options = {}) {
+    const {
+      message = "モデルを読み込んでいます...",
+      container = document.body,
+    } = options;
+
+    const loadingElement = document.createElement("div");
+    loadingElement.className = "loading-screen";
+    loadingElement.innerHTML = `
+      <div class="loading-spinner"></div>
+      <div class="loading-message">${message}</div>
+      <div class="loading-progress">
+        <div class="progress-bar"></div>
+      </div>
+    `;
+
+    container.appendChild(loadingElement);
+    return loadingElement.id;
+  }
+}
+```
+
+### 4.3 エラーハンドリング
+
+```javascript
+// ✅ ユーザーフレンドリーなエラーメッセージ
+function showNotification(message, type = "info") {
+  const notification = document.createElement("div");
+  notification.className = `notification notification-${type}`;
+  notification.textContent = message;
+
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+```
+
+## 5. パフォーマンスルール
+
+### 5.1 メモリ管理
+
+```javascript
+// ✅ リソースの適切な破棄
+function cleanup() {
+  // 3Dリソースの破棄
+  scene.traverse((object) => {
+    if (object.geometry) object.geometry.dispose();
+    if (object.material) {
+      if (Array.isArray(object.material)) {
+        object.material.forEach((material) => disposeMaterial(material));
+      } else {
+        disposeMaterial(object.material);
+      }
+    }
+  });
+
+  // アニメーションミキサーの破棄
+  animationMixers.forEach((mixer) => mixer.stopAllAction());
+  animationMixers.clear();
+
+  // レンダラーの破棄
+  renderer.dispose();
+}
+```
+
+### 5.2 60fps 維持
+
+```javascript
+// ✅ 最適化されたアニメーションループ
+function animate() {
+  requestAnimationFrame(animate);
+
+  // デルタタイムを使用した滑らかなアニメーション
+  const delta = clock.getDelta();
+
+  // アニメーションミキサーの更新
+  animationMixers.forEach((mixer) => mixer.update(delta));
+
+  // レンダリング
+  renderer.render(scene, camera);
+}
+```
+
+## 6. 品質管理ルール
+
+### 6.1 テスト戦略
+
+```javascript
+// ✅ ユニットテスト例
+describe("ProjectStore", () => {
+  test("プロジェクトの保存と読み込み", async () => {
+    const testProject = {
+      id: "test-project",
+      name: "テストプロジェクト",
+      models: [],
+    };
+
+    await saveProject(testProject);
+    const loadedProject = await getProject("test-project");
+
+    expect(loadedProject.name).toBe("テストプロジェクト");
+  });
+});
+```
+
+### 6.2 デバッグルール
+
+```javascript
+// ✅ 統一されたログ形式
+const LOG_PREFIXES = {
+  INFO: "ℹ️",
+  SUCCESS: "✅",
+  WARNING: "⚠️",
+  ERROR: "❌",
+  DEBUG: "��",
+  LOADING: "��",
+};
+
+function log(level, message, data = null) {
+  const prefix = LOG_PREFIXES[level] || "ℹ️";
+  const timestamp = new Date().toISOString();
+
+  console.log(`${prefix} [${timestamp}] ${message}`, data || "");
+}
+```
+
+### 6.3 セキュリティルール
+
+```javascript
+// ✅ ファイルアップロード検証
+function validateFileUpload(file) {
+  const allowedTypes = ["model/gltf-binary", "model/gltf+json"];
+  const maxSize = 50 * 1024 * 1024; // 50MB
+
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error("サポートされていないファイル形式です");
+  }
+
+  if (file.size > maxSize) {
+    throw new Error("ファイルサイズが大きすぎます（最大50MB）");
+  }
+
+  return true;
+}
+```
+
+## 7. AR 機能固有ルール
+
+### 7.1 マーカー型 AR
+
+```javascript
+// ✅ マーカー検出の最適化
+function setupMarkerDetection() {
+  const markerSize = 0.1; // 10cm
+  const markerPattern = "data:image/png;base64,...";
+
+  const marker = new THREE.Group();
+  marker.add(createMarkerMesh(markerPattern, markerSize));
+
+  return marker;
+}
+```
+
+### 7.2 マーカーレス型 AR
+
+```javascript
+// ✅ 平面検出の実装
+function setupPlaneDetection() {
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  function onMouseClick(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(planeMeshes);
+
+    if (intersects.length > 0) {
+      placeModelAt(intersects[0].point);
+    }
+  }
+}
+```
+
+## 8. 最強の WEBAR 編集ツール要件
+
+### 8.1 コード品質
+
+- **美しいコード**: 可読性と保守性を重視
+- **適切なコメント**: JSDoc 形式で詳細なドキュメント
+- **エラーハンドリング**: 全ての非同期処理で try-catch
+- **パフォーマンス**: 60fps 維持とメモリリーク防止
+
+### 8.2 UI デザイン
+
+- **超かっこいい UI**: モダンで洗練されたデザイン
+- **直感的操作**: ドラッグ&ドロップ、リアルタイムプレビュー
+- **アニメーション**: 滑らかなトランジション効果
+- **一貫性**: 統一されたデザインシステム
+
+### 8.3 使いやすさ
+
+- **軽快な動作**: 最適化されたパフォーマンス
+- **シンプル操作**: 複雑な設定を隠蔽
+- **効率的ワークフロー**: 最小クリック数での操作
+- **快適編集体験**: リアルタイムフィードバック
+
+### 8.4 機能性
+
+- **過不足ない機能**: 必要最小限の機能実装
+- **拡張性**: プラグイン対応の設計
+- **柔軟カスタマイズ**: 高度な設定オプション
+- **効率的アセット管理**: IndexedDB 活用
+
+### 8.5 品質管理
+
+- **徹底テスト**: ユニット・統合・パフォーマンステスト
+- **早期バグ発見**: 継続的インテグレーション
+- **継続改善**: ユーザーフィードバック反映
+- **品質維持**: 定期的なコードレビュー

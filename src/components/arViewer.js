@@ -162,7 +162,13 @@ export async function initARViewer(containerId, options = {}) {
   console.log('コンテナ要素:', container);
   
   if (!container) {
-    console.error(`ARViewer: コンテナID "${containerId}" が見つかりません`);
+    console.error(`❌ ARViewer: コンテナID "${containerId}" が見つかりません`, {
+      containerId,
+      allElementsWithId: document.querySelectorAll(`#${containerId}`).length,
+      documentReady: document.readyState,
+      bodyChildren: document.body.children.length,
+      availableContainers: Array.from(document.querySelectorAll('[id]')).map(el => el.id)
+    });
     return null;
   }
   

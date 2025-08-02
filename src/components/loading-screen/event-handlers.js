@@ -87,8 +87,19 @@ export function setupTabHandlers() {
   const mainTabs = document.querySelectorAll('.loading-screen-editor__main-tab');
   const mainContents = document.querySelectorAll('.loading-screen-editor__tab-content');
 
+  console.log('タブ要素検索結果:', {
+    mainTabs: mainTabs.length,
+    mainContents: mainContents.length,
+    containerExists: !!document.querySelector('.loading-screen-editor')
+  });
+
   if (mainTabs.length === 0 || mainContents.length === 0) {
-    console.error('タブ要素が見つかりません');
+    console.error('❌ タブ要素が見つかりません:', {
+      mainTabsFound: mainTabs.length,
+      mainContentsFound: mainContents.length,
+      expectedMainTabs: '.loading-screen-editor__main-tab',
+      expectedMainContents: '.loading-screen-editor__tab-content'
+    });
     return;
   }
 
@@ -342,14 +353,21 @@ function handleFileSelection(file, dropzone, removeButton) {
   // ファイルタイプの検証
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
   if (!allowedTypes.includes(file.type)) {
-    showLogoError('サポートされていないファイル形式です', 'JPG, PNG, GIF, WebP形式のファイルを選択してください');
+    showLogoError(
+      `❌ サポートされていないファイル形式です\n\nファイル名: ${file.name}\n検出された形式: ${file.type}\n対応形式: JPG, PNG, GIF, WebP`,
+      'JPG, PNG, GIF, WebP形式のファイルを選択してください'
+    );
     return;
   }
 
   // ファイルサイズの検証
   const maxSize = 2 * 1024 * 1024; // 2MB
   if (file.size > maxSize) {
-    showLogoError('ファイルサイズが大きすぎます', '2MB以下のファイルを選択してください');
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+    showLogoError(
+      `❌ ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n最大許可サイズ: 2MB`,
+      '2MB以下のファイルを選択してください'
+    );
     return;
   }
 

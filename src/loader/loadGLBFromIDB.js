@@ -1,7 +1,7 @@
 // src/loader/loadGLBFromIDB.js
 // IndexedDB から GLB モデルを読み込んで Three.js で使用可能な形式に変換
 
-import { loadModelBlob, loadModelMeta } from '../storage/indexeddb-storage.js';
+import { loadModelBlob, loadModelMeta, getAllModelIds, MODEL_KEY_PREFIX } from '../storage/indexeddb-storage.js';
 
 /**
  * IndexedDB からモデルを読み込み、Three.js の GLTFLoader で使用可能な URL を生成
@@ -19,7 +19,15 @@ export async function loadGLBFromIDB(modelId) {
     ]);
 
     if (!blob) {
-      throw new Error(`モデル Blob が見つかりません: ${modelId}`);
+      // IndexedDB の状態を詳しく調査
+      const allKeys = await getAllModelIds();
+      throw new Error(`❌ モデル Blob が見つかりません: ${JSON.stringify({
+        modelId,
+        allModelIds: allKeys,
+        totalModels: allKeys.length,
+        keyExists: allKeys.includes(modelId),
+        searchKey: `${MODEL_KEY_PREFIX}${modelId}`
+      })}`);
     }
 
     if (!meta) {

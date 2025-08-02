@@ -2,7 +2,7 @@
 // IndexedDB を使った 3D モデルデータの保存・取得
 import { get, set, del, keys } from 'idb-keyval';
 
-const MODEL_KEY_PREFIX = 'model:';
+export const MODEL_KEY_PREFIX = 'model:';
 const META_KEY_PREFIX = 'meta:';
 
 /**
@@ -71,7 +71,11 @@ export async function loadModelBlob(modelId) {
     const blob = await get(`${MODEL_KEY_PREFIX}${modelId}`);
     
     if (!blob) {
-      console.warn('⚠️ モデル Blob が見つかりません:', modelId);
+      console.warn('⚠️ モデル Blob が見つかりません:', {
+        modelId,
+        searchKey: `${MODEL_KEY_PREFIX}${modelId}`,
+        timestamp: new Date().toISOString()
+      });
       return null;
     }
 
@@ -83,8 +87,14 @@ export async function loadModelBlob(modelId) {
 
     return blob;
   } catch (error) {
-    console.error('❌ モデル Blob 取得エラー:', error);
-    throw new Error(`モデルの取得に失敗しました: ${error.message}`);
+    console.error('❌ モデル Blob 取得エラー:', {
+      modelId,
+      searchKey: `${MODEL_KEY_PREFIX}${modelId}`,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    throw new Error(`モデルの取得に失敗しました: ${error.message} (modelId: ${modelId})`);
   }
 }
 

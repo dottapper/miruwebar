@@ -340,7 +340,7 @@ export function showEditor(container) {
     console.error('❌ 重要なDOM要素が見つかりません: model-upload-area');
   }
   if (!fileListContainer) {
-    console.error('❌ 重要なDOM要素が見つかりません: file-list');
+    console.error('❌ 重要なDOM要素が見つかりません: .file-list (クラス)');
   }
   if (!arViewerContainer) {
     console.error('❌ 重要なDOM要素が見つかりません: ar-viewer');
@@ -481,7 +481,18 @@ export function showEditor(container) {
       console.log('ARビューアーの初期化完了:', viewerInstance);
 
       if (!viewerInstance) {
-        throw new Error('ARビューアーの初期化に失敗しました');
+        const arViewerElement = document.getElementById('ar-viewer');
+        throw new Error(`ARビューアーの初期化に失敗しました: ${JSON.stringify({
+          arViewerExists: !!arViewerElement,
+          arViewerSize: arViewerElement ? {
+            width: arViewerElement.clientWidth,
+            height: arViewerElement.clientHeight
+          } : null,
+          containerId: 'ar-viewer',
+          markerMode: isMarkerMode,
+          projectId: projectId,
+          arType: arType
+        })}`);
       }
 
       // イベントリスナーの設定
@@ -525,7 +536,7 @@ export function showEditor(container) {
       // 基本プロジェクトデータを取得
       const basicProject = getProject(projectId);
       if (!basicProject) {
-        console.warn('❌ プロジェクトが見つかりません:', projectId);
+        console.error('❌ プロジェクトが見つかりません:', projectId);
         return;
       }
       
@@ -1578,14 +1589,16 @@ export function showEditor(container) {
     // ファイルサイズチェック (50MB制限)
     const maxSize = 50 * 1024 * 1024; // 50MB in bytes
     if (file.size > maxSize) {
-      alert('ファイルサイズが大きすぎます。50MB以下のファイルを選択してください。');
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      alert(`❌ ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n最大許可サイズ: 50MB\n\n50MB以下のファイルを選択してください。`);
       resetUploadArea();
       return;
     }
 
     // ファイル形式チェック
     if (!file.name.toLowerCase().endsWith('.glb')) {
-      alert('GLB形式のファイルのみアップロード可能です。');
+      const fileExtension = file.name.split('.').pop() || '不明';
+      alert(`❌ サポートされていないファイル形式です\n\nファイル名: ${file.name}\n検出された形式: .${fileExtension}\n対応形式: .glb のみ\n\nGLB形式のファイルを選択してください。`);
       resetUploadArea();
       return;
     }
@@ -1662,7 +1675,10 @@ export function showEditor(container) {
       if (file.name.endsWith('.glb')) {
         // ファイルサイズチェック
         if (totalFileSize + file.size > MAX_TOTAL_SIZE) {
-          alert(`合計ファイルサイズが50MBを超えています。\n現在の使用量: ${(totalFileSize / (1024 * 1024)).toFixed(2)}MB\n追加しようとしたファイル: ${(file.size / (1024 * 1024)).toFixed(2)}MB`);
+          const currentSizeMB = (totalFileSize / (1024 * 1024)).toFixed(2);
+          const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+          const totalSizeMB = ((totalFileSize + file.size) / (1024 * 1024)).toFixed(2);
+          alert(`❌ 合計ファイルサイズが制限を超えています\n\nファイル名: ${file.name}\n現在の使用量: ${currentSizeMB}MB\n追加ファイル: ${fileSizeMB}MB\n合計予定サイズ: ${totalSizeMB}MB\n最大許可サイズ: 50MB\n\n既存ファイルを削除してから追加してください。`);
           return;
         }
 
@@ -1735,7 +1751,8 @@ export function showEditor(container) {
           }
         }
       } else {
-        alert('GLB形式のファイルをドロップしてください。\n現在のファイル形式: ' + file.name.split('.').pop());
+        const fileExtension = file.name.split('.').pop() || '不明';
+        alert(`❌ サポートされていないファイル形式です\n\nファイル名: ${file.name}\n検出された形式: .${fileExtension}\n対応形式: .glb のみ\n\nGLB形式のファイルをドロップしてください。`);
       }
     }
   };
@@ -2296,7 +2313,7 @@ export function showEditor(container) {
     if (checkForUnsavedChanges()) {
       const message = '変更内容が保存されていません。このページを離れてもよろしいですか？';
       event.preventDefault();
-      event.returnValue = message;
+      event.returnValue = ''; // 現代的なブラウザでは空文字列を設定
       return message;
     }
   });
