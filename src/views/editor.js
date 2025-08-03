@@ -2,7 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, getProjects, loadProjectModels, deleteProject } from '../api/projects.js'; // IndexedDB 対応 API をインポート
+import { saveProject, getProject, loadProjectModels } from '../api/projects.js'; // IndexedDB 対応 API をインポート
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -320,8 +320,6 @@ export function showEditor(container) {
   let changeMarkerButton = document.getElementById('change-marker'); // マーカーモード時のみ存在
   let backButton = document.getElementById('back-to-projects');
   let saveButton = document.getElementById('save-button');
-  let shareButton = document.getElementById('share-button');
-  let previewButton = document.getElementById('preview-button');
   let qrcodeButton = document.getElementById('qrcode-button');
   let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
 
@@ -377,11 +375,6 @@ export function showEditor(container) {
   
   // --- 変更追跡用の状態管理 ---
   let hasUnsavedChanges = false;
-  let initialState = {
-    models: [],
-    markerImage: localStorage.getItem('markerImageUrl'),
-    settings: {}
-  };
 
   // --- 変更追跡用の関数 ---
   function markAsChanged() {
@@ -1329,7 +1322,7 @@ export function showEditor(container) {
   }
 
   // モデル情報のみのアイテムを作成（再アップロード促進用）
-  function createModelInfoItem(modelSetting, index) {
+  function createModelInfoItem(modelSetting, _index) {
     const infoItem = document.createElement('div');
     infoItem.className = 'file-item saved-model-info';
     infoItem.style.cssText = `
@@ -2311,10 +2304,10 @@ export function showEditor(container) {
   // --- ページ離脱時の確認 ---
   window.addEventListener('beforeunload', (event) => {
     if (checkForUnsavedChanges()) {
-      const message = '変更内容が保存されていません。このページを離れてもよろしいですか？';
+      // 現代的なブラウザでは preventDefault() のみで十分
       event.preventDefault();
-      event.returnValue = ''; // 現代的なブラウザでは空文字列を設定
-      return message;
+      // 古いブラウザ対応のため、空文字列を返す
+      return '';
     }
   });
 
@@ -2413,8 +2406,6 @@ export function showEditor(container) {
     changeMarkerButton = null;
     backButton = null;
     saveButton = null;
-    shareButton = null;
-    previewButton = null;
     scaleSlider = null;
     scaleValue = null;
     scaleSizeLabel = null;

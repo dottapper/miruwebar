@@ -30,7 +30,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
                 PNG, JPG, GIF, WebP (最大2MB)
               </div>
             </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
           </div>
         </div>
         
@@ -139,27 +139,6 @@ export function createStartTabContent(currentSettings = defaultSettings) {
           </div>
         </div>
       </div>
-      
-      <!-- サムネイル設定（既存機能） -->
-      <div class="loading-screen-editor__section">
-        <h3 class="loading-screen-editor__section-title">サムネイル設定</h3>
-        
-        <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">サムネイル画像</label>
-          <div class="loading-screen-editor__file-preview" id="thumbnailDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
-            <div class="loading-screen-editor__drop-zone">
-              <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">サムネイル画像をドロップ</div>
-              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-              <div class="loading-screen-editor__supported-formats">
-                JPG, PNG, WebP (最大2MB)
-              </div>
-            </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
-          </div>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -206,7 +185,7 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
               PNG, JPG, WebP (最大2MB、透過PNG推奨)
             </div>
           </div>
-          <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+          <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
         </div>
       </div>
       
@@ -331,7 +310,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
                 JPG, PNG, WebP (最大2MB)
               </div>
             </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
           </div>
         </div>
         
@@ -370,7 +349,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
                 JPG, PNG, WebP (最大2MB)
               </div>
             </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">×</button>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
           </div>
         </div>
       </div>
