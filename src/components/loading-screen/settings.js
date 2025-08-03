@@ -19,7 +19,7 @@ export const defaultSettings = {
     buttonTextColor: '#ffffff',
     logo: null,
     logoPosition: 20,
-    logoSize: 1.0
+    logoSize: 1.5
   },
   loadingScreen: {
     backgroundColor: '#121212',
@@ -28,7 +28,7 @@ export const defaultSettings = {
     logoType: 'none', // 'none', 'useStartLogo', 'custom'
     logo: null, // カスタムロゴのファイルデータ
     logoPosition: 20,
-    logoSize: 1.0,
+    logoSize: 1.5,
     brandName: 'あなたのブランド',
     subTitle: 'AR体験',
     loadingMessage: '読み込み中...',

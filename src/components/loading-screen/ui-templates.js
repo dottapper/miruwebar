@@ -38,7 +38,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
           <label class="loading-screen-editor__label">ロゴ位置（上から）</label>
           <div class="loading-screen-editor__slider-with-value">
             <input type="range" class="loading-screen-editor__slider" id="startScreen-logoPosition" min="5" max="50" step="1" value="${currentSettings.startScreen.logoPosition}">
-            <span class="loading-screen-editor__value-display" id="logoPosition-value">${currentSettings.startScreen.logoPosition}%</span>
+            <span class="loading-screen-editor__value-display" id="startScreen-logoPosition-value">${currentSettings.startScreen.logoPosition}%</span>
           </div>
         </div>
         
@@ -46,7 +46,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
           <label class="loading-screen-editor__label">ロゴサイズ</label>
           <div class="loading-screen-editor__slider-with-value">
             <input type="range" class="loading-screen-editor__slider" id="startScreen-logoSize" min="0.3" max="2.0" step="0.1" value="${currentSettings.startScreen.logoSize}">
-            <span class="loading-screen-editor__value-display" id="logoSize-value">${currentSettings.startScreen.logoSize}x</span>
+            <span class="loading-screen-editor__value-display" id="startScreen-logoSize-value">${currentSettings.startScreen.logoSize}x</span>
           </div>
         </div>
       </div>
@@ -194,7 +194,7 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
         <label class="loading-screen-editor__label">ロゴ位置（上から）</label>
         <div class="loading-screen-editor__slider-with-value">
           <input type="range" class="loading-screen-editor__slider" id="loadingScreen-logoPosition" min="10" max="50" step="1" value="${currentSettings.loadingScreen.logoPosition}">
-          <span class="loading-screen-editor__value-display" id="logoPosition-value">${currentSettings.loadingScreen.logoPosition}%</span>
+          <span class="loading-screen-editor__value-display" id="loadingScreen-logoPosition-value">${currentSettings.loadingScreen.logoPosition}%</span>
         </div>
       </div>
       
@@ -202,7 +202,7 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
         <label class="loading-screen-editor__label">ロゴサイズ</label>
         <div class="loading-screen-editor__slider-with-value">
           <input type="range" class="loading-screen-editor__slider" id="loadingScreen-logoSize" min="0.5" max="2.0" step="0.1" value="${currentSettings.loadingScreen.logoSize}">
-          <span class="loading-screen-editor__value-display" id="logoSize-value">${currentSettings.loadingScreen.logoSize}x</span>
+          <span class="loading-screen-editor__value-display" id="loadingScreen-logoSize-value">${currentSettings.loadingScreen.logoSize}x</span>
         </div>
       </div>
     </div>

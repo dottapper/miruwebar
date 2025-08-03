@@ -382,6 +382,33 @@ function handleFileSelection(file, dropzone, removeButton) {
     
     // 画像が読み込まれた後にプレビューを更新
     imgElement.onload = () => {
+      // ロゴアップロード時に適切なサイズを設定
+      if (dropzone.id === 'startLogoDropzone') {
+        const logoSizeSlider = document.getElementById('startScreen-logoSize');
+        if (logoSizeSlider && logoSizeSlider.value === '1.0') {
+          // デフォルト値の場合は適切なサイズに設定
+          logoSizeSlider.value = '1.5';
+          const sizeValueDisplay = document.getElementById('startScreen-logoSize-value');
+          if (sizeValueDisplay) {
+            sizeValueDisplay.textContent = '1.5x';
+          }
+          logoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
+          console.log('🖼️ スタート画面ロゴアップロード時にサイズを1.5xに設定');
+        }
+      } else if (dropzone.id === 'loadingLogoDropzone') {
+        const logoSizeSlider = document.getElementById('loadingScreen-logoSize');
+        if (logoSizeSlider && logoSizeSlider.value === '1.0') {
+          // デフォルト値の場合は適切なサイズに設定
+          logoSizeSlider.value = '1.5';
+          const sizeValueDisplay = document.getElementById('loadingScreen-logoSize-value');
+          if (sizeValueDisplay) {
+            sizeValueDisplay.textContent = '1.5x';
+          }
+          logoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
+          console.log('🖼️ ローディング画面ロゴアップロード時にサイズを1.5xに設定');
+        }
+      }
+      
       const currentScreenType = getCurrentActiveScreenType();
       updatePreview(currentScreenType);
     };
@@ -508,11 +535,112 @@ export function setupLogoTypeHandlers() {
         logoSizeControls.style.display = logoType !== 'none' ? 'block' : 'none';
       }
       
+      // 「スタート画面のロゴを使用」が選択された場合、スタート画面の設定を引き継ぐ
+      if (logoType === 'useStartLogo') {
+        inheritStartScreenLogoSettings();
+      }
+      
       // プレビューを更新
       const currentScreenType = getCurrentActiveScreenType();
       updatePreview(currentScreenType);
     });
   });
+}
+
+// スタート画面のロゴ設定をローディング画面に引き継ぐ関数
+function inheritStartScreenLogoSettings() {
+  console.log('🔄 スタート画面のロゴ設定をローディング画面に引き継ぎます');
+  
+  // スタート画面のロゴサイズを取得
+  const startLogoSizeSlider = document.getElementById('startScreen-logoSize');
+  const startLogoPositionSlider = document.getElementById('startScreen-logoPosition');
+  
+  // ローディング画面のロゴサイズスライダーを取得
+  const loadingLogoSizeSlider = document.getElementById('loadingScreen-logoSize');
+  const loadingLogoPositionSlider = document.getElementById('loadingScreen-logoPosition');
+  
+  console.log('📋 要素の存在確認:', {
+    startLogoSizeSlider: !!startLogoSizeSlider,
+    startLogoPositionSlider: !!startLogoPositionSlider,
+    loadingLogoSizeSlider: !!loadingLogoSizeSlider,
+    loadingLogoPositionSlider: !!loadingLogoPositionSlider
+  });
+  
+  if (startLogoSizeSlider && loadingLogoSizeSlider) {
+    const startSize = parseFloat(startLogoSizeSlider.value);
+    console.log('📏 現在のスタート画面ロゴサイズ:', startSize);
+    
+    // スタート画面のロゴサイズをそのままローディング画面に適用
+    // ただし、ローディング画面のスライダー範囲（0.5-2.0）に収まるように調整
+    let adjustedSize = startSize;
+    
+    // スタート画面のロゴサイズをそのまま引き継ぐ
+    // ただし、ローディング画面のスライダー範囲（0.5-2.0）に収まるように調整
+    adjustedSize = startSize;
+    
+    // 範囲外の場合は調整
+    if (startSize < 0.5) {
+      adjustedSize = 0.5;
+      console.log('⚠️ スタート画面のロゴサイズが小さすぎるため、0.5xに調整');
+    } else if (startSize > 2.0) {
+      adjustedSize = 2.0;
+      console.log('⚠️ スタート画面のロゴサイズが大きすぎるため、2.0xに調整');
+    } else {
+      console.log('🔧 スタート画面のロゴサイズをそのまま引き継ぎ:', startSize);
+    }
+    
+    console.log('🔧 調整後のサイズ:', adjustedSize);
+    
+    loadingLogoSizeSlider.value = adjustedSize;
+    console.log('✅ ローディング画面スライダーに設定:', loadingLogoSizeSlider.value);
+    
+    // 値表示も更新
+    const sizeValueDisplay = document.getElementById('loadingScreen-logoSize-value');
+    console.log('🏷️ 値表示要素:', sizeValueDisplay);
+    if (sizeValueDisplay) {
+      sizeValueDisplay.textContent = adjustedSize.toFixed(1) + 'x';
+      console.log('📝 値表示を更新:', sizeValueDisplay.textContent);
+    } else {
+      console.error('❌ 値表示要素が見つかりません: loadingScreen-logoSize-value');
+    }
+    
+    // スライダーのinputイベントを発火させて、他の処理も連鎖実行
+    loadingLogoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
+    console.log('🔄 スライダーのinputイベントを発火');
+    
+    // プレビューの更新を強制実行
+    setTimeout(() => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+      console.log('🔄 プレビューを更新しました:', currentScreenType);
+    }, 100);
+    
+    console.log(`スタート画面のロゴサイズ (${startSize}x) をローディング画面に適用 (${adjustedSize}x)`);
+  }
+  
+  if (startLogoPositionSlider && loadingLogoPositionSlider) {
+    const startPosition = parseFloat(startLogoPositionSlider.value);
+    
+    // ローディング画面のポジション範囲（10-50）に収まるように調整
+    const adjustedPosition = Math.max(10, Math.min(50, startPosition));
+    
+    loadingLogoPositionSlider.value = adjustedPosition;
+    
+    // 値表示も更新
+    const positionValueDisplay = document.getElementById('loadingScreen-logoPosition-value');
+    if (positionValueDisplay) {
+      positionValueDisplay.textContent = adjustedPosition + '%';
+      console.log('📝 ポジション値表示を更新:', positionValueDisplay.textContent);
+    } else {
+      console.error('❌ ポジション値表示要素が見つかりません: loadingScreen-logoPosition-value');
+    }
+    
+    // スライダーのinputイベントを発火させて、他の処理も連鎖実行
+    loadingLogoPositionSlider.dispatchEvent(new Event('input', { bubbles: true }));
+    console.log('🔄 ポジションスライダーのinputイベントを発火');
+    
+    console.log(`スタート画面のロゴ位置 (${startPosition}%) をローディング画面に適用 (${adjustedPosition}%)`);
+  }
 }
 
 // サイドバーメニューの設定

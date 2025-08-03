@@ -80,7 +80,7 @@ function updateStartPreview(previewScreen, settings) {
           left: 50%;
           transform: translateX(-50%);
           width: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 80}px;
-          height: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 60}px;
+          height: ${(screen.logoSize || defaultSettings.startScreen.logoSize) * 80}px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -203,8 +203,8 @@ function updateLoadingPreview(previewScreen, settings) {
           top: ${screen.logoPosition || defaultSettings.loadingScreen.logoPosition}%;
           left: 50%;
           transform: translateX(-50%);
-          width: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 60}px;
-          height: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 60}px;
+          width: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80}px;
+          height: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80}px;
           display: flex;
           align-items: center;
           justify-content: center;
