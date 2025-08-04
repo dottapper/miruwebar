@@ -358,7 +358,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
 }
 
 // メインエディタのHTMLテンプレート - projectsと同じレイアウト
-export function createMainEditorTemplate() {
+export function createMainEditorTemplate(currentSettings = defaultSettings) {
   return `
     <div class="app-layout">
       <!-- サイドメニュー - projectsと同じ構造 -->
@@ -401,7 +401,7 @@ export function createMainEditorTemplate() {
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
           </svg>
-          ローディング画面
+          ローディング画面一覧
         </div>
         
         <div class="menu-spacer"></div>
@@ -445,7 +445,7 @@ export function createMainEditorTemplate() {
             <div class="loading-screen-editor__content-container">
               <!-- スタート画面タブ -->
               <div class="loading-screen-editor__tab-content loading-screen-editor__tab-content--active" data-tab="start">
-                ${createStartTabContent()}
+                ${createStartTabContent(currentSettings)}
               </div>
               
               <!-- ローディング画面タブ -->
@@ -466,20 +466,20 @@ export function createMainEditorTemplate() {
                 <!-- サブタブコンテンツ -->
                 <div class="loading-screen-editor__subcontent-container">
                   <div class="loading-screen-editor__sub-content loading-screen-editor__sub-content--active" data-subtab="general">
-                    ${createGeneralTabContent()}
+                    ${createGeneralTabContent(currentSettings)}
                   </div>
                   <div class="loading-screen-editor__sub-content" data-subtab="text" style="display: none;">
-                    ${createTextTabContent()}
+                    ${createTextTabContent(currentSettings)}
                   </div>
                   <div class="loading-screen-editor__sub-content" data-subtab="animation" style="display: none;">
-                    ${createAnimationTabContent()}
+                    ${createAnimationTabContent(currentSettings)}
                   </div>
                 </div>
               </div>
               
               <!-- ガイド画面タブ -->
               <div class="loading-screen-editor__tab-content" data-tab="guide" style="display: none;">
-                ${createGuideTabContent()}
+                ${createGuideTabContent(currentSettings)}
               </div>
             </div>
             

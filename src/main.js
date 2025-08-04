@@ -6,6 +6,7 @@ import './styles/marker-upload.css';
 import './styles/version-info.css';
 import './styles/loading-screen-editor.css'; // ローディング画面エディタ用のスタイルを追加
 import './styles/loading-screen.css'; // ローディング画面のスタイルをインポート
+import './styles/loading-screen-selector.css'; // ローディング画面選択モーダルのスタイル
 
 // QRCode ライブラリを読み込み
 import QRCode from 'qrcode'

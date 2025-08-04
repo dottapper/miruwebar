@@ -2,6 +2,7 @@
 import { showNewProjectModal, showConfirmDialog } from '../components/ui.js';
 import { getProjects, deleteProject } from '../api/projects-new.js';
 import { showVersionInfoModal } from '../components/version-info.js';
+import { showLoadingScreenSelector } from '../components/loading-screen-selector.js';
 import '../styles/projects.css';
 import '../styles/version-info.css'; // バージョン情報モーダル用のスタイル
 
@@ -111,7 +112,7 @@ export default function showProjects(container) {
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
           </svg>
-          ローディング画面
+          ローディング画面一覧
         </div>
         <div class="menu-spacer"></div>
         <!-- バージョン情報ボタン (divに変更) -->
@@ -203,16 +204,16 @@ export default function showProjects(container) {
     console.warn('バージョン情報ボタンが見つかりません');
   }
 
-  // ローディング画面設定ボタンのイベントリスナー設定
+  // ローディング画面一覧ボタンのイベントリスナー設定
   const loadingScreenBtn = document.getElementById('loading-screen-btn');
   if (loadingScreenBtn) {
     loadingScreenBtn.addEventListener('click', () => {
-      console.log('ローディング画面設定ボタンがクリックされました');
+      console.log('ローディング画面一覧ボタンがクリックされました');
       try {
-        // ハッシュベースのルーティングを使用
-        window.location.hash = '#/loading-screen';
+        // ローディング画面選択モーダルを表示
+        showLoadingScreenSelector();
       } catch (error) {
-        console.error('ローディング画面設定画面への遷移エラー:', error);
+        console.error('ローディング画面選択モーダルの表示エラー:', error);
       }
     });
   }

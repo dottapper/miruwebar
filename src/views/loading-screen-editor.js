@@ -5,6 +5,7 @@
 import '../styles/loading-screen-editor.css';
 import { defaultSettings, settingsAPI } from '../components/loading-screen/settings.js';
 import { createMainEditorTemplate } from '../components/loading-screen/ui-templates.js';
+import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { 
   setupTabHandlers, 
   setupColorInputs, 
@@ -23,20 +24,141 @@ export default function showLoadingScreenEditor(container) {
     timestamp: new Date().toISOString(),
     container: container
   });
+  
+  console.log('📋 デフォルト設定参照:', defaultSettings);
+
+  // URLパラメータを確認
+  const fullHash = window.location.hash;
+  const hashParts = fullHash.split('?');
+  const queryString = hashParts[1] || '';
+  const urlParams = new URLSearchParams(queryString);
+  const mode = urlParams.get('mode');
+  const templateId = urlParams.get('template');
+  
+  console.log('🔍 URL解析詳細:', {
+    fullHash: fullHash,
+    hashParts: hashParts,
+    queryString: queryString,
+    urlParams: Array.from(urlParams.entries()),
+    mode: mode,
+    templateId: templateId,
+    isNewMode: mode === 'new',
+    isTemplateMode: !!templateId
+  });
 
   // 現在の設定を保持
-  let currentSettings = JSON.parse(JSON.stringify(defaultSettings));
+  let currentSettings;
+  
+  // モードに応じて設定を初期化
+  if (mode === 'new') {
+    // 新規作成モード: デフォルト設定を使用
+    currentSettings = JSON.parse(JSON.stringify(defaultSettings));
+    console.log('🆕 新規作成モード: デフォルト設定を使用');
+    console.log('🆕 使用する設定:', currentSettings);
+  } else if (templateId) {
+    // テンプレート編集モード: 指定されたテンプレートを読み込み
+    const template = getLoadingScreenTemplate(templateId);
+    console.log('📄 テンプレート取得結果:', template);
+    if (template && template.settings) {
+      currentSettings = JSON.parse(JSON.stringify(template.settings));
+      console.log('📄 テンプレート編集モード: テンプレートを読み込み', template.name);
+      console.log('📄 使用する設定:', currentSettings);
+    } else {
+      console.warn('⚠️ テンプレートが見つかりません。デフォルト設定を使用:', templateId);
+      currentSettings = JSON.parse(JSON.stringify(defaultSettings));
+      console.log('⚠️ デフォルト設定使用:', currentSettings);
+    }
+  } else {
+    // 通常モード: 保存済み設定を読み込み（従来の動作）
+    try {
+      currentSettings = settingsAPI.getSettings();
+      console.log('💾 通常モード: 保存済み設定を読み込み');
+      console.log('💾 使用する設定:', currentSettings);
+    } catch (error) {
+      console.error('設定の読み込みに失敗:', error);
+      currentSettings = JSON.parse(JSON.stringify(defaultSettings));
+      console.log('💾 エラー時デフォルト設定使用:', currentSettings);
+    }
+  }
   
   // タイマーIDを保持するための変数
   let verifyLayoutTimeoutId = null;
+  
+  // 設定をフォームに適用する関数
+  function applySettingsToForm(settings) {
+    console.log('⚙️ 設定をフォームに適用開始:', settings);
+    
+    // 各画面タイプの設定を適用
+    ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
+      const screenSettings = settings[screenType];
+      if (!screenSettings) return;
+      
+      // 各プロパティをフォーム要素に設定
+      Object.entries(screenSettings).forEach(([key, value]) => {
+        const inputId = `${screenType}-${key}`;
+        const input = document.getElementById(inputId);
+        
+        if (input) {
+          if (input.type === 'color') {
+            input.value = value || '';
+            // カラーテキスト入力も更新
+            const textInput = document.getElementById(`${inputId}Text`);
+            if (textInput) {
+              textInput.value = value || '';
+            }
+          } else if (input.type === 'range') {
+            input.value = value || input.min;
+            // スライダーの値表示も更新
+            const valueDisplay = document.getElementById(`${inputId}-value`);
+            if (valueDisplay) {
+              const unit = input.id.includes('Position') ? '%' : 'x';
+              valueDisplay.textContent = value + unit;
+            }
+          } else {
+            input.value = value || '';
+          }
+          
+          console.log(`⚙️ ${inputId} = ${value}`);
+        }
+      });
+    });
+    
+    // ロゴタイプラジオボタンの設定
+    if (settings.loadingScreen && settings.loadingScreen.logoType) {
+      const logoTypeRadio = document.querySelector(`input[name="loadingLogoType"][value="${settings.loadingScreen.logoType}"]`);
+      if (logoTypeRadio) {
+        logoTypeRadio.checked = true;
+        console.log(`⚙️ logoType = ${settings.loadingScreen.logoType}`);
+        
+        // UI表示の更新
+        const customLogoSection = document.getElementById('loading-custom-logo-section');
+        const logoControls = document.getElementById('loading-logo-controls');
+        const logoSizeControls = document.getElementById('loading-logo-size-controls');
+        
+        const logoType = settings.loadingScreen.logoType;
+        if (customLogoSection) {
+          customLogoSection.style.display = logoType === 'custom' ? 'block' : 'none';
+        }
+        if (logoControls) {
+          logoControls.style.display = logoType !== 'none' ? 'block' : 'none';
+        }
+        if (logoSizeControls) {
+          logoSizeControls.style.display = logoType !== 'none' ? 'block' : 'none';
+        }
+      }
+    }
+    
+    console.log('⚙️ 設定のフォーム適用完了');
+  }
 
   // エディタの初期化
   function initializeEditor() {
     console.log('ローディング画面エディタを初期化中...');
 
-    // メインテンプレートを作成してDOMに追加
-    const templateHTML = createMainEditorTemplate();
+    // 現在の設定を使用してメインテンプレートを作成してDOMに追加
+    const templateHTML = createMainEditorTemplate(currentSettings);
     console.log('HTMLテンプレート生成完了:', templateHTML.length, '文字');
+    console.log('使用した設定:', currentSettings);
     
     const editorContainer = document.createElement('div');
     editorContainer.innerHTML = templateHTML;
@@ -90,9 +212,13 @@ export default function showLoadingScreenEditor(container) {
         
         console.log('全てのイベントリスナーを設定しました');
 
-        // 初期設定の読み込みとプレビューの更新
-        loadSettings().then(() => {
-          console.log('設定の読み込みが完了しました');
+        // モードに応じた設定処理
+        if (mode === 'new' || templateId) {
+          console.log('🔧 新規作成またはテンプレートモード: loadSettings()をスキップ');
+          console.log('🔧 使用する設定:', currentSettings);
+          
+          // フォーム要素に設定値を直接適用
+          applySettingsToForm(currentSettings);
           
           // 初期タブの表示を強制
           const initialTab = document.querySelector('.loading-screen-editor__main-tab--active');
@@ -103,14 +229,25 @@ export default function showLoadingScreenEditor(container) {
             const firstTab = document.querySelector('.loading-screen-editor__main-tab');
             if (firstTab) firstTab.click();
           }
+        } else {
+          // 通常モード: 保存済み設定を読み込み
+          loadSettings().then(() => {
+            console.log('設定の読み込みが完了しました');
+            
+            // 初期タブの表示を強制
+            const initialTab = document.querySelector('.loading-screen-editor__main-tab--active');
+            if (initialTab) {
+              initialTab.click();
+            } else {
+              // アクティブなタブがない場合は最初のタブをクリック
+              const firstTab = document.querySelector('.loading-screen-editor__main-tab');
+              if (firstTab) firstTab.click();
+            }
+          });
+        }
           
-          // レイアウト検証を実行
-          verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
-        }).catch((error) => {
-          console.error('❌ 設定の読み込みに失敗しました:', error);
-          // エラーが発生してもレイアウト検証は実行
-          verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
-        });
+        // レイアウト検証を実行
+        verifyLayoutTimeoutId = setTimeout(verifyLayout, 500);
       } catch (error) {
         console.error('初期化中にエラーが発生しました:', error);
       }
