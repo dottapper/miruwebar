@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テストページ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .test-container {
+            text-align: center;
+            padding: 2rem;
+            background-color: #242424;
+            border-radius: 16px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            color: #7C4DFF;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #B0B0B0;
+            margin-bottom: 1rem;
+        }
+        button {
+            background: linear-gradient(135deg, #7C4DFF, #4A148C);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>miru-WebAR テストページ</h1>
+        <p>このページが正常に表示されれば、基本的な環境は動作しています。</p>
+        <button onclick="testFunction()">テストボタン</button>
+        <p id="result"></p>
+    </div>
+
+    <script>
+        function testFunction() {
+            document.getElementById('result').textContent = '✅ JavaScriptも正常に動作しています！';
+        }
+        
+        console.log('🎯 テストページ読み込み完了');
+        console.log('📅 現在時刻:', new Date().toLocaleString('ja-JP'));
+    </script>
+</body>
+</html> 

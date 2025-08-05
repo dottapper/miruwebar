@@ -1,7 +1,8 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
-import QRCode from 'qrcode';
+// QRCodeライブラリを遅延読み込みに変更
+// import QRCode from 'qrcode';
 
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
@@ -309,6 +310,20 @@ export function showNewProjectModal() {
             const canvas = document.getElementById('qrcode-canvas');
             if (!canvas) {
                 throw new Error('Canvas element not found');
+            }
+
+            // QRCodeライブラリを遅延読み込み
+            let QRCode = null;
+            if (window.loadQRCode) {
+                QRCode = await window.loadQRCode();
+            } else {
+                // フォールバック: 直接インポート
+                const qrcodeModule = await import('qrcode');
+                QRCode = qrcodeModule.default;
+            }
+
+            if (!QRCode) {
+                throw new Error('QRCode library not available');
             }
 
             await QRCode.toCanvas(canvas, arViewerUrl, {
