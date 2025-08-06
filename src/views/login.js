@@ -1,46 +1,26 @@
 // src/views/login.js
 export default function showLogin(container) {
   container.innerHTML = `
-    <div class="login-container">
-      <div class="login-header">
-        <h1>miru-webAR</h1>
-        <p class="login-subtitle">あなただけの3D世界を現実に</p>
-      </div>
-      <div class="login-form">
-        <div class="form-group">
-          <label for="email">メールアドレス</label>
-          <input type="email" id="email" placeholder="example@email.com">
-        </div>
-        <div class="form-group">
-          <label for="password">パスワード</label>
-          <input type="password" id="password" placeholder="パスワードを入力">
-        </div>
-        <button id="login-button" class="primary-button">ログイン</button>
-        <div class="form-links">
-          <a href="#/register" class="form-link">新規登録</a>
-          <span class="divider">|</span>
-          <a href="#/forgot-password" class="form-link">パスワードを忘れた</a>
-        </div>
-      </div>
-      <div class="login-footer">
-        <p>自分だけのARで世界を彩る</p>
-      </div>
-    </div>
-  `;
+    <section class="gate">
+      <h1>miru-webAR</h1>
+      <p class="sub">あなたの3Dを現実へ</p>
 
-  // ログインボタンのイベントリスナー
-  const loginButton = document.getElementById('login-button');
-  if (loginButton) {
-    loginButton.addEventListener('click', () => {
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      
-      // デバッグモードでのみログを出力
-      if (import.meta.env.DEV || window.location.search.includes('debug=true')) {
-        console.log('ログイン処理:', email);
-      }
-      // select-arからprojectsに遷移先を変更
-      window.location.hash = '#/projects';
-    });
-  }
+      <div class="card">
+        <h2>ログインは不要です</h2>
+        <ul>
+          <li>このツールはブラウザ内で動作します。</li>
+          <li>メール・パスワードの収集は行いません。</li>
+          <li>読み込んだGLB/画像は端末内で処理され、サーバー保存はしません。</li>
+          <li>QRコードでARコンテンツを共有できます。</li>
+          <li>外部URL読み込み時のCORS・著作権管理はご自身でご確認ください。</li>
+          <li>サポートは <a href="/discord" target="_blank" rel="noopener">Discord</a> のみです。</li>
+        </ul>
+        <div class="actions">
+          <a class="btn primary" href="#/projects">今すぐはじめる</a>
+          <a class="btn" href="#/usage-guide">使い方を見る</a>
+        </div>
+        <p class="small">※ ベータ版のため予告なく仕様変更・停止することがあります。重要データは必ずバックアップしてください。</p>
+      </div>
+    </section>
+  `;
 }

@@ -7,6 +7,7 @@ import './styles/version-info.css';
 import './styles/loading-screen-editor.css'; // ローディング画面エディタ用のスタイルを追加
 import './styles/loading-screen.css'; // ローディング画面のスタイルをインポート
 import './styles/loading-screen-selector.css'; // ローディング画面選択モーダルのスタイル
+import './styles/usage-guide.css'; // 使い方ガイドページのスタイル
 
 // QRCode ライブラリを遅延読み込みに変更
 // import QRCode from 'qrcode'
@@ -84,7 +85,8 @@ const viewModules = {
   '#/projects': () => import('./views/projects.js'),
   '#/editor': () => import('./views/editor.js'),
   '#/qr-code': () => import('./views/qr-code.js'),
-  '#/loading-screen': () => import('./views/loading-screen-editor.js')
+  '#/loading-screen': () => import('./views/loading-screen-editor.js'),
+  '#/usage-guide': () => import('./views/usage-guide.js')
 };
 
 // アプリケーションのメインコンテナ
@@ -137,17 +139,18 @@ async function render() {
 
     // 現在のハッシュを取得
     let hash = window.location.hash || '#/login';
-    debugLog('📍 現在のハッシュ:', hash);
+    console.log('📍 現在のハッシュ:', hash);
     
     // ハッシュにクエリパラメータがある場合は分離
     const [baseHash] = hash.split('?');
-    debugLog('📍 ベースハッシュ:', baseHash);
+    console.log('📍 ベースハッシュ:', baseHash);
     
     // 対応するビューモジュールを取得
     const viewModule = viewModules[baseHash];
+    console.log('📍 対応するビューモジュール:', baseHash, !!viewModule);
     
     if (viewModule) {
-      debugLog(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
+      console.log(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
       try {
         // 動的インポートでビューを読み込み
         const module = await viewModule();
@@ -191,6 +194,7 @@ async function render() {
       }
     } else {
       console.warn(`⚠️ 未定義のルート: ${baseHash}`);
+      console.log('📍 利用可能なルート:', Object.keys(viewModules));
       window.location.hash = '#/login';
     }
   } catch (error) {

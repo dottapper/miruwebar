@@ -1,4 +1,4 @@
-/* src/styles/login.css */
+/* src/styles/login-backup.css - バックアップ用 */
 @import './common.css';
 
 body {
@@ -32,20 +32,25 @@ body::before {
   100% { transform: translate(-10%, -10%) rotate(10deg); }
 }
 
-.gate {
+.login-container {
   width: 100%;
-  max-width: 600px;
+  max-width: 420px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   padding: 2rem;
   position: relative;
   z-index: 1;
-  text-align: center;
 }
 
-.gate h1 {
-  font-size: 3.5rem;
+.login-header {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.login-header h1 {
+  font-size: 3.2rem;
   margin-bottom: 0.5rem;
   background: linear-gradient(45deg, var(--color-primary), var(--color-secondary));
   -webkit-background-clip: text;
@@ -54,159 +59,139 @@ body::before {
   text-fill-color: transparent;
   letter-spacing: -0.5px;
   font-weight: 700;
-  margin-bottom: 1rem;
 }
 
-.gate .sub {
+.login-subtitle {
   color: var(--color-text-secondary);
-  font-size: 1.3rem;
-  margin-bottom: 3rem;
-  font-weight: 300;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
 }
 
-.card {
-  background-color: rgba(36, 36, 36, 0.9);
+.login-form {
+  background-color: rgba(36, 36, 36, 0.8);
   border-radius: var(--border-radius-large);
   box-shadow: var(--shadow-large);
-  backdrop-filter: blur(15px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 2.5rem;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 2rem;
   position: relative;
   overflow: hidden;
-  margin: 0 auto;
-  max-width: 500px;
 }
 
-.card::before {
+.login-form::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
+  height: 3px;
   background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
 }
 
-.card h2 {
-  font-size: 1.8rem;
+.form-group {
   margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
   color: var(--color-text-primary);
-  font-weight: 600;
+  display: block;
+  font-size: 0.95rem;
 }
 
-.card ul {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem 0;
-  text-align: left;
-}
-
-.card li {
-  padding: 0.8rem 0;
-  color: var(--color-text-secondary);
+.form-group input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-medium);
   font-size: 1rem;
-  line-height: 1.6;
-  position: relative;
-  padding-left: 1.5rem;
+  background-color: rgba(18, 18, 18, 0.8);
+  color: var(--color-text-primary);
+  transition: all var(--transition-quick);
+  box-sizing: border-box;
 }
 
-.card li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: var(--color-primary);
-  font-weight: bold;
-  font-size: 1.1rem;
+.form-group input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(124, 77, 255, 0.2);
 }
 
-.card a {
-  color: var(--color-primary);
-  text-decoration: none;
-  transition: color var(--transition-quick);
+.form-group input::placeholder {
+  color: var(--color-text-disabled);
 }
 
-.card a:hover {
-  color: var(--color-primary-light);
-  text-decoration: underline;
-}
-
-.actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  margin: 2rem 0;
-  flex-wrap: wrap;
-}
-
-.btn {
-  padding: 1rem 2rem;
+.primary-button {
+  width: 100%;
+  padding: 0.9rem;
+  background: var(--gradient-primary);
+  color: white;
+  border: none;
   border-radius: var(--border-radius-medium);
   font-size: 1rem;
   font-weight: 600;
-  text-decoration: none;
-  transition: all var(--transition-standard);
-  display: inline-block;
-  border: 2px solid transparent;
   cursor: pointer;
+  margin-top: 1rem;
+  transition: all var(--transition-standard);
+  position: relative;
+  overflow: hidden;
 }
 
-.btn.primary {
-  background: var(--gradient-primary);
-  color: white;
-  border-color: var(--color-primary);
+.primary-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: all 0.8s;
 }
 
-.btn.primary:hover {
+.primary-button:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px -5px rgba(124, 77, 255, 0.5);
 }
 
-.btn:not(.primary) {
-  background: transparent;
-  color: var(--color-text-primary);
-  border-color: var(--color-border);
+.primary-button:hover::before {
+  left: 100%;
 }
 
-.btn:not(.primary):hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+.primary-button:active {
+  transform: translateY(0);
 }
 
-.small {
-  font-size: 0.85rem;
-  color: var(--color-text-disabled);
+.form-links {
+  display: flex;
+  justify-content: center;
   margin-top: 1.5rem;
-  line-height: 1.5;
-  font-style: italic;
+  font-size: 0.9rem;
 }
 
-/* レスポンシブ対応 */
-@media (max-width: 768px) {
-  .gate {
-    padding: 1rem;
-  }
-  
-  .gate h1 {
-    font-size: 2.8rem;
-  }
-  
-  .gate .sub {
-    font-size: 1.1rem;
-  }
-  
-  .card {
-    padding: 2rem;
-  }
-  
-  .actions {
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .btn {
-    width: 100%;
-    max-width: 300px;
-    text-align: center;
-  }
+.form-link {
+  color: var(--color-primary-light);
+  text-decoration: none;
+  transition: color var(--transition-quick);
 }
+
+.form-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.divider {
+  margin: 0 0.6rem;
+  color: var(--color-text-disabled);
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-style: italic;
+} 
