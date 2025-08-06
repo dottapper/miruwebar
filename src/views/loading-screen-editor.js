@@ -34,6 +34,7 @@ export default function showLoadingScreenEditor(container) {
   const urlParams = new URLSearchParams(queryString);
   const mode = urlParams.get('mode');
   const templateId = urlParams.get('template');
+  const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
   
   console.log('🔍 URL解析詳細:', {
     fullHash: fullHash,
@@ -42,6 +43,7 @@ export default function showLoadingScreenEditor(container) {
     urlParams: Array.from(urlParams.entries()),
     mode: mode,
     templateId: templateId,
+    templateName: templateName,
     isNewMode: mode === 'new',
     isTemplateMode: !!templateId
   });
@@ -62,23 +64,58 @@ export default function showLoadingScreenEditor(container) {
     if (template && template.settings) {
       currentSettings = JSON.parse(JSON.stringify(template.settings));
       console.log('📄 テンプレート編集モード: テンプレートを読み込み', template.name);
-      console.log('📄 使用する設定:', currentSettings);
+      console.log('📄 テンプレート元データ:', template.settings);
+      console.log('📄 コピー後の設定:', currentSettings);
+      console.log('📄 アニメーション設定確認:', currentSettings.loadingScreen.animation);
+      
+      // 最後に使用したテンプレートIDを記録
+      localStorage.setItem('lastUsedTemplateId', templateId);
+      console.log('📄 最後に使用したテンプレートIDを記録:', templateId);
     } else {
       console.warn('⚠️ テンプレートが見つかりません。デフォルト設定を使用:', templateId);
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
       console.log('⚠️ デフォルト設定使用:', currentSettings);
     }
   } else {
-    // 通常モード: 保存済み設定を読み込み（従来の動作）
+    // 通常モード: 最後に使用したテンプレートまたは保存済み設定を読み込み
     try {
-      currentSettings = settingsAPI.getSettings();
-      console.log('💾 通常モード: 保存済み設定を読み込み');
-      console.log('💾 使用する設定:', currentSettings);
+      // 最後に使用したテンプレートIDを確認
+      const lastTemplateId = localStorage.getItem('lastUsedTemplateId');
+      if (lastTemplateId) {
+        console.log('💾 最後に使用したテンプレートを読み込み:', lastTemplateId);
+        const template = getLoadingScreenTemplate(lastTemplateId);
+        if (template && template.settings) {
+          currentSettings = JSON.parse(JSON.stringify(template.settings));
+          console.log('💾 テンプレートからの設定読み込み完了:', template.name);
+          console.log('💾 使用する設定:', currentSettings);
+        } else {
+          // テンプレートが見つからない場合は通常の設定を読み込み
+          currentSettings = settingsAPI.getSettings();
+          console.log('💾 テンプレートが見つからないため通常設定を読み込み');
+        }
+      } else {
+        // 最後のテンプレートIDがない場合は通常の設定を読み込み
+        currentSettings = settingsAPI.getSettings();
+        console.log('💾 通常モード: 保存済み設定を読み込み');
+        console.log('💾 使用する設定:', currentSettings);
+      }
     } catch (error) {
       console.error('設定の読み込みに失敗:', error);
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
       console.log('💾 エラー時デフォルト設定使用:', currentSettings);
     }
+  }
+  
+  // 初期化時のアニメーション設定調整（無効なslideのみ修正）
+  if (currentSettings.loadingScreen.animation === 'slide') {
+    currentSettings.loadingScreen.animation = 'none';
+    console.log('🔧 無効なスライドアニメーションを「なし」に修正');
+  }
+  
+  // デフォルト値設定（未定義の場合のみ）
+  if (!currentSettings.loadingScreen.animation) {
+    currentSettings.loadingScreen.animation = 'none';
+    console.log('🔧 未定義のアニメーション設定をデフォルト「なし」に設定');
   }
   
   // タイマーIDを保持するための変数
@@ -148,7 +185,82 @@ export default function showLoadingScreenEditor(container) {
       }
     }
     
+    // 画像データの復元
+    restoreImageData(settings);
+    
     console.log('⚙️ 設定のフォーム適用完了');
+  }
+  
+  // 画像データを復元する関数
+  function restoreImageData(settings) {
+    console.log('🖼️ 画像データ復元開始');
+    console.log('🖼️ 復元する設定データ:', settings);
+    
+    // 少し遅延を入れてDropzone要素の準備を確実にする
+    setTimeout(() => {
+      // サムネイル画像
+      if (settings.startScreen.thumbnail) {
+        const thumbnailDropzone = document.getElementById('thumbnailDropzone');
+        if (thumbnailDropzone) {
+          thumbnailDropzone.innerHTML = `<img src="${settings.startScreen.thumbnail}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="サムネイル">`;
+          console.log('🖼️ サムネイル画像を復元');
+        } else {
+          console.warn('🖼️ サムネイルDropzoneが見つかりません');
+        }
+      }
+    
+      // スタート画面ロゴ
+      if (settings.startScreen.logo) {
+        const startLogoDropzone = document.getElementById('startLogoDropzone');
+        if (startLogoDropzone) {
+          startLogoDropzone.innerHTML = `<img src="${settings.startScreen.logo}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="ロゴ">`;
+          console.log('🖼️ スタート画面ロゴを復元');
+        } else {
+          console.warn('🖼️ スタート画面ロゴDropzoneが見つかりません');
+        }
+      }
+      
+      // ローディング画面カスタムロゴ
+      if (settings.loadingScreen.logo) {
+        const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
+        if (loadingLogoDropzone) {
+          loadingLogoDropzone.innerHTML = `<img src="${settings.loadingScreen.logo}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="ローディング画面ロゴ">`;
+          console.log('🖼️ ローディング画面ロゴを復元');
+        } else {
+          console.warn('🖼️ ローディング画面ロゴDropzoneが見つかりません');
+        }
+      }
+      
+      // ガイド画面画像（平面検出用）
+      if (settings.guideScreen.surfaceDetection?.guideImage) {
+        const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
+        if (surfaceGuideDropzone) {
+          surfaceGuideDropzone.innerHTML = `<img src="${settings.guideScreen.surfaceDetection.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="平面検出ガイド画像">`;
+          console.log('🖼️ 平面検出ガイド画像を復元');
+        } else {
+          console.warn('🖼️ 平面検出ガイドDropzoneが見つかりません');
+        }
+      }
+      
+      // ガイド画面画像（空間検出用）
+      if (settings.guideScreen.worldTracking?.guideImage) {
+        const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
+        if (worldGuideDropzone) {
+          worldGuideDropzone.innerHTML = `<img src="${settings.guideScreen.worldTracking.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="空間検出ガイド画像">`;
+          console.log('🖼️ 空間検出ガイド画像を復元');
+        } else {
+          console.warn('🖼️ 空間検出ガイドDropzoneが見つかりません');
+        }
+      }
+      
+      console.log('🖼️ 画像データ復元完了');
+      
+      // 画像復元後にプレビューを更新
+      setTimeout(() => {
+        console.log('🔄 画像復元後にプレビューを更新');
+        updatePreview('startScreen'); // デフォルトでスタート画面を表示
+      }, 50);
+    }, 200); // DOM準備のために200ms遅延
   }
 
   // エディタの初期化
@@ -209,6 +321,9 @@ export default function showLoadingScreenEditor(container) {
         setupButtons();
         setupLogoTypeHandlers();
         setupSidebarMenuHandlers();
+        
+        // ヘッダーにテンプレート名を表示
+        updateEditorTitle(mode, templateName, templateId);
         
         console.log('全てのイベントリスナーを設定しました');
 
@@ -390,20 +505,80 @@ export default function showLoadingScreenEditor(container) {
 
   // クリーンアップ処理
   function cleanup() {
-    console.log('ローディング画面エディタをクリーンアップしています...');
+    try {
+      console.log('🧹 ローディング画面エディタをクリーンアップしています...');
+      
+      // 実行中のタイマーをクリア
+      if (verifyLayoutTimeoutId) {
+        try {
+          clearTimeout(verifyLayoutTimeoutId);
+          verifyLayoutTimeoutId = null;
+          console.log('✅ verifyLayout タイマーをクリアしました');
+        } catch (timerError) {
+          console.warn('⚠️ タイマークリア中にエラー:', timerError);
+        }
+      }
+      
+      // イベントリスナーのクリーンアップ
+      try {
+        // hashchange イベントリスナーを削除
+        window.removeEventListener('hashchange', updateActiveMenuItem);
+        console.log('✅ hashchange イベントリスナーを削除しました');
+      } catch (eventError) {
+        console.warn('⚠️ イベントリスナー削除中にエラー:', eventError);
+      }
+      
+      // コンテナの内容をクリア
+      if (container) {
+        try {
+          while (container.firstChild) {
+            container.removeChild(container.firstChild);
+          }
+          console.log('✅ コンテナの内容をクリアしました');
+        } catch (containerError) {
+          console.warn('⚠️ コンテナクリア中にエラー:', containerError);
+        }
+      }
+      
+      console.log('🧹 クリーンアップ処理完了');
+    } catch (error) {
+      console.error('❌ クリーンアップ処理中にエラー:', error);
+      console.error('エラースタック:', error.stack);
+    }
+  }
+
+  // ヘッダーのタイトルを更新する関数
+  function updateEditorTitle(mode, templateName, templateId) {
+    const titleElement = document.getElementById('editor-title');
+    const badgeElement = document.getElementById('template-name-badge');
     
-    // 実行中のタイマーをクリア
-    if (verifyLayoutTimeoutId) {
-      clearTimeout(verifyLayoutTimeoutId);
-      verifyLayoutTimeoutId = null;
-      console.log('verifyLayout タイマーをクリアしました');
+    if (!titleElement || !badgeElement) {
+      console.warn('タイトル要素が見つかりません');
+      return;
     }
     
-    // コンテナの内容をクリア
-    if (container) {
-      while (container.firstChild) {
-        container.removeChild(container.firstChild);
+    // デフォルトのタイトル
+    titleElement.textContent = 'ローディング画面エディタ';
+    
+    if (mode === 'new' && templateName) {
+      // 新規作成モード
+      badgeElement.textContent = templateName;
+      badgeElement.className = 'template-name-badge new-template';
+      badgeElement.style.display = 'inline-block';
+      console.log('🏷️ 新規テンプレート名を表示:', templateName);
+    } else if (templateId) {
+      // 編集モード - テンプレート名を取得して表示
+      const template = getLoadingScreenTemplate(templateId);
+      if (template && template.name) {
+        badgeElement.textContent = `${template.name} (編集中)`;
+        badgeElement.className = 'template-name-badge editing-template';
+        badgeElement.style.display = 'inline-block';
+        console.log('🏷️ 編集中テンプレート名を表示:', template.name);
       }
+    } else {
+      // 通常モード - バッジを非表示
+      badgeElement.style.display = 'none';
+      console.log('🏷️ 通常モード - バッジを非表示');
     }
   }
 

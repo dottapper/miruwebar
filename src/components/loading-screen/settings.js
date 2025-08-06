@@ -33,7 +33,7 @@ export const defaultSettings = {
     subTitle: 'AR体験',
     loadingMessage: '読み込み中...',
     fontScale: 1.0,
-    animation: 'fade'
+    animation: 'none'
   },
   guideScreen: {
     backgroundColor: '#121212',
@@ -115,9 +115,39 @@ export const settingsAPI = {
   },
   
   saveSettings(settings) {
-    const merged = this.mergeWithDefaults(settings);
-    localStorage.setItem('loadingScreenSettings', JSON.stringify(merged));
-    return Promise.resolve(merged);
+    try {
+      const merged = this.mergeWithDefaults(settings);
+      const settingsJson = JSON.stringify(merged);
+      
+      // localStorageの容量制限をチェック（約5MB）
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (settingsJson.length > maxSize) {
+        console.error('設定データが大きすぎます:', {
+          size: settingsJson.length,
+          maxSize: maxSize,
+          sizeInMB: (settingsJson.length / 1024 / 1024).toFixed(2)
+        });
+        
+        // 画像データを削除して再試行
+        const settingsWithoutImages = this.removeImageData(merged);
+        const settingsWithoutImagesJson = JSON.stringify(settingsWithoutImages);
+        
+        if (settingsWithoutImagesJson.length > maxSize) {
+          throw new Error(`設定データが大きすぎます（${(settingsJson.length / 1024 / 1024).toFixed(2)}MB）。画像を削除してから保存してください。`);
+        } else {
+          console.log('画像データを削除して保存します');
+          localStorage.setItem('loadingScreenSettings', settingsWithoutImagesJson);
+          return Promise.resolve(settingsWithoutImages);
+        }
+      }
+      
+      localStorage.setItem('loadingScreenSettings', settingsJson);
+      
+      return Promise.resolve(merged);
+    } catch (error) {
+      console.error('設定保存エラー:', error);
+      throw new Error(`設定の保存に失敗しました: ${error.message}`);
+    }
   },
   
   // 設定をデフォルト値とマージする
@@ -153,6 +183,35 @@ export const settingsAPI = {
     localStorage.removeItem('loadingScreenSettings');
     console.log('設定をリセットしました');
     return JSON.parse(JSON.stringify(defaultSettings));
+  },
+
+  // 画像データを削除するヘルパー関数
+  removeImageData(settings) {
+    const cleanedSettings = JSON.parse(JSON.stringify(settings));
+    
+    // スタート画面の画像データを削除
+    if (cleanedSettings.startScreen) {
+      delete cleanedSettings.startScreen.logo;
+      delete cleanedSettings.startScreen.thumbnail;
+    }
+    
+    // ローディング画面の画像データを削除
+    if (cleanedSettings.loadingScreen) {
+      delete cleanedSettings.loadingScreen.logo;
+    }
+    
+    // ガイド画面の画像データを削除
+    if (cleanedSettings.guideScreen) {
+      if (cleanedSettings.guideScreen.surfaceDetection) {
+        delete cleanedSettings.guideScreen.surfaceDetection.guideImage;
+      }
+      if (cleanedSettings.guideScreen.worldTracking) {
+        delete cleanedSettings.guideScreen.worldTracking.guideImage;
+      }
+    }
+    
+    console.log('🧹 画像データを削除しました');
+    return cleanedSettings;
   }
 };
 

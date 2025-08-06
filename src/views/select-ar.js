@@ -2,74 +2,88 @@
 export default function showSelectAR(container) {
   container.innerHTML = `
     <div class="select-ar-container">
-      <h1>AR種類を選択</h1>
-      <p>作成したいARの種類を選んでください</p>
+      <div class="header">
+        <h1>ARタイプを選択</h1>
+        <p>作成したいARの種類を選択してください</p>
+      </div>
       
       <div class="ar-options">
-        <div class="ar-option" id="marker-ar">
-          <div class="ar-icon">📍</div>
+        <div class="ar-option" data-type="marker">
+          <div class="ar-icon">🎯</div>
           <h3>マーカー型AR</h3>
-          <p>特定の画像をカメラで認識すると、その上に3Dモデルを表示します</p>
+          <p>画像マーカーを認識して3Dモデルを表示</p>
         </div>
         
-        <div class="ar-option" id="markerless-ar">
-          <div class="ar-icon">🌐</div>
-          <h3>マーカーレス型AR</h3>
-          <p>周囲の平面を検出して、3Dモデルを自由に配置できます</p>
+        <div class="ar-option" data-type="markerless">
+          <div class="ar-icon">📱</div>
+          <h3>マーカーレスAR</h3>
+          <p>平面を認識して3Dモデルを配置</p>
         </div>
         
-        <div class="ar-option" id="location-ar">
-          <div class="ar-icon">🗺️</div>
-          <h3>位置情報AR</h3>
-          <p>特定の位置情報と連動して3Dモデルを表示します</p>
+        <div class="ar-option" data-type="location">
+          <div class="ar-icon">📍</div>
+          <h3>ロケーションベースAR</h3>
+          <p>GPS座標に基づいて3Dモデルを表示</p>
+        </div>
+        
+        <div class="ar-option" data-type="object">
+          <div class="ar-icon">🔍</div>
+          <h3>物体認識型AR</h3>
+          <p>特定の物体を認識して3Dモデルを表示</p>
+        </div>
+        
+        <div class="ar-option" data-type="face">
+          <div class="ar-icon">😊</div>
+          <h3>フェイスタイプAR</h3>
+          <p>顔に重ねて表示するARエフェクト</p>
+        </div>
+        
+        <div class="ar-option" data-type="faceswitch">
+          <div class="ar-icon">🎭</div>
+          <h3>FaceSwitch AR（ベータ）</h3>
+          <p>顔の表情に応じて変化するAR</p>
         </div>
       </div>
       
       <div class="navigation-buttons">
         <button id="back-button">戻る</button>
-        <button id="next-button" class="primary-button" disabled>次へ</button>
+        <button id="next-button" disabled>次へ</button>
       </div>
     </div>
   `;
 
-  // オプション選択処理
+  // ARオプションの選択処理
   const arOptions = document.querySelectorAll('.ar-option');
   const nextButton = document.getElementById('next-button');
   let selectedOption = null;
 
   arOptions.forEach(option => {
     option.addEventListener('click', () => {
-      // 選択状態の解除
+      // 既存の選択を解除
       arOptions.forEach(opt => opt.classList.remove('selected'));
       
-      // 新しい選択
+      // 新しい選択を設定
       option.classList.add('selected');
-      selectedOption = option.id;
+      selectedOption = option.dataset.type;
+      nextButton.disabled = false;
       
-      // 次へボタンを有効化
-      if (nextButton) nextButton.disabled = false;
+      // デバッグモードでのみログを出力
+      if (import.meta.env.DEV || window.location.search.includes('debug=true')) {
+        console.log('選択されたAR種類:', selectedOption);
+      }
     });
   });
 
-  // 次へボタンのイベントリスナー
-  if (nextButton) {
-    nextButton.addEventListener('click', () => {
-      if (selectedOption) {
-        // 選択したAR種類を保存（後でAPI実装時に使用）
-        console.log('選択されたAR種類:', selectedOption);
-        
-        // プロジェクト一覧画面へ遷移
-        window.location.hash = '#/projects';
-      }
-    });
-  }
+  // 次へボタンの処理
+  nextButton.addEventListener('click', () => {
+    if (selectedOption) {
+      window.location.hash = `#/editor?type=${selectedOption}`;
+    }
+  });
 
-  // 戻るボタンのイベントリスナー
-  const backButton = document.getElementById('back-button');
-  if (backButton) {
-    backButton.addEventListener('click', () => {
-      window.location.hash = '#/login';
-    });
-  }
+  // 戻るボタンの処理
+  document.getElementById('back-button').addEventListener('click', () => {
+    window.location.hash = '#/login';
+  });
 }
   

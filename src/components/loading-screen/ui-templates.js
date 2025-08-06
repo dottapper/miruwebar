@@ -241,8 +241,8 @@ export function createAnimationTabContent(currentSettings = defaultSettings) {
       <div class="loading-screen-editor__form-group">
         <label class="loading-screen-editor__label">アニメーション</label>
         <select class="loading-screen-editor__input" id="loadingScreen-animation">
+          <option value="none" ${(currentSettings.loadingScreen.animation || 'none') === 'none' ? 'selected' : ''}>なし</option>
           <option value="fade" ${currentSettings.loadingScreen.animation === 'fade' ? 'selected' : ''}>フェード</option>
-          <option value="slide" ${currentSettings.loadingScreen.animation === 'slide' ? 'selected' : ''}>スライド</option>
           <option value="zoom" ${currentSettings.loadingScreen.animation === 'zoom' ? 'selected' : ''}>ズーム</option>
         </select>
       </div>
@@ -419,7 +419,10 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
       <!-- メインコンテンツ -->
       <div class="main-content">
         <div class="content-header">
-          <h1>ローディング画面エディタ</h1>
+          <div class="content-header-title">
+            <h1 id="editor-title">ローディング画面エディタ</h1>
+            <span class="template-name-badge" id="template-name-badge" style="display: none;"></span>
+          </div>
           <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
             ← プロジェクト一覧に戻る
           </button>

@@ -2,16 +2,21 @@
  * ローディング画面エディタのイベントハンドラー
  */
 
-import { settingsAPI, validateAndFixColor } from './settings.js';
-import { updatePreview } from './preview.js';
+import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
+import { createMainEditorTemplate } from './ui-templates.js';
+import { settingsAPI, defaultSettings } from './settings.js';
 import { 
-  getAllTemplates, 
-  getTemplate, 
-  saveTemplate, 
-  deleteTemplate, 
-  duplicateTemplate,
-  generateTemplateListHTML 
+  getTemplate,
+  saveTemplate,
+  deleteTemplate,
+  getAllTemplates
 } from './template-manager.js';
+import { 
+  saveLoadingScreenTemplate, 
+  getLoadingScreenTemplate, 
+  deleteLoadingScreenTemplate,
+  showLoadingScreenSelector
+} from '../loading-screen-selector.js';
 
 // タブ名を画面タイプに変換する関数
 function convertTabNameToScreenType(tabName) {
@@ -82,32 +87,17 @@ export function showLogoError(message, detail = '') {
 
 // タブ切り替えの処理
 export function setupTabHandlers() {
-  console.log('タブハンドラーの設定を開始...');
-  
   const mainTabs = document.querySelectorAll('.loading-screen-editor__main-tab');
   const mainContents = document.querySelectorAll('.loading-screen-editor__tab-content');
 
-  console.log('タブ要素検索結果:', {
-    mainTabs: mainTabs.length,
-    mainContents: mainContents.length,
-    containerExists: !!document.querySelector('.loading-screen-editor')
-  });
-
   if (mainTabs.length === 0 || mainContents.length === 0) {
-    console.error('❌ タブ要素が見つかりません:', {
-      mainTabsFound: mainTabs.length,
-      mainContentsFound: mainContents.length,
-      expectedMainTabs: '.loading-screen-editor__main-tab',
-      expectedMainContents: '.loading-screen-editor__tab-content'
-    });
+    console.warn('タブ要素が見つかりません');
     return;
   }
 
   mainTabs.forEach(tab => {
     tab.addEventListener('click', async (e) => {
       e.stopPropagation();
-      
-      console.log('メインタブクリック:', tab.dataset.tab);
       
       mainTabs.forEach(t => t.classList.remove('loading-screen-editor__main-tab--active'));
       mainContents.forEach(c => {
@@ -160,8 +150,6 @@ function setupSubTabHandlers() {
     tab.addEventListener('click', (e) => {
       e.stopPropagation();
       
-      console.log('サブタブクリック:', tab.dataset.subtab);
-      
       subTabs.forEach(t => t.classList.remove('loading-screen-editor__sub-tab--active'));
       subContents.forEach(c => {
         c.classList.remove('loading-screen-editor__sub-content--active');
@@ -198,7 +186,6 @@ function setupGuideModeHandlers() {
 
   modeSelect.addEventListener('change', (e) => {
     const selectedMode = e.target.value;
-    console.log('ガイドモード変更:', selectedMode);
     
     if (selectedMode === 'surface') {
       surfaceSection.style.display = 'block';
@@ -227,13 +214,10 @@ function setupOrientationButtons() {
     button.addEventListener('click', (e) => {
       e.stopPropagation();
       
-      const orientation = button.dataset.orientation;
-      console.log('向き変更:', orientation);
-      
       orientationButtons.forEach(b => b.classList.remove('loading-screen-editor__orientation-button--active'));
       button.classList.add('loading-screen-editor__orientation-button--active');
       
-      if (orientation === 'landscape') {
+      if (button.dataset.orientation === 'landscape') {
         phoneFrame.classList.add('loading-screen-editor__phone-frame--landscape');
       } else {
         phoneFrame.classList.remove('loading-screen-editor__phone-frame--landscape');
@@ -286,6 +270,24 @@ export function setupTextInputs() {
   
   textInputs.forEach(input => {
     input.addEventListener('input', () => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    });
+  });
+  
+  // すべてのselectボックスに対する処理
+  const selectInputs = document.querySelectorAll('select.loading-screen-editor__input');
+  selectInputs.forEach(select => {
+    select.addEventListener('change', () => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    });
+  });
+  
+  // テキストエリアに対する処理
+  const textAreas = document.querySelectorAll('textarea.loading-screen-editor__input');
+  textAreas.forEach(textarea => {
+    textarea.addEventListener('input', () => {
       const currentScreenType = getCurrentActiveScreenType();
       updatePreview(currentScreenType);
     });
@@ -375,6 +377,14 @@ function handleFileSelection(file, dropzone, removeButton) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
+    
+    // dropZoneが存在しない場合のエラーハンドリング
+    if (!dropZone) {
+      console.error('❌ dropZoneが見つかりません:', dropzone.id);
+      showNotification('ファイルアップロードエリアが見つかりません', 'error');
+      return;
+    }
+    
     const imgElement = document.createElement('img');
     imgElement.src = e.target.result;
     imgElement.alt = 'プレビュー';
@@ -382,6 +392,7 @@ function handleFileSelection(file, dropzone, removeButton) {
     
     // 画像が読み込まれた後にプレビューを更新
     imgElement.onload = () => {
+      
       // ロゴアップロード時に適切なサイズを設定
       if (dropzone.id === 'startLogoDropzone') {
         const logoSizeSlider = document.getElementById('startScreen-logoSize');
@@ -393,7 +404,6 @@ function handleFileSelection(file, dropzone, removeButton) {
             sizeValueDisplay.textContent = '1.5x';
           }
           logoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
-          console.log('🖼️ スタート画面ロゴアップロード時にサイズを1.5xに設定');
         }
       } else if (dropzone.id === 'loadingLogoDropzone') {
         const logoSizeSlider = document.getElementById('loadingScreen-logoSize');
@@ -405,26 +415,31 @@ function handleFileSelection(file, dropzone, removeButton) {
             sizeValueDisplay.textContent = '1.5x';
           }
           logoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
-          console.log('🖼️ ローディング画面ロゴアップロード時にサイズを1.5xに設定');
         }
       }
       
-      const currentScreenType = getCurrentActiveScreenType();
-      updatePreview(currentScreenType);
+      // DOMに画像を挿入
+      dropZone.innerHTML = `
+        <div class="loading-screen-editor__file-name">${file.name}</div>
+      `;
+      dropZone.insertBefore(imgElement, dropZone.firstChild);
+      
+      if (removeButton) {
+        removeButton.style.display = 'block';
+      }
+      
+      // 画像がDOMに挿入された後にプレビューを更新
+      setTimeout(() => {
+        const currentScreenType = getCurrentActiveScreenType();
+        updatePreview(currentScreenType);
+      }, 50);
     };
     
-    dropZone.innerHTML = `
-      <div class="loading-screen-editor__file-name">${file.name}</div>
-    `;
-    dropZone.insertBefore(imgElement, dropZone.firstChild);
-    
-    if (removeButton) {
-      removeButton.style.display = 'block';
-    }
-    
-    // 初回のプレビュー更新（画像読み込み前）
-    const currentScreenType = getCurrentActiveScreenType();
-    updatePreview(currentScreenType);
+    // 画像読み込みエラー時の処理
+    imgElement.onerror = () => {
+      console.error('❌ 画像読み込みエラー:', file.name);
+      showNotification('画像の読み込みに失敗しました', 'error');
+    };
   };
   
   reader.readAsDataURL(file);
@@ -549,8 +564,6 @@ export function setupLogoTypeHandlers() {
 
 // スタート画面のロゴ設定をローディング画面に引き継ぐ関数
 function inheritStartScreenLogoSettings() {
-  console.log('🔄 スタート画面のロゴ設定をローディング画面に引き継ぎます');
-  
   // スタート画面のロゴサイズを取得
   const startLogoSizeSlider = document.getElementById('startScreen-logoSize');
   const startLogoPositionSlider = document.getElementById('startScreen-logoPosition');
@@ -559,63 +572,36 @@ function inheritStartScreenLogoSettings() {
   const loadingLogoSizeSlider = document.getElementById('loadingScreen-logoSize');
   const loadingLogoPositionSlider = document.getElementById('loadingScreen-logoPosition');
   
-  console.log('📋 要素の存在確認:', {
-    startLogoSizeSlider: !!startLogoSizeSlider,
-    startLogoPositionSlider: !!startLogoPositionSlider,
-    loadingLogoSizeSlider: !!loadingLogoSizeSlider,
-    loadingLogoPositionSlider: !!loadingLogoPositionSlider
-  });
-  
   if (startLogoSizeSlider && loadingLogoSizeSlider) {
     const startSize = parseFloat(startLogoSizeSlider.value);
-    console.log('📏 現在のスタート画面ロゴサイズ:', startSize);
     
     // スタート画面のロゴサイズをそのままローディング画面に適用
     // ただし、ローディング画面のスライダー範囲（0.5-2.0）に収まるように調整
     let adjustedSize = startSize;
     
-    // スタート画面のロゴサイズをそのまま引き継ぐ
-    // ただし、ローディング画面のスライダー範囲（0.5-2.0）に収まるように調整
-    adjustedSize = startSize;
-    
     // 範囲外の場合は調整
     if (startSize < 0.5) {
       adjustedSize = 0.5;
-      console.log('⚠️ スタート画面のロゴサイズが小さすぎるため、0.5xに調整');
     } else if (startSize > 2.0) {
       adjustedSize = 2.0;
-      console.log('⚠️ スタート画面のロゴサイズが大きすぎるため、2.0xに調整');
-    } else {
-      console.log('🔧 スタート画面のロゴサイズをそのまま引き継ぎ:', startSize);
     }
     
-    console.log('🔧 調整後のサイズ:', adjustedSize);
-    
     loadingLogoSizeSlider.value = adjustedSize;
-    console.log('✅ ローディング画面スライダーに設定:', loadingLogoSizeSlider.value);
     
     // 値表示も更新
     const sizeValueDisplay = document.getElementById('loadingScreen-logoSize-value');
-    console.log('🏷️ 値表示要素:', sizeValueDisplay);
     if (sizeValueDisplay) {
       sizeValueDisplay.textContent = adjustedSize.toFixed(1) + 'x';
-      console.log('📝 値表示を更新:', sizeValueDisplay.textContent);
-    } else {
-      console.error('❌ 値表示要素が見つかりません: loadingScreen-logoSize-value');
     }
     
     // スライダーのinputイベントを発火させて、他の処理も連鎖実行
     loadingLogoSizeSlider.dispatchEvent(new Event('input', { bubbles: true }));
-    console.log('🔄 スライダーのinputイベントを発火');
     
     // プレビューの更新を強制実行
     setTimeout(() => {
       const currentScreenType = getCurrentActiveScreenType();
       updatePreview(currentScreenType);
-      console.log('🔄 プレビューを更新しました:', currentScreenType);
     }, 100);
-    
-    console.log(`スタート画面のロゴサイズ (${startSize}x) をローディング画面に適用 (${adjustedSize}x)`);
   }
   
   if (startLogoPositionSlider && loadingLogoPositionSlider) {
@@ -630,16 +616,10 @@ function inheritStartScreenLogoSettings() {
     const positionValueDisplay = document.getElementById('loadingScreen-logoPosition-value');
     if (positionValueDisplay) {
       positionValueDisplay.textContent = adjustedPosition + '%';
-      console.log('📝 ポジション値表示を更新:', positionValueDisplay.textContent);
-    } else {
-      console.error('❌ ポジション値表示要素が見つかりません: loadingScreen-logoPosition-value');
     }
     
     // スライダーのinputイベントを発火させて、他の処理も連鎖実行
     loadingLogoPositionSlider.dispatchEvent(new Event('input', { bubbles: true }));
-    console.log('🔄 ポジションスライダーのinputイベントを発火');
-    
-    console.log(`スタート画面のロゴ位置 (${startPosition}%) をローディング画面に適用 (${adjustedPosition}%)`);
   }
 }
 
@@ -674,6 +654,18 @@ export function setupSidebarMenuHandlers() {
       });
     }
     
+    // ローディング画面一覧メニュー
+    const loadingScreenMenu = document.getElementById('loading-screen-menu');
+    if (loadingScreenMenu) {
+      loadingScreenMenu.addEventListener('click', () => {
+        try {
+          showLoadingScreenSelector();
+        } catch (error) {
+          console.error('ローディング画面セレクターの表示エラー:', error);
+        }
+      });
+    }
+    
     // ログアウトボタン
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
@@ -683,8 +675,6 @@ export function setupSidebarMenuHandlers() {
         }
       });
     }
-    
-    console.log('サイドバーメニューの設定が完了しました');
   } catch (error) {
     console.error('サイドバーメニューの設定中にエラーが発生しました:', error);
   }
@@ -699,14 +689,28 @@ function loadTemplateList() {
   }
   
   try {
+    // 保存済みテンプレートを取得
+    const templates = getStoredTemplates();
     const currentTemplateId = getCurrentActiveTemplateId();
-    const templateListHTML = generateTemplateListHTML(currentTemplateId);
+    
+    if (templates.length === 0) {
+      templateListContainer.innerHTML = '<div class="no-templates">保存済みテンプレートはありません</div>';
+      return;
+    }
+    
+    // テンプレート一覧のHTMLを生成
+    const templateListHTML = templates.map(template => `
+      <div class="loading-screen-editor__template-item ${template.id === currentTemplateId ? 'loading-screen-editor__template-item--active' : ''}" 
+           data-template-id="${template.id}">
+        <div class="loading-screen-editor__template-name">${template.name}</div>
+        <div class="loading-screen-editor__template-date">${template.createdAt}</div>
+      </div>
+    `).join('');
+    
     templateListContainer.innerHTML = templateListHTML;
     
     // テンプレートアイテムのイベントリスナーを設定
     setupTemplateItemHandlers();
-    
-    console.log('テンプレート一覧を読み込みました');
   } catch (error) {
     console.error('テンプレート一覧の読み込みに失敗しました:', error);
   }
@@ -736,7 +740,7 @@ function setupTemplateItemHandlers() {
 // テンプレートを選択
 function selectTemplate(templateId) {
   try {
-    const template = getTemplate(templateId);
+    const template = getLoadingScreenTemplate(templateId);
     if (!template) {
       console.error('テンプレートが見つかりません:', templateId);
       return;
@@ -750,9 +754,9 @@ function selectTemplate(templateId) {
     // アクティブなテンプレートを更新
     updateActiveTemplate(templateId);
     
-    // プレビューを更新
-    const currentScreenType = getCurrentActiveScreenType();
-    updatePreview(currentScreenType);
+    // プレビュー更新は loadTemplateSettings 内で実行されるため、ここではコメントアウト
+    // const currentScreenType = getCurrentActiveScreenType();
+    // updatePreview(currentScreenType);
     
     console.log('テンプレートを選択しました:', template.name);
   } catch (error) {
@@ -819,6 +823,73 @@ function loadTemplateSettings(settings) {
         }
       }
     }
+    
+    // 画像データの読み込み
+    console.log('🖼️ 画像データ読み込み処理開始');
+    
+    // サムネイル画像
+    if (settings.startScreen?.thumbnail) {
+      const thumbnailDropzone = document.getElementById('thumbnailDropzone');
+      if (thumbnailDropzone) {
+        thumbnailDropzone.innerHTML = `
+          <img src="${settings.startScreen.thumbnail}" alt="サムネイル" style="max-width: 100%; max-height: 100px;">
+          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
+        `;
+      }
+    }
+    
+    // スタート画面ロゴ
+    if (settings.startScreen?.logo) {
+      const startLogoDropzone = document.getElementById('startLogoDropzone');
+      if (startLogoDropzone) {
+        startLogoDropzone.innerHTML = `
+          <img src="${settings.startScreen.logo}" alt="スタート画面ロゴ" style="max-width: 100%; max-height: 100px;">
+          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
+        `;
+      }
+    }
+    
+    // ローディング画面カスタムロゴ
+    if (settings.loadingScreen?.logo) {
+      const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
+      if (loadingLogoDropzone) {
+        loadingLogoDropzone.innerHTML = `
+          <img src="${settings.loadingScreen.logo}" alt="ローディング画面ロゴ" style="max-width: 100%; max-height: 100px;">
+          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
+        `;
+      }
+    }
+    
+    // ガイド画面画像（平面検出用）
+    if (settings.guideScreen?.surfaceDetection?.guideImage) {
+      const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
+      if (surfaceGuideDropzone) {
+        surfaceGuideDropzone.innerHTML = `
+          <img src="${settings.guideScreen.surfaceDetection.guideImage}" alt="平面検出ガイド画像" style="max-width: 100%; max-height: 100px;">
+          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
+        `;
+      }
+    }
+    
+    // ガイド画面画像（空間検出用）
+    if (settings.guideScreen?.worldTracking?.guideImage) {
+      const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
+      if (worldGuideDropzone) {
+        worldGuideDropzone.innerHTML = `
+          <img src="${settings.guideScreen.worldTracking.guideImage}" alt="空間検出ガイド画像" style="max-width: 100%; max-height: 100px;">
+          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
+        `;
+      }
+    }
+    
+    console.log('🖼️ 画像データ読み込み処理完了');
+    
+    // 画像復元後にプレビューを更新
+    setTimeout(() => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    }, 100);
+    
   } catch (error) {
     console.error('テンプレート設定の読み込みに失敗しました:', error);
   }
@@ -875,15 +946,13 @@ function createNewTemplate(templateName) {
     const currentSettings = getCurrentSettings();
     
     // 新しいテンプレートデータを作成
-    const newTemplate = {
+    const templateData = {
       name: templateName,
-      description: 'カスタムテンプレート',
-      settings: currentSettings,
-      isDefault: false
+      settings: currentSettings
     };
     
     // テンプレートを保存
-    const savedTemplate = saveTemplate(newTemplate);
+    const savedTemplate = saveLoadingScreenTemplate(templateData);
     
     // テンプレート一覧を更新
     loadTemplateList();
@@ -901,24 +970,35 @@ function createNewTemplate(templateName) {
 
 // ボタンの設定
 export function setupButtons() {
-  console.log('ボタンイベントの設定を開始...');
-  
   // プロジェクト一覧に戻るボタン
   const backButton = document.getElementById('back-to-projects-button');
   if (backButton) {
     backButton.addEventListener('click', () => {
-      // 変更があるかチェック（簡易版）
-      const hasChanges = checkForUnsavedChanges();
-      
-      if (hasChanges) {
-        if (confirm('変更内容が失われますが、プロジェクト一覧に戻りますか？')) {
+      try {
+        // 変更があるかチェック（簡易版）
+        let hasChanges = false;
+        try {
+          hasChanges = checkForUnsavedChanges();
+        } catch (changeCheckError) {
+          console.warn('変更チェック中にエラー:', changeCheckError);
+          hasChanges = false; // エラー時は変更なしとみなす
+        }
+        
+        if (hasChanges) {
+          showSaveConfirmDialog(() => {
+            // プロジェクト一覧に戻る
+            window.location.hash = '#/projects';
+          });
+        } else {
           window.location.hash = '#/projects';
         }
-      } else {
+      } catch (error) {
+        console.error('戻るボタンクリック処理中にエラー:', error);
+        
+        // エラー発生時でも戻れるように
         window.location.hash = '#/projects';
       }
     });
-    console.log('戻るボタンのイベントリスナーを設定しました');
   } else {
     console.warn('戻るボタンが見つかりません');
   }
@@ -928,19 +1008,80 @@ export function setupButtons() {
   if (saveButton) {
     saveButton.addEventListener('click', async () => {
       try {
-        console.log('設定を保存中...');
-        const settings = getCurrentSettings();
-        await settingsAPI.saveSettings(settings);
+        // 現在の設定を取得
+        const settings = getCurrentSettingsFromDOM();
         
-        // 保存成功の通知
-        showNotification('設定を保存しました', 'success');
-        console.log('設定を保存しました');
+        // URLパラメータから新規作成モードと名前を確認
+        const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+        const mode = urlParams.get('mode');
+        const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+        
+        if (mode === 'new' && templateName) {
+          // 新規作成モード：テンプレートとして保存
+          const templateData = {
+            name: templateName,
+            settings: settings
+          };
+          
+          const savedTemplate = saveLoadingScreenTemplate(templateData);
+          showNotification(`テンプレート「${savedTemplate.name}」を保存しました`, 'success');
+          
+          // 最後に使用したテンプレートIDを記録
+          localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+          
+          // URLを更新して編集モードに切り替え
+          window.location.hash = `#/loading-screen?template=${savedTemplate.id}`;
+          
+          // タイトルも更新
+          setTimeout(() => {
+            updateEditorTitleFromUrl();
+          }, 100);
+        } else {
+          // 既存テンプレートの更新または通常の設定保存
+          const templateId = urlParams.get('template');
+          if (templateId) {
+            // テンプレート編集モード：既存テンプレートを更新
+            const template = getLoadingScreenTemplate(templateId);
+            if (template) {
+              const updatedTemplate = {
+                ...template,
+                settings: settings,
+                updatedAt: new Date().toLocaleDateString('ja-JP')
+              };
+              
+              // 既存のテンプレートを削除して新しいものを保存
+              deleteLoadingScreenTemplate(templateId);
+              const savedTemplate = saveLoadingScreenTemplate({
+                name: template.name,
+                settings: settings
+              });
+              
+              showNotification(`テンプレート「${template.name}」を更新しました`, 'success');
+              
+              // 最後に使用したテンプレートIDを記録
+              localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+            } else {
+              // テンプレートが見つからない場合は通常保存
+              await settingsAPI.saveSettings(settings);
+              showNotification('設定を保存しました', 'success');
+            }
+          } else {
+            // 通常の設定保存
+            await settingsAPI.saveSettings(settings);
+            showNotification('設定を保存しました', 'success');
+          }
+        }
       } catch (error) {
         console.error('設定の保存に失敗しました:', error);
-        showNotification('設定の保存に失敗しました', 'error');
+        
+        // 容量制限エラーの場合の特別な処理
+        if (error.message.includes('quota') || error.message.includes('容量') || error.message.includes('QuotaExceededError')) {
+          showNotification('保存容量が不足しています。古いテンプレートを削除してから保存してください。', 'error');
+        } else {
+          showNotification(`設定の保存に失敗しました: ${error.message}`, 'error');
+        }
       }
     });
-    console.log('保存ボタンのイベントリスナーを設定しました');
   } else {
     console.warn('保存ボタンが見つかりません');
   }
@@ -962,25 +1103,53 @@ export function setupButtons() {
   const resetButtons = document.querySelectorAll('[id*="reset"]');
   resetButtons.forEach(button => {
     button.addEventListener('click', () => {
-      if (confirm('設定をリセットしますか？')) {
-        settingsAPI.resetSettings();
-        location.reload(); // ページをリロードして初期状態に戻す
+      if (confirm('設定をリセットしますか？\n\nすべての設定とアップロードした画像がデフォルト状態に戻ります。')) {
+        try {
+          // 設定をリセット
+          settingsAPI.resetSettings();
+          
+          // テンプレート関連のIDをクリア
+          localStorage.removeItem('lastUsedTemplateId');
+          
+          // DOMをクリア（画像のアップロードデータなどを削除）
+          resetDOMElements();
+          
+          // 成功通知を表示
+          showNotification('設定をリセットしました', 'success');
+          
+        } catch (error) {
+          console.error('リセット処理中にエラー:', error);
+          showNotification('リセット処理中にエラーが発生しました', 'error');
+        }
       }
     });
   });
-  console.log(`${resetButtons.length}個のリセットボタンのイベントリスナーを設定しました`);
 }
 
 // 未保存の変更があるかチェックする関数
 function checkForUnsavedChanges() {
-  // 簡易版：フォーム要素の値をチェック
-  const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider');
-  for (const input of inputs) {
-    if (input.value !== input.defaultValue) {
-      return true;
+  try {
+    // 簡易版：フォーム要素の値をチェック
+    const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider');
+    
+    for (const input of inputs) {
+      try {
+        if (input.value !== input.defaultValue) {
+          return true;
+        }
+      } catch (inputError) {
+        console.warn('入力要素チェック中にエラー:', input.id, inputError);
+        // 個別の入力要素でエラーが発生しても継続
+      }
     }
+    
+    return false;
+  } catch (error) {
+    console.error('未保存変更チェック中にエラー:', error);
+    
+    // エラー時は安全のため変更ありとみなす
+    return false;
   }
-  return false;
 }
 
 // 通知を表示する関数
@@ -1037,4 +1206,277 @@ function getCurrentSettings() {
   }
 
   return settings;
+}
+
+// URLパラメータからタイトルを更新する関数
+function updateEditorTitleFromUrl() {
+  const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const mode = urlParams.get('mode');
+  const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+  const templateId = urlParams.get('template');
+  
+  const titleElement = document.getElementById('editor-title');
+  const badgeElement = document.getElementById('template-name-badge');
+  
+  if (!titleElement || !badgeElement) {
+    return;
+  }
+  
+  // デフォルトのタイトル
+  titleElement.textContent = 'ローディング画面エディタ';
+  
+  if (mode === 'new' && templateName) {
+    // 新規作成モード
+    badgeElement.textContent = templateName;
+    badgeElement.className = 'template-name-badge new-template';
+    badgeElement.style.display = 'inline-block';
+  } else if (templateId) {
+    // 編集モード - テンプレート名を取得して表示
+    const template = getStoredTemplates().find(t => t.id === templateId);
+    if (template && template.name) {
+      badgeElement.textContent = `${template.name} (編集中)`;
+      badgeElement.className = 'template-name-badge editing-template';
+      badgeElement.style.display = 'inline-block';
+    }
+  } else {
+    // 通常モード - バッジを非表示
+    badgeElement.style.display = 'none';
+  }
+}
+
+/**
+ * 保存済みテンプレートを取得
+ */
+function getStoredTemplates() {
+  try {
+    const stored = localStorage.getItem('loadingScreenTemplates');
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('テンプレート一覧の取得に失敗:', error);
+    return [];
+  }
+}
+
+/**
+ * 保存確認ダイアログを表示
+ */
+function showSaveConfirmDialog(onNavigate) {
+  // 既存のダイアログがある場合は削除
+  const existingDialog = document.getElementById('save-confirm-dialog');
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+
+  // ダイアログのHTMLを作成
+  const dialogHTML = `
+    <div class="save-confirm-dialog-overlay" id="save-confirm-dialog">
+      <div class="save-confirm-dialog">
+        <div class="save-confirm-dialog-header">
+          <h3>変更を保存しますか？</h3>
+        </div>
+        <div class="save-confirm-dialog-content">
+          <p>変更が保存されていません。プロジェクト一覧に戻る前に保存しますか？</p>
+        </div>
+        <div class="save-confirm-dialog-actions">
+          <button class="save-confirm-button save-confirm-button--secondary" id="cancel-save-dialog">
+            キャンセル
+          </button>
+          <button class="save-confirm-button save-confirm-button--danger" id="discard-changes">
+            保存せずに戻る
+          </button>
+          <button class="save-confirm-button save-confirm-button--primary" id="save-and-navigate">
+            保存して戻る
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // DOMに追加
+  document.body.insertAdjacentHTML('beforeend', dialogHTML);
+
+  // ダイアログ要素を取得
+  const dialog = document.getElementById('save-confirm-dialog');
+  const cancelBtn = document.getElementById('cancel-save-dialog');
+  const discardBtn = document.getElementById('discard-changes');
+  const saveBtn = document.getElementById('save-and-navigate');
+
+  // ダイアログを表示
+  setTimeout(() => {
+    dialog.classList.add('show');
+  }, 10);
+
+  // キャンセルボタン
+  cancelBtn.addEventListener('click', () => {
+    console.log('👤 ユーザーがキャンセルを選択');
+    hideDialog();
+  });
+
+  // 保存せずに戻るボタン
+  discardBtn.addEventListener('click', () => {
+    console.log('👤 ユーザーが「保存せずに戻る」を選択');
+    hideDialog();
+    onNavigate();
+  });
+
+  // 保存して戻るボタン
+  saveBtn.addEventListener('click', async () => {
+    console.log('👤 ユーザーが「保存して戻る」を選択');
+    
+    try {
+      // 保存処理を実行
+      console.log('💾 設定を保存中...');
+      const saveButton = document.getElementById('save-button');
+      if (saveButton) {
+        saveButton.click(); // 既存の保存ボタンをクリックして保存処理を実行
+        
+        // 保存完了を待つ
+        setTimeout(() => {
+          console.log('💾 保存完了 - プロジェクト一覧に遷移');
+          hideDialog();
+          onNavigate();
+        }, 500);
+      } else {
+        console.warn('⚠️ 保存ボタンが見つかりません');
+        hideDialog();
+        onNavigate();
+      }
+    } catch (error) {
+      console.error('❌ 保存処理中にエラー:', error);
+      hideDialog();
+      onNavigate();
+    }
+  });
+
+  // ダイアログを非表示にする関数
+  function hideDialog() {
+    dialog.classList.remove('show');
+    setTimeout(() => {
+      if (dialog.parentNode) {
+        dialog.parentNode.removeChild(dialog);
+      }
+    }, 300);
+  }
+
+  // Escキーで閉じる
+  const handleEscKey = (e) => {
+    if (e.key === 'Escape') {
+      hideDialog();
+      document.removeEventListener('keydown', handleEscKey);
+    }
+  };
+  document.addEventListener('keydown', handleEscKey);
+
+  // オーバーレイクリックで閉じる
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      hideDialog();
+    }
+  });
+}
+
+// グローバルスコープで removeFile 関数を利用可能にする
+window.removeFile = removeFile;
+
+/**
+ * DOM要素をデフォルト状態にリセット
+ */
+function resetDOMElements() {
+  try {
+    console.log('🧹 DOM要素リセット開始');
+    
+    // すべての入力要素をデフォルト値にリセット
+    const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider, .loading-screen-editor__color-picker');
+    inputs.forEach(input => {
+      const id = input.id;
+      if (!id) return;
+      
+      const [screenType, property] = id.split('-');
+      if (defaultSettings[screenType] && defaultSettings[screenType][property] !== undefined) {
+        const defaultValue = defaultSettings[screenType][property];
+        
+        if (input.type === 'range') {
+          input.value = defaultValue;
+          // スライダーの値表示も更新
+          const valueDisplay = input.parentElement?.querySelector('.loading-screen-editor__value-display');
+          if (valueDisplay) {
+            const unit = input.id.includes('Position') ? '%' : 'x';
+            valueDisplay.textContent = defaultValue + unit;
+          }
+        } else if (input.type === 'color') {
+          input.value = defaultValue;
+          // カラーテキスト入力も更新
+          const textInput = document.getElementById(`${id}Text`);
+          if (textInput) {
+            textInput.value = defaultValue;
+          }
+        } else {
+          input.value = defaultValue;
+        }
+        
+      }
+    });
+    
+    // ロゴタイプラジオボタンをリセット
+    const logoTypeRadio = document.querySelector('input[name="loadingLogoType"][value="none"]');
+    if (logoTypeRadio) {
+      logoTypeRadio.checked = true;
+      
+      // UI表示の更新
+      const customLogoSection = document.getElementById('loading-custom-logo-section');
+      const logoControls = document.getElementById('loading-logo-controls');
+      const logoSizeControls = document.getElementById('loading-logo-size-controls');
+      
+      if (customLogoSection) {
+        customLogoSection.style.display = 'none';
+      }
+      if (logoControls) {
+        logoControls.style.display = 'none';
+      }
+      if (logoSizeControls) {
+        logoSizeControls.style.display = 'none';
+      }
+    }
+    
+    // 画像アップロードエリアをリセット
+    const dropzones = [
+      'thumbnailDropzone',
+      'startLogoDropzone', 
+      'loadingLogoDropzone',
+      'surfaceGuideImageDropzone',
+      'worldGuideImageDropzone'
+    ];
+    
+    dropzones.forEach(dropzoneId => {
+      const dropzone = document.getElementById(dropzoneId);
+      if (dropzone) {
+        // デフォルトのドロップゾーンHTMLに戻す
+        dropzone.innerHTML = `
+          <div class="loading-screen-editor__drop-zone-icon">📁</div>
+          <div class="loading-screen-editor__drop-zone-text">画像をドラッグ&ドロップ</div>
+          <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+          <div class="loading-screen-editor__supported-formats">対応形式: PNG, JPG, GIF</div>
+        `;
+      }
+    });
+    
+    // ガイド画面のモード選択をリセット
+    const guideModeSelect = document.getElementById('guideScreen-mode');
+    if (guideModeSelect) {
+      guideModeSelect.value = 'surface';
+    }
+    
+    console.log('🧹 DOM要素リセット完了');
+    
+    // プレビューを更新
+    setTimeout(() => {
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+      console.log('🔄 リセット後のプレビューを更新');
+    }, 100);
+    
+  } catch (error) {
+    console.error('❌ DOM要素リセット中にエラー:', error);
+    throw error;
+  }
 } 

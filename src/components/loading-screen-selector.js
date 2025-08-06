@@ -2,7 +2,7 @@
  * ローディング画面選択モーダルの管理
  */
 
-import { settingsAPI } from './loading-screen/settings.js';
+// import { settingsAPI } from './loading-screen/settings.js'; // 現在未使用
 
 let modalOverlay = null;
 let isModalOpen = false;
@@ -46,9 +46,6 @@ function createModalHTML() {
             <button class="modal-button modal-button--secondary" id="cancel-selection">
               キャンセル
             </button>
-            <button class="modal-button modal-button--primary" id="confirm-selection" style="display: none;">
-              選択
-            </button>
           </div>
         </div>
       </div>
@@ -70,17 +67,39 @@ function generateTemplatesList() {
     `;
   }
   
-  // とりあえずドロップダウン形式で実装
-  const options = templates.map(template => 
-    `<option value="${template.id}">${template.name} (${template.createdAt})</option>`
-  ).join('');
+  // カード形式でテンプレート一覧を表示
+  const templateCards = templates.map(template => {
+    const previewColors = template.settings?.startScreen || {};
+    const backgroundColor = previewColors.backgroundColor || '#121212';
+    const accentColor = previewColors.accentColor || '#6c5ce7';
+    
+    return `
+      <div class="template-card" data-template-id="${template.id}">
+        <div class="template-preview" style="background-color: ${backgroundColor};">
+          <div class="template-preview-content">
+            <div class="template-preview-logo" style="background-color: ${accentColor};"></div>
+            <div class="template-preview-title" style="color: ${previewColors.textColor || '#ffffff'};">
+              ${template.settings?.startScreen?.title || 'AR体験を開始'}
+            </div>
+          </div>
+        </div>
+        <div class="template-info">
+          <div class="template-name">${template.name}</div>
+          <div class="template-date">作成日: ${template.createdAt}</div>
+          <div class="template-actions">
+            <button class="template-action-btn template-select-btn" data-template-id="${template.id}">
+              選択
+            </button>
+            <button class="template-action-btn template-delete-btn" data-template-id="${template.id}">
+              削除
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
   
-  return `
-    <select class="template-dropdown" id="template-selector">
-      <option value="">テンプレートを選択してください</option>
-      ${options}
-    </select>
-  `;
+  return templateCards;
 }
 
 /**
@@ -175,17 +194,8 @@ function setupModalEventListeners() {
     newButton.addEventListener('click', handleNewTemplateCreation);
   }
   
-  // テンプレート選択
-  const templateSelector = document.getElementById('template-selector');
-  if (templateSelector) {
-    templateSelector.addEventListener('change', handleTemplateSelection);
-  }
-  
-  // 選択ボタン
-  const confirmButton = document.getElementById('confirm-selection');
-  if (confirmButton) {
-    confirmButton.addEventListener('click', handleConfirmSelection);
-  }
+  // テンプレートカードのイベントリスナーを設定
+  setupTemplateCardListeners();
   
   // オーバーレイクリックで閉じる
   modalOverlay.addEventListener('click', (e) => {
@@ -199,46 +209,248 @@ function setupModalEventListeners() {
 }
 
 /**
+ * テンプレートカードのイベントリスナーを設定
+ */
+function setupTemplateCardListeners() {
+  // 選択ボタン
+  const selectButtons = document.querySelectorAll('.template-select-btn');
+  selectButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const templateId = button.dataset.templateId;
+      handleTemplateSelection(templateId);
+    });
+  });
+  
+  // 削除ボタン
+  const deleteButtons = document.querySelectorAll('.template-delete-btn');
+  deleteButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const templateId = button.dataset.templateId;
+      handleTemplateDelete(templateId);
+    });
+  });
+  
+  // テンプレートカード全体のクリック（プレビュー用）
+  const templateCards = document.querySelectorAll('.template-card');
+  templateCards.forEach(card => {
+    card.addEventListener('click', (e) => {
+      // ボタンクリック時は無視
+      if (e.target.classList.contains('template-action-btn')) {
+        return;
+      }
+      
+      const templateId = card.dataset.templateId;
+      // カードクリックでも選択（ダブルクリック防止）
+      handleTemplateSelection(templateId);
+    });
+  });
+}
+
+/**
  * 新規作成処理
  */
 function handleNewTemplateCreation() {
   console.log('新規テンプレート作成が選択されました');
+  
+  // 名前入力ダイアログを表示
+  showTemplateNameDialog();
+}
+
+/**
+ * テンプレート名前入力ダイアログを表示
+ */
+function showTemplateNameDialog() {
+  // 既存のダイアログがある場合は削除
+  const existingDialog = document.getElementById('template-name-dialog');
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+  
+  const dialogHTML = `
+    <div class="template-name-dialog-overlay" id="template-name-dialog">
+      <div class="template-name-dialog">
+        <div class="template-name-dialog-header">
+          <h3>新しいローディング画面</h3>
+          <button class="template-name-dialog-close" id="close-name-dialog">×</button>
+        </div>
+        <div class="template-name-dialog-content">
+          <p>ローディング画面の名前を入力してください：</p>
+          <input type="text" 
+                 class="template-name-input" 
+                 id="template-name-input" 
+                 placeholder="例：企業ロゴ付きローディング画面"
+                 maxlength="50">
+          <div class="template-name-counter">
+            <span id="char-counter">0</span>/50文字
+          </div>
+        </div>
+        <div class="template-name-dialog-actions">
+          <button class="template-name-button template-name-button--secondary" id="cancel-name-dialog">
+            キャンセル
+          </button>
+          <button class="template-name-button template-name-button--primary" id="confirm-name-dialog">
+            作成
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', dialogHTML);
+  
+  // イベントリスナーを設定
+  setupNameDialogEventListeners();
+  
+  // ダイアログを表示
+  const dialog = document.getElementById('template-name-dialog');
+  setTimeout(() => {
+    dialog.classList.add('show');
+    // 入力フィールドにフォーカス
+    document.getElementById('template-name-input').focus();
+  }, 10);
+}
+
+/**
+ * 名前入力ダイアログのイベントリスナーを設定
+ */
+function setupNameDialogEventListeners() {
+  const dialog = document.getElementById('template-name-dialog');
+  const closeButton = document.getElementById('close-name-dialog');
+  const cancelButton = document.getElementById('cancel-name-dialog');
+  const confirmButton = document.getElementById('confirm-name-dialog');
+  const nameInput = document.getElementById('template-name-input');
+  const charCounter = document.getElementById('char-counter');
+  
+  // 閉じるボタン
+  closeButton?.addEventListener('click', hideTemplateNameDialog);
+  
+  // キャンセルボタン
+  cancelButton?.addEventListener('click', hideTemplateNameDialog);
+  
+  // 作成ボタン
+  confirmButton?.addEventListener('click', handleNameConfirm);
+  
+  // 文字数カウンター
+  nameInput?.addEventListener('input', (e) => {
+    const length = e.target.value.length;
+    charCounter.textContent = length;
+    
+    // 文字数制限の視覚的フィードバック
+    if (length > 45) {
+      charCounter.style.color = '#ff6b6b';
+    } else if (length > 35) {
+      charCounter.style.color = '#ffa500';
+    } else {
+      charCounter.style.color = '#666';
+    }
+  });
+  
+  // Enterキーで作成
+  nameInput?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleNameConfirm();
+    }
+  });
+  
+  // オーバーレイクリックで閉じる
+  dialog?.addEventListener('click', (e) => {
+    if (e.target === dialog) {
+      hideTemplateNameDialog();
+    }
+  });
+  
+  // Escキーで閉じる
+  const handleEscKey = (e) => {
+    if (e.key === 'Escape') {
+      hideTemplateNameDialog();
+      document.removeEventListener('keydown', handleEscKey);
+    }
+  };
+  document.addEventListener('keydown', handleEscKey);
+}
+
+/**
+ * 名前入力ダイアログを非表示
+ */
+function hideTemplateNameDialog() {
+  const dialog = document.getElementById('template-name-dialog');
+  if (dialog) {
+    dialog.classList.remove('show');
+    setTimeout(() => {
+      dialog.remove();
+    }, 300);
+  }
+}
+
+/**
+ * 名前確定処理
+ */
+function handleNameConfirm() {
+  const nameInput = document.getElementById('template-name-input');
+  const templateName = nameInput?.value.trim();
+  
+  if (!templateName) {
+    // 名前が空の場合の警告
+    nameInput.classList.add('error');
+    nameInput.placeholder = '名前を入力してください';
+    nameInput.focus();
+    return;
+  }
+  
+  console.log('テンプレート名が確定されました:', templateName);
+  
+  // ダイアログを閉じる
+  hideTemplateNameDialog();
+  
+  // セレクターモーダルも閉じる
   hideLoadingScreenSelector();
   
-  // ローディング画面エディタに遷移（新規作成モード）
-  window.location.hash = '#/loading-screen?mode=new';
+  // 名前をURLパラメータに含めてエディタに遷移
+  const encodedName = encodeURIComponent(templateName);
+  window.location.hash = `#/loading-screen?mode=new&name=${encodedName}`;
 }
 
 /**
  * テンプレート選択処理
  */
-function handleTemplateSelection() {
-  const selector = document.getElementById('template-selector');
-  const confirmButton = document.getElementById('confirm-selection');
+function handleTemplateSelection(templateId) {
+  console.log('テンプレートが選択されました:', templateId);
   
-  if (selector && confirmButton) {
-    if (selector.value) {
-      confirmButton.style.display = 'block';
-    } else {
-      confirmButton.style.display = 'none';
-    }
-  }
+  hideLoadingScreenSelector();
+  
+  // ローディング画面エディタに遷移（編集モード）
+  window.location.hash = `#/loading-screen?template=${templateId}`;
 }
 
 /**
- * 選択確定処理
+ * テンプレート削除処理
  */
-function handleConfirmSelection() {
-  const selector = document.getElementById('template-selector');
+function handleTemplateDelete(templateId) {
+  const template = getLoadingScreenTemplate(templateId);
   
-  if (selector && selector.value) {
-    const templateId = selector.value;
-    console.log('テンプレートが選択されました:', templateId);
-    
-    hideLoadingScreenSelector();
-    
-    // ローディング画面エディタに遷移（編集モード）
-    window.location.hash = `#/loading-screen?template=${templateId}`;
+  if (!template) {
+    console.error('削除対象のテンプレートが見つかりません:', templateId);
+    return;
+  }
+  
+  const confirmMessage = `テンプレート「${template.name}」を削除しますか？\n\nこの操作は取り消せません。`;
+  
+  if (confirm(confirmMessage)) {
+    try {
+      const result = deleteLoadingScreenTemplate(templateId);
+      
+      // 一覧を更新
+      updateTemplatesList();
+      
+      // 通知を表示
+      showDeleteNotification(`テンプレート「${template.name}」を削除しました`);
+    } catch (error) {
+      console.error('テンプレート削除に失敗:', error);
+      alert('テンプレートの削除に失敗しました');
+    }
   }
 }
 
@@ -256,7 +468,11 @@ function handleKeyPress(e) {
  */
 export function saveLoadingScreenTemplate(templateData) {
   try {
+    const settings = templateData.settings;
     const templates = getStoredTemplates();
+    
+    // 容量制限をチェック（約4MB）
+    const maxSize = 4 * 1024 * 1024;
     const newTemplate = {
       id: `template_${Date.now()}`,
       name: templateData.name || `テンプレート ${templates.length + 1}`,
@@ -265,10 +481,29 @@ export function saveLoadingScreenTemplate(templateData) {
       settings: templateData.settings
     };
     
+    // 新しいテンプレートを追加
     templates.push(newTemplate);
+    
+    // 容量チェック
+    const templatesJson = JSON.stringify(templates);
+    if (templatesJson.length > maxSize) {
+      console.warn('⚠️ テンプレート容量制限に近づいています。古いテンプレートを削除します。');
+      
+      // 古いテンプレートを削除（最新の5個を保持）
+      while (templates.length > 5 && templatesJson.length > maxSize) {
+        const oldestTemplate = templates.shift(); // 最も古いテンプレートを削除
+        console.log('🗑️ 古いテンプレートを削除:', oldestTemplate.name);
+      }
+      
+      // 再度容量チェック
+      const reducedTemplatesJson = JSON.stringify(templates);
+      if (reducedTemplatesJson.length > maxSize) {
+        throw new Error('テンプレートの容量が制限を超えています。画像を削除してから保存してください。');
+      }
+    }
+    
     localStorage.setItem('loadingScreenTemplates', JSON.stringify(templates));
     
-    console.log('テンプレートを保存しました:', newTemplate.name);
     return newTemplate;
   } catch (error) {
     console.error('テンプレートの保存に失敗:', error);
@@ -282,4 +517,58 @@ export function saveLoadingScreenTemplate(templateData) {
 export function getLoadingScreenTemplate(templateId) {
   const templates = getStoredTemplates();
   return templates.find(template => template.id === templateId);
+}
+
+/**
+ * テンプレートを削除
+ */
+export function deleteLoadingScreenTemplate(templateId) {
+  try {
+    const templates = getStoredTemplates();
+    const filteredTemplates = templates.filter(template => template.id !== templateId);
+    
+    localStorage.setItem('loadingScreenTemplates', JSON.stringify(filteredTemplates));
+    
+    // 削除されたテンプレートがlastUsedTemplateIdの場合はクリア
+    const lastUsedId = localStorage.getItem('lastUsedTemplateId');
+    if (lastUsedId === templateId) {
+      localStorage.removeItem('lastUsedTemplateId');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('テンプレートの削除に失敗:', error);
+    throw error;
+  }
+}
+
+/**
+ * 削除通知を表示
+ */
+function showDeleteNotification(message) {
+  const notification = document.createElement('div');
+  notification.className = 'template-notification template-notification--success';
+  notification.innerHTML = `
+    <div class="notification-content">
+      <span class="notification-icon">✓</span>
+      <span class="notification-message">${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // フェードイン
+  setTimeout(() => {
+    notification.classList.add('show');
+  }, 10);
+  
+  // 自動で削除
+  setTimeout(() => {
+    notification.classList.remove('show');
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
 }

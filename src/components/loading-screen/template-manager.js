@@ -31,7 +31,7 @@ export const defaultTemplateSettings = {
     subTitle: 'AR Experience',
     loadingMessage: '読み込み中...',
     fontScale: 1.0,
-    animation: 'fade'
+    animation: 'none'
   },
   guideScreen: {
     mode: 'surface',

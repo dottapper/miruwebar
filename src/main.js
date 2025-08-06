@@ -14,12 +14,28 @@ import './styles/loading-screen-selector.css'; // ローディング画面選択
 // IndexedDB マイグレーション機能をインポート
 import { initializeMigration } from './storage/migrate.js';
 
-// デバッグ用の初期ログ
-console.log('🎯 メインアプリケーション開始');
-console.log('🔧 アニメーション機能デバッグモード有効');
+// デバッグモードの設定
+const DEBUG_MODE = import.meta.env.DEV || window.location.search.includes('debug=true');
+
+// デバッグ用ログ関数
+function debugLog(message, ...args) {
+  if (DEBUG_MODE) {
+    console.log(message, ...args);
+  }
+}
+
+// LocatorJS警告の抑制
+if (typeof window !== 'undefined') {
+  window.__LOCATOR_DEV__ = false;
+}
 
 // グローバルエラーハンドラーを設定
 window.addEventListener('error', (event) => {
+  // LocatorJS関連のエラーは無視
+  if (event.message && event.message.includes('locatorjs')) {
+    return;
+  }
+  
   console.error('❌ グローバルエラー:', event.error);
   console.error('エラー詳細:', {
     message: event.message,
@@ -30,6 +46,11 @@ window.addEventListener('error', (event) => {
 });
 
 window.addEventListener('unhandledrejection', (event) => {
+  // LocatorJS関連のエラーは無視
+  if (event.reason && event.reason.message && event.reason.message.includes('locatorjs')) {
+    return;
+  }
+  
   console.error('❌ 未処理のPromise拒否:', event.reason);
 });
 
@@ -38,10 +59,8 @@ let QRCode = null;
 async function loadQRCode() {
   if (!QRCode) {
     try {
-      console.log('📦 QRCodeライブラリ読み込み中...');
       const qrcodeModule = await import('qrcode');
       QRCode = qrcodeModule.default;
-      console.log('✅ QRCodeライブラリ読み込み完了');
     } catch (error) {
       console.error('❌ QRCodeライブラリ読み込みエラー:', error);
       QRCode = null;
@@ -54,33 +73,19 @@ async function loadQRCode() {
 window.loadQRCode = loadQRCode;
 
 // アプリケーション初期化時にマイグレーションを実行
-initializeMigration().then((result) => {
-  console.log('🔄 マイグレーション初期化完了:', result);
-}).catch((error) => {
+initializeMigration().catch((error) => {
   console.error('❌ マイグレーション初期化エラー:', error);
 });
 
-// ページごとのJSファイルをインポート
-import showLogin from './views/login.js';
-import showSelectAR from './views/select-ar.js';
-import showProjects from './views/projects.js';
-import { showEditor } from './views/editor.js';  // named importに修正
-import showQRCode from './views/qr-code.js';
-import showLoadingScreenEditor from './views/loading-screen-editor.js';
-
-console.log('📦 ビューファイルのインポート完了');
-
-// ルートに対応する表示関数のマップ
-const routes = {
-  '#/login': showLogin,
-  '#/select-ar': showSelectAR,
-  '#/projects': showProjects,
-  '#/editor': showEditor,
-  '#/qr-code': showQRCode,
-  '#/loading-screen': showLoadingScreenEditor  // パスを修正
+// 動的インポート用のビュー関数マッパー
+const viewModules = {
+  '#/login': () => import('./views/login.js'),
+  '#/select-ar': () => import('./views/select-ar.js'),
+  '#/projects': () => import('./views/projects.js'),
+  '#/editor': () => import('./views/editor.js'),
+  '#/qr-code': () => import('./views/qr-code.js'),
+  '#/loading-screen': () => import('./views/loading-screen-editor.js')
 };
-
-console.log('🗺️ ルート設定完了:', Object.keys(routes));
 
 // アプリケーションのメインコンテナ
 const app = document.getElementById('app');
@@ -107,19 +112,19 @@ if (!app) {
   throw new Error('アプリケーションコンテナが見つかりません');
 }
 
-console.log('✅ アプリケーションコンテナ取得成功:', app);
+debugLog('✅ アプリケーションコンテナ取得成功:', app);
 
 // 現在のビューのクリーンアップ関数
 let currentCleanup = null;
 
 // ルーティング処理
-function render() {
+async function render() {
   try {
-    console.log('🔄 ルーティング処理開始');
+    debugLog('🔄 ルーティング処理開始');
     
     // 現在のビューをクリーンアップ
     if (typeof currentCleanup === 'function') {
-      console.log('🧹 現在のビューをクリーンアップ');
+      debugLog('🧹 現在のビューをクリーンアップ');
       currentCleanup();
       currentCleanup = null;
     }
@@ -128,24 +133,32 @@ function render() {
     while (app.firstChild) {
       app.removeChild(app.firstChild);
     }
-    console.log('🧹 DOMクリア完了');
+    debugLog('🧹 DOMクリア完了');
 
     // 現在のハッシュを取得
     let hash = window.location.hash || '#/login';
-    console.log('📍 現在のハッシュ:', hash);
+    debugLog('📍 現在のハッシュ:', hash);
     
     // ハッシュにクエリパラメータがある場合は分離
     const [baseHash] = hash.split('?');
-    console.log('📍 ベースハッシュ:', baseHash);
+    debugLog('📍 ベースハッシュ:', baseHash);
     
-    // 対応するビュー関数を取得
-    const view = routes[baseHash];
+    // 対応するビューモジュールを取得
+    const viewModule = viewModules[baseHash];
     
-    if (view) {
-      console.log(`✅ ルート "${baseHash}" のビューを表示します`);
+    if (viewModule) {
+      debugLog(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
       try {
-        currentCleanup = view(app);
-        console.log('✅ ビュー表示完了');
+        // 動的インポートでビューを読み込み
+        const module = await viewModule();
+        const view = module.default || module.showEditor || module;
+        
+        if (typeof view === 'function') {
+          currentCleanup = view(app);
+          debugLog('✅ ビュー表示完了');
+        } else {
+          throw new Error('ビュー関数が見つかりません');
+        }
       } catch (viewError) {
         console.error('❌ ビュー表示中にエラー:', viewError);
         // エラー時のフォールバック表示
@@ -216,11 +229,11 @@ function render() {
 
 // ハッシュ変更時のルーティング
 window.addEventListener('hashchange', () => {
-  console.log('🔄 ハッシュ変更検知');
+  debugLog('🔄 ハッシュ変更検知');
   render();
 });
 
 // 初期表示
-console.log('🚀 初期表示開始');
+debugLog('🚀 初期表示開始');
 render();
-console.log('✅ 初期表示完了');
+debugLog('✅ 初期表示完了');

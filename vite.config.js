@@ -14,12 +14,23 @@ export default defineConfig({
     }
   },
   build: {
+    // チャンクサイズの警告制限を調整（Three.jsを含むため）
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         // ファイル名にタイムスタンプを強制追加
         entryFileNames: `assets/[name]-${Date.now()}.[hash].js`,
         chunkFileNames: `assets/[name]-${Date.now()}.[hash].js`,
-        assetFileNames: `assets/[name]-${Date.now()}.[hash].[ext]`
+        assetFileNames: `assets/[name]-${Date.now()}.[hash].[ext]`,
+        // 手動チャンク分割の設定
+        manualChunks: {
+          // Three.jsを別チャンクに分離
+          'three': ['three'],
+          // QRCodeライブラリを別チャンクに分離
+          'qrcode': ['qrcode'],
+          // ベンダーライブラリを分離
+          'vendor': ['uuid', 'idb-keyval']
+        }
       }
     }
   },
@@ -33,5 +44,9 @@ export default defineConfig({
     loader: {
       '.js': 'js'
     }
+  },
+  // ★★★ LocatorJS警告の抑制 ★★★
+  define: {
+    __LOCATOR_DEV__: false
   }
 });

@@ -35,7 +35,10 @@ export default function showLogin(container) {
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
       
-      console.log('ログイン処理:', email);
+      // デバッグモードでのみログを出力
+      if (import.meta.env.DEV || window.location.search.includes('debug=true')) {
+        console.log('ログイン処理:', email);
+      }
       // select-arからprojectsに遷移先を変更
       window.location.hash = '#/projects';
     });

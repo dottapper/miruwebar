@@ -227,6 +227,13 @@ export default function showProjects(container) {
   // プロジェクト一覧を表示する関数
   function renderProjectList(page) {
     const projectList = document.getElementById('project-list');
+    
+    // projectListが存在しない場合のエラーハンドリング
+    if (!projectList) {
+      console.error('❌ project-list要素が見つかりません');
+      return;
+    }
+    
     projectList.innerHTML = ''; // リストをクリア
     
     // プロジェクトデータを取得

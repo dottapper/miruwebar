@@ -47,8 +47,6 @@ function updatePreviewTitle(screenType) {
 function updateStartPreview(previewScreen, settings) {
   const screen = settings.startScreen;
   
-
-  
   // サムネイル画像の取得
   const thumbnailDropzone = document.getElementById('thumbnailDropzone');
   const thumbnailImg = thumbnailDropzone?.querySelector('img');
@@ -58,7 +56,10 @@ function updateStartPreview(previewScreen, settings) {
   const logoDropzone = document.getElementById('startLogoDropzone');
   const logoImg = logoDropzone?.querySelector('img');
   const logoSrc = logoImg?.src || '';
-
+  
+  // ロゴの表示条件をより厳密にチェック
+  const shouldShowLogo = logoSrc && (logoSrc.startsWith('data:') || logoSrc.startsWith('blob:')) && logoSrc.length > 50;
+  
   previewScreen.innerHTML = `
     <div class="start-screen-preview" style="
       background-color: ${screen.backgroundColor || defaultSettings.startScreen.backgroundColor};
@@ -73,7 +74,7 @@ function updateStartPreview(previewScreen, settings) {
       padding: 20px;
       box-sizing: border-box;
     ">
-      ${logoSrc ? `
+      ${shouldShowLogo ? `
         <div class="logo-container" style="
           position: absolute;
           top: ${screen.logoPosition || defaultSettings.startScreen.logoPosition}%;
@@ -84,13 +85,14 @@ function updateStartPreview(previewScreen, settings) {
           display: flex;
           align-items: center;
           justify-content: center;
+          z-index: 10;
         ">
           <img src="${logoSrc}" style="
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
             filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
-          " alt="ロゴ">
+          " alt="ロゴ" onload="console.log('🖼️ ロゴ画像読み込み完了:', this.src.substring(0, 50) + '...')" onerror="console.error('❌ ロゴ画像読み込みエラー:', this.src)">
         </div>
       ` : ''}
       
@@ -155,8 +157,6 @@ function updateStartPreview(previewScreen, settings) {
           ${screen.buttonText || defaultSettings.startScreen.buttonText}
         </button>
       </div>
-      
-
     </div>
   `;
 }
@@ -164,6 +164,10 @@ function updateStartPreview(previewScreen, settings) {
 // ローディング画面のプレビュー更新
 function updateLoadingPreview(previewScreen, settings) {
   const screen = settings.loadingScreen;
+  
+  // アニメーションタイプの取得
+  const animationSelect = document.getElementById('loadingScreen-animation');
+  const animationType = animationSelect?.value || screen.animation || 'none';
   
   // ロゴタイプの取得
   const logoTypeRadio = document.querySelector('input[name="loadingLogoType"]:checked');
@@ -184,7 +188,7 @@ function updateLoadingPreview(previewScreen, settings) {
   }
 
   previewScreen.innerHTML = `
-    <div class="loading-screen-preview" style="
+    <div class="loading-screen-preview ${animationType !== 'none' ? `loading-animation-${animationType}` : ''}" style="
       background-color: ${screen.backgroundColor || defaultSettings.loadingScreen.backgroundColor};
       color: ${screen.textColor || defaultSettings.loadingScreen.textColor};
       width: 100%;
@@ -200,11 +204,10 @@ function updateLoadingPreview(previewScreen, settings) {
       ${logoType !== 'none' && logoSrc ? `
         <div class="logo-container" style="
           position: absolute;
-          top: ${screen.logoPosition || defaultSettings.loadingScreen.logoPosition}%;
+          top: ${logoType === 'useStartLogo' ? (settings.startScreen.logoPosition || defaultSettings.startScreen.logoPosition) : (screen.logoPosition || defaultSettings.loadingScreen.logoPosition)}%;
           left: 50%;
-          transform: translateX(-50%);
-          width: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80}px;
-          height: ${(screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80}px;
+          width: ${logoType === 'useStartLogo' ? ((settings.startScreen.logoSize || defaultSettings.startScreen.logoSize) * 80) : ((screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80)}px;
+          height: ${logoType === 'useStartLogo' ? ((settings.startScreen.logoSize || defaultSettings.startScreen.logoSize) * 80) : ((screen.logoSize || defaultSettings.loadingScreen.logoSize) * 80)}px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -271,6 +274,37 @@ function updateLoadingPreview(previewScreen, settings) {
       @keyframes loading-pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
+      }
+      
+      /* CSS-only アニメーション */
+      .loading-screen-preview .logo-container {
+        transform: translateX(-50%); /* デフォルトの中央配置 */
+      }
+      
+      /* フェードアニメーション - 全体に適用 */
+      .loading-animation-fade .logo-container,
+      .loading-animation-fade .brand-name,
+      .loading-animation-fade .sub-title,
+      .loading-animation-fade .progress-container,
+      .loading-animation-fade .loading-message {
+        animation: fadeInAnimation 2s ease-in-out infinite alternate;
+      }
+      
+      
+      /* ズームアニメーション */
+      .loading-animation-zoom .logo-container {
+        animation: zoomPulseAnimation 2s ease-in-out infinite alternate;
+      }
+      
+      @keyframes fadeInAnimation {
+        0% { opacity: 0.6; }
+        100% { opacity: 1; }
+      }
+      
+      
+      @keyframes zoomPulseAnimation {
+        0% { transform: translateX(-50%) scale(0.95); opacity: 0.8; }
+        100% { transform: translateX(-50%) scale(1.05); opacity: 1; }
       }
     </style>
   `;
@@ -351,8 +385,6 @@ function updateGuidePreview(previewScreen, settings) {
       display: flex;
       flex-direction: column;
     ">
-      
-      <!-- 上部タイトルエリア -->
       <div class="guide-header" style="
         position: absolute;
         top: 20px;
@@ -384,7 +416,6 @@ function updateGuidePreview(previewScreen, settings) {
         </div>
       </div>
 
-      <!-- 中央マーカー画像エリア（平面検出のみ） -->
       ${mode === 'surface' ? `
         <div class="marker-center-area" style="
           position: absolute;
@@ -448,7 +479,6 @@ function updateGuidePreview(previewScreen, settings) {
           </div>
         </div>
       ` : `
-        <!-- 空間検出用の中央エリア -->
         <div class="world-center-area" style="
           position: absolute;
           top: 50%;
@@ -511,7 +541,6 @@ function updateGuidePreview(previewScreen, settings) {
         </div>
       `}
       
-      <!-- 下部ステータスエリア -->
       <div class="guide-footer" style="
         position: absolute;
         bottom: 20px;
@@ -555,7 +584,7 @@ function updateGuidePreview(previewScreen, settings) {
 }
 
 // DOMから現在の設定を取得
-function getCurrentSettingsFromDOM() {
+export function getCurrentSettingsFromDOM() {
   const settings = {
     startScreen: { ...defaultSettings.startScreen },
     loadingScreen: { ...defaultSettings.loadingScreen },
@@ -593,8 +622,6 @@ function getCurrentSettingsFromDOM() {
       }
       
       settings[screenType][property] = value;
-      
-
     }
   });
   
@@ -626,6 +653,42 @@ function getCurrentSettingsFromDOM() {
   }
   if (worldDescription) {
     settings.guideScreen.worldTracking.description = worldDescription.value;
+  }
+  
+  // 画像データを取得
+  // サムネイル画像
+  const thumbnailDropzone = document.getElementById('thumbnailDropzone');
+  const thumbnailImg = thumbnailDropzone?.querySelector('img');
+  if (thumbnailImg && thumbnailImg.src) {
+    settings.startScreen.thumbnail = thumbnailImg.src;
+  }
+  
+  // スタート画面ロゴ
+  const startLogoDropzone = document.getElementById('startLogoDropzone');
+  const startLogoImg = startLogoDropzone?.querySelector('img');
+  if (startLogoImg && startLogoImg.src) {
+    settings.startScreen.logo = startLogoImg.src;
+  }
+  
+  // ローディング画面カスタムロゴ
+  const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
+  const loadingLogoImg = loadingLogoDropzone?.querySelector('img');
+  if (loadingLogoImg && loadingLogoImg.src) {
+    settings.loadingScreen.logo = loadingLogoImg.src;
+  }
+  
+  // ガイド画面画像（平面検出用）
+  const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
+  const surfaceGuideImg = surfaceGuideDropzone?.querySelector('img');
+  if (surfaceGuideImg && surfaceGuideImg.src) {
+    settings.guideScreen.surfaceDetection.guideImage = surfaceGuideImg.src;
+  }
+  
+  // ガイド画面画像（空間検出用）
+  const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
+  const worldGuideImg = worldGuideDropzone?.querySelector('img');
+  if (worldGuideImg && worldGuideImg.src) {
+    settings.guideScreen.worldTracking.guideImage = worldGuideImg.src;
   }
 
   return settings;
