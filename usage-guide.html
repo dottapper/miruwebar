@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>使い方ガイド - miru-webAR</title>
+  <link rel="stylesheet" href="usage-guide.css">
+</head>
+<body>
+  <div class="usage-guide">
+    <div class="usage-header">
+      <h1>使い方ガイド</h1>
+      <p class="subtitle">miru-webARの基本的な使い方をご紹介します</p>
+    </div>
+
+    <div class="guide-content">
+      <section class="guide-section">
+        <h2>1. ARコンテンツの作成</h2>
+        <div class="step-content">
+          <div class="step-video">
+            <div class="video-placeholder">
+              <div class="video-icon">📹</div>
+              <p>動画を準備中...</p>
+              <a href="https://youtu.be/xxxxx" target="_blank" rel="noopener" class="external-link">
+                YouTubeで見る →
+              </a>
+            </div>
+          </div>
+          <div class="step-text">
+            <h3>ステップ1: ARタイプの選択</h3>
+            <ul>
+              <li>マーカー型AR: 画像マーカーを使用</li>
+              <li>マーカーレス型AR: 平面検出を使用</li>
+            </ul>
+            
+            <h3>ステップ2: 3Dモデルのアップロード</h3>
+            <ul>
+              <li>GLBファイルをドラッグ&ドロップ</li>
+              <li>またはファイル選択ボタンでアップロード</li>
+              <li>アニメーション付きモデルも対応</li>
+            </ul>
+            
+            <h3>ステップ3: 位置とサイズの調整</h3>
+            <ul>
+              <li>マウスでドラッグして位置を調整</li>
+              <li>スケールスライダーでサイズを変更</li>
+              <li>回転ツールで向きを調整</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <h2>2. ローディング画面のカスタマイズ</h2>
+        <div class="step-content">
+          <div class="step-video">
+            <div class="video-placeholder">
+              <div class="video-icon">📹</div>
+              <p>動画を準備中...</p>
+              <a href="https://youtu.be/xxxxx" target="_blank" rel="noopener" class="external-link">
+                YouTubeで見る →
+              </a>
+            </div>
+          </div>
+          <div class="step-text">
+            <h3>カスタマイズ可能な項目</h3>
+            <ul>
+              <li>背景色とテキスト色</li>
+              <li>ロゴ画像のアップロード</li>
+              <li>メッセージテキストの変更</li>
+              <li>プログレスバーの表示/非表示</li>
+              <li>テンプレートの保存と管理</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <h2>3. QRコードでの共有</h2>
+        <div class="step-content">
+          <div class="step-video">
+            <div class="video-placeholder">
+              <div class="video-icon">📹</div>
+              <p>動画を準備中...</p>
+              <a href="https://youtu.be/xxxxx" target="_blank" rel="noopener" class="external-link">
+                YouTubeで見る →
+              </a>
+            </div>
+          </div>
+          <div class="step-text">
+            <h3>共有の手順</h3>
+            <ul>
+              <li>プロジェクトを保存</li>
+              <li>QRコードを生成</li>
+              <li>PNG画像としてダウンロード</li>
+              <li>スマートフォンでスキャンしてAR体験</li>
+            </ul>
+            
+            <h3>対応デバイス</h3>
+            <ul>
+              <li>iOS: Safari（ARKit対応）</li>
+              <li>Android: Chrome（ARCore対応）</li>
+              <li>その他: WebAR対応ブラウザ</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="guide-section">
+        <h2>4. よくある質問</h2>
+        <div class="faq-content">
+          <div class="faq-item">
+            <h3>Q: どのような3Dファイルが使えますか？</h3>
+            <p>A: GLB形式のファイルに対応しています。Blender、Maya、3ds Maxなどで作成したモデルをGLB形式でエクスポートしてご利用ください。</p>
+          </div>
+          
+          <div class="faq-item">
+            <h3>Q: ファイルサイズの制限はありますか？</h3>
+            <p>A: ブラウザの容量制限により、大きなファイルは処理に時間がかかる場合があります。推奨サイズは50MB以下です。</p>
+          </div>
+          
+          <div class="faq-item">
+            <h3>Q: データはどこに保存されますか？</h3>
+            <p>A: すべてのデータはお使いのブラウザ内（IndexedDB）に保存されます。サーバーには一切送信されません。</p>
+          </div>
+          
+          <div class="faq-item">
+            <h3>Q: スマートフォンでAR体験するには？</h3>
+            <p>A: 生成されたQRコードをスマートフォンのカメラでスキャンするか、QRコードリーダーアプリを使用してください。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="guide-footer">
+      <div class="action-buttons">
+        <a href="#/select-ar" class="btn primary">今すぐ試す</a>
+        <a href="#/login" class="btn">トップに戻る</a>
+      </div>
+      <p class="support-note">
+        サポートが必要な場合は <a href="/discord" target="_blank" rel="noopener">Discord</a> でお気軽にお声がけください。
+      </p>
+    </div>
+  </div>
+</body>
+</html>

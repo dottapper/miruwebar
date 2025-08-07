@@ -1,8 +1,9 @@
 // src/views/login.js
 export default function showLogin(container) {
   container.innerHTML = `
-    <section class="gate">
-      <h1>miru-webAR</h1>
+    <div class="login-page">
+      <section class="gate">
+        <h1>miru-webAR</h1>
       <p class="sub">あなたの3Dを現実へ</p>
 
       <div class="card">
@@ -22,5 +23,6 @@ export default function showLogin(container) {
         <p class="small">※ ベータ版のため予告なく仕様変更・停止することがあります。重要データは必ずバックアップしてください。</p>
       </div>
     </section>
+    </div>
   `;
 }

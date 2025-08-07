@@ -121,6 +121,7 @@ let currentCleanup = null;
 
 // ルーティング処理
 async function render() {
+  console.log('🔥 render関数開始');
   try {
     debugLog('🔄 ルーティング処理開始');
     
@@ -141,6 +142,11 @@ async function render() {
     let hash = window.location.hash || '#/login';
     console.log('📍 現在のハッシュ:', hash);
     
+    // デバッグ用：usage-guideルートの特別確認
+    if (hash === '#/usage-guide') {
+      console.log('🎯 usage-guideルートが検出されました！');
+    }
+    
     // ハッシュにクエリパラメータがある場合は分離
     const [baseHash] = hash.split('?');
     console.log('📍 ベースハッシュ:', baseHash);
@@ -152,18 +158,29 @@ async function render() {
     if (viewModule) {
       console.log(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
       try {
+        console.log('🔄 動的インポート開始...');
         // 動的インポートでビューを読み込み
         const module = await viewModule();
+        console.log('🔍 読み込まれたモジュール:', module);
+        console.log('🔍 module.default:', module.default);
+        console.log('🔍 module.default の型:', typeof module.default);
+        
         const view = module.default || module.showEditor || module;
+        console.log('🔍 最終的なview:', view);
+        console.log('🔍 view の型:', typeof view);
         
         if (typeof view === 'function') {
+          console.log('🎯 ビュー関数を実行します');
           currentCleanup = view(app);
-          debugLog('✅ ビュー表示完了');
+          console.log('✅ ビュー表示完了');
         } else {
+          console.error('❌ ビュー関数が見つかりません。view:', view);
           throw new Error('ビュー関数が見つかりません');
         }
       } catch (viewError) {
         console.error('❌ ビュー表示中にエラー:', viewError);
+        console.error('❌ エラースタック:', viewError.stack);
+        console.error('❌ エラー詳細:', viewError.message);
         // エラー時のフォールバック表示
         app.innerHTML = `
           <div style="
@@ -234,10 +251,15 @@ async function render() {
 // ハッシュ変更時のルーティング
 window.addEventListener('hashchange', () => {
   debugLog('🔄 ハッシュ変更検知');
-  render();
+  render().catch((error) => {
+    console.error('❌ ハッシュ変更時のエラー:', error);
+  });
 });
 
 // 初期表示
 debugLog('🚀 初期表示開始');
-render();
-debugLog('✅ 初期表示完了');
+render().then(() => {
+  debugLog('✅ 初期表示完了');
+}).catch((error) => {
+  console.error('❌ 初期表示エラー:', error);
+});
