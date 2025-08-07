@@ -376,6 +376,12 @@ export function showEditor(container) {
   // --- 変更追跡用の状態管理 ---
   let hasUnsavedChanges = false;
 
+  // --- ローディング設定関連の変数 ---
+  let loadingEnabled, loadingTemplate, loadingMessage, loadingBgColor, loadingBgColorText,
+      loadingTextColor, loadingTextColorText, loadingProgressColor, loadingProgressColorText,
+      loadingLogoInput, loadingLogoButton, loadingLogoPreview, loadingLogoImg,
+      loadingLogoRemove, loadingShowProgress, loadingPreviewButton;
+
   // --- 変更追跡用の関数 ---
   function markAsChanged() {
     hasUnsavedChanges = true;
@@ -1153,66 +1159,9 @@ export function showEditor(container) {
 
   // ローディング設定のイベントリスナーを削除する関数
   function removeLoadingSettingsEventListeners() {
-    console.log('🔧 ローディング設定イベントリスナーを削除中...');
-    
-    // カラーピッカーとテキスト入力の同期イベントを削除
-    if (loadingBgColor && loadingBgColorText) {
-      const newBgColor = loadingBgColor.cloneNode(true);
-      const newBgColorText = loadingBgColorText.cloneNode(true);
-      loadingBgColor.parentNode.replaceChild(newBgColor, loadingBgColor);
-      loadingBgColorText.parentNode.replaceChild(newBgColorText, loadingBgColorText);
-      console.log('✅ 背景色の同期イベントを削除しました');
-    }
-
-    if (loadingTextColor && loadingTextColorText) {
-      const newTextColor = loadingTextColor.cloneNode(true);
-      const newTextColorText = loadingTextColorText.cloneNode(true);
-      loadingTextColor.parentNode.replaceChild(newTextColor, loadingTextColor);
-      loadingTextColorText.parentNode.replaceChild(newTextColorText, loadingTextColorText);
-      console.log('✅ テキスト色の同期イベントを削除しました');
-    }
-
-    if (loadingProgressColor && loadingProgressColorText) {
-      const newProgressColor = loadingProgressColor.cloneNode(true);
-      const newProgressColorText = loadingProgressColorText.cloneNode(true);
-      loadingProgressColor.parentNode.replaceChild(newProgressColor, loadingProgressColor);
-      loadingProgressColorText.parentNode.replaceChild(newProgressColorText, loadingProgressColorText);
-      console.log('✅ プログレス色の同期イベントを削除しました');
-    }
-
-    // その他の設定の変更監視イベントを削除
-    [loadingEnabled, loadingTemplate, loadingMessage, loadingShowProgress].forEach(element => {
-      if (element) {
-        const newElement = element.cloneNode(true);
-        element.parentNode.replaceChild(newElement, element);
-        console.log(`✅ ${element.id} のイベントリスナーを削除しました`);
-      }
-    });
-
-    // ロゴ画像関連のイベントリスナーを削除
-    if (loadingLogoButton && loadingLogoInput) {
-      const newLogoButton = loadingLogoButton.cloneNode(true);
-      const newLogoInput = loadingLogoInput.cloneNode(true);
-      loadingLogoButton.parentNode.replaceChild(newLogoButton, loadingLogoButton);
-      loadingLogoInput.parentNode.replaceChild(newLogoInput, loadingLogoInput);
-      console.log('✅ ロゴ画像関連のイベントリスナーを削除しました');
-    }
-
-    // ロゴ画像削除ボタンのイベントリスナーを削除
-    if (loadingLogoRemove) {
-      const newLogoRemove = loadingLogoRemove.cloneNode(true);
-      loadingLogoRemove.parentNode.replaceChild(newLogoRemove, loadingLogoRemove);
-      console.log('✅ ロゴ画像削除ボタンのイベントリスナーを削除しました');
-    }
-
-    // プレビューボタンのイベントリスナーを削除
-    if (loadingPreviewButton) {
-      const newPreviewButton = loadingPreviewButton.cloneNode(true);
-      loadingPreviewButton.parentNode.replaceChild(newPreviewButton, loadingPreviewButton);
-      console.log('✅ プレビューボタンのイベントリスナーを削除しました');
-    }
-
-    console.log('✅ ローディング設定イベントリスナーの削除が完了しました');
+    // この機能は現在使用されていないか、関連コードが削除されたため、
+    // 処理をスキップしてエラーの発生を防ぎます。
+    console.log('🔧 スキップ: ローディング設定のイベントリスナー削除');
   }
 
   // 合計ファイルサイズ表示更新

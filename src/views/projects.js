@@ -463,55 +463,41 @@ export default function showProjects(container) {
   }
   
   // 初期表示
-  renderProjectList(currentPage);
+  setTimeout(() => renderProjectList(currentPage), 0);
 
   // 新規作成ボタンのイベントリスナー設定
-  document.getElementById('new-project-btn').addEventListener('click', () => {
+  const newProjectBtn = document.getElementById('new-project-btn');
+  newProjectBtn.addEventListener('click', () => {
     showNewProjectModal();
   });
   
   // ログアウトボタンのイベントリスナー
-  document.getElementById('logout-btn').addEventListener('click', () => {
+  const logoutBtn = document.getElementById('logout-btn');
+  logoutBtn.addEventListener('click', () => {
     if (confirm('ログアウトしますか？')) {
       window.location.hash = '#/login';
     }
   });
   
-  // ローカルストレージの変更を監視し、プロジェクトリストを更新
+  // --- イベントリスナー管理 ---
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  // ローカルストレージの変更を監視
   window.addEventListener('storage', (e) => {
     if (e.key === 'miruwebAR_projects') {
       console.log('プロジェクトデータが更新されました');
       renderProjectList(currentPage);
     }
-  });
+  }, { signal });
 
-  // ページの表示・非表示切り替え時にプロジェクトリストを更新
+  // ページの表示・非表示切り替え時に更新
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       console.log('ページが表示されました - プロジェクトリストを更新');
       renderProjectList(currentPage);
     }
-  });
-
-  // ハッシュ変更時にプロジェクト一覧に戻った場合は更新
-  const originalHashChangeHandler = window.onhashchange;
-  window.addEventListener('hashchange', (e) => {
-    if (originalHashChangeHandler) originalHashChangeHandler(e);
-    
-    const currentHash = window.location.hash || '#/projects';
-    if (currentHash.startsWith('#/projects')) {
-      console.log('プロジェクト一覧に戻りました - リストを更新');
-      renderProjectList(currentPage);
-    }
-  });
-
-  // 定期的な更新（他のタブでの変更を検出するため）
-  setInterval(() => {
-    const currentHash = window.location.hash || '#/projects';
-    if (currentHash.startsWith('#/projects')) {
-      renderProjectList(currentPage);
-    }
-  }, 5000); // 5秒ごと
+  }, { signal });
 
   // ドキュメント全体のクリックイベントでドロップダウンを閉じる
   document.addEventListener('click', (e) => {
@@ -520,12 +506,11 @@ export default function showProjects(container) {
         dropdown.classList.remove('show');
       });
     }
-  });
+  }, { signal });
 
-  // 初期化時に全てのメニューが閉じられていることを確保
-  setTimeout(() => {
-    document.querySelectorAll('.card-menu-dropdown').forEach(dropdown => {
-      dropdown.classList.remove('show');
-    });
-  }, 100);
+  // クリーンアップ関数
+  return () => {
+    console.log('プロジェクト一覧ビューのクリーンアップを実行します');
+    controller.abort(); // すべてのイベントリスナーを一度に削除
+  };
 }
