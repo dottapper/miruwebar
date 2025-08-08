@@ -11,6 +11,8 @@ import {
   clearAllModels
 } from '../storage/indexeddb-storage.js';
 
+import { exportProjectBundle } from '../utils/publish.js';
+
 const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
 
 /**
@@ -476,4 +478,37 @@ export async function getProjectStorageInfo() {
         console.error('❌ ストレージ情報取得エラー:', error);
         throw new Error(`ストレージ情報の取得に失敗しました: ${error.message}`);
     }
+}
+
+/**
+ * プロジェクトの公開用ZIPを生成
+ * @param {string} projectId
+ * @returns {Promise<Blob>} ZIP Blob
+ */
+export async function exportProjectBundleById(projectId) {
+  const project = getProject(projectId);
+  if (!project) {
+    throw new Error('プロジェクトが見つかりません');
+  }
+  
+  // project.jsonの組み立て（viewer用の簡易形式）
+  const projectJson = {
+    name: project.name,
+    description: project.description,
+    type: project.type,
+    loadingScreen: project.loadingScreen,
+    // viewer側ではURLで読み込むため、assets配列を生成（IndexedDBは同梱対象外）
+    models: (project.modelSettings || []).map((m) => ({
+      url: `/assets/${m.fileName}`,
+      fileName: m.fileName,
+      fileSize: m.fileSize
+    }))
+  };
+
+  // 同梱対象のアセットURL（ローカルのpublic/assetsから取得を想定）
+  const assetUrls = (project.modelSettings || [])
+    .filter(m => m.fileName)
+    .map(m => `${window.location.origin}/assets/${m.fileName}`);
+
+  return await exportProjectBundle({ project: projectJson, assetUrls });
 }

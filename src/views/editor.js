@@ -2,7 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, loadProjectModels } from '../api/projects.js'; // IndexedDB 対応 API をインポート
+import { saveProject, getProject, loadProjectModels, exportProjectBundleById } from '../api/projects.js'; // IndexedDB 対応 API をインポート
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -75,6 +75,7 @@ export function showEditor(container) {
           <button id="qrcode-button" class="btn-secondary">QRコードを発行</button>
           <button id="save-button" class="btn-primary">保存</button>
           <button id="share-button" class="btn-secondary">共有</button>
+          <button id="export-button" class="btn-secondary">エクスポート</button>
         </div>
       </div>
 
@@ -322,6 +323,7 @@ export function showEditor(container) {
   let saveButton = document.getElementById('save-button');
   let qrcodeButton = document.getElementById('qrcode-button');
   let arViewerContainer = document.getElementById('ar-viewer'); // ARビューアのコンテナ
+  let exportButton = document.getElementById('export-button');
 
   // 基本DOM要素の取得状況をログ出力
   console.log('基本DOM要素の取得状況:', {
@@ -998,6 +1000,28 @@ export function showEditor(container) {
     }
     
     // ローディング設定のイベントリスナー
+    if (exportButton) {
+      exportButton.addEventListener('click', async () => {
+        try {
+          const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+          const currentProjectId = urlParams.get('id');
+          if (!currentProjectId) {
+            alert('まずプロジェクトを保存してください（IDが必要です）。');
+            return;
+          }
+          const blob = await exportProjectBundleById(currentProjectId);
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${currentProjectId}.zip`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          console.error('エクスポートに失敗:', e);
+          alert('エクスポートに失敗しました: ' + e.message);
+        }
+      });
+    }
   }
 
   // --- 関数定義 ---

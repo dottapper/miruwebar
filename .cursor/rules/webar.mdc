@@ -195,6 +195,46 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
 
 ## 4. UI/UX ルール
 
+### 4.0 UI デザイン変更時の注意事項
+
+**重要**: UIデザインを変更する際は、必ず他のファイル部分への干渉を防ぐこと
+
+#### 4.0.1 干渉回避の原則
+
+- **CSS スコープの確認**: 変更対象のスタイルが他のコンポーネントに影響しないか事前確認
+- **グローバルスタイルの慎重な使用**: グローバルCSSの変更は全体への影響を検証してから実施
+- **クラス名の重複チェック**: 新しいクラス名が既存のものと重複しないか確認
+
+#### 4.0.2 干渉が発生しそうな場合の対応手順
+
+1. **問題の特定**: どの部分が干渉するか詳細に分析
+2. **回避策の検討**: 以下の手法を検討
+   - CSS Modules の使用
+   - BEM命名規則の適用
+   - 特定のスコープ内でのスタイル限定
+   - より具体的なセレクタの使用
+3. **回避策の提示**: 修正前に回避策を明示
+4. **安全な修正**: 回避策を適用してから修正実行
+
+#### 4.0.3 推奨される安全な変更手法
+
+```css
+/* ✅ スコープを限定した安全な変更 */
+.login-page .form-container {
+  /* login-page内でのみ有効 */
+}
+
+/* ✅ 具体的なセレクタで干渉回避 */
+.editor-view .button.primary {
+  /* 特定のコンテキストでのみ有効 */
+}
+
+/* ❌ 干渉の可能性が高い変更 */
+.button {
+  /* 全体のbuttonに影響する危険性 */
+}
+```
+
 ### 4.1 インタラクション設計
 
 ```javascript
@@ -443,3 +483,116 @@ function setupPlaneDetection() {
 - **早期バグ発見**: 継続的インテグレーション
 - **継続改善**: ユーザーフィードバック反映
 - **品質維持**: 定期的なコードレビュー
+
+## 公開ポリシー / 運用方針
+
+### 基本方針
+
+- 編集・保存はブラウザ内（IndexedDB / localStorage）
+- 作品・個人情報はサーバーに保持しない（BYO ホスティング）
+- 公開はユーザー自身の静的ホスティング（Vercel / Cloudflare Pages / GitHub Pages / S3 など）
+- 共有は QR コード（固定ビューア URL に `?src=project.json` を付与）
+
+### 推奨公開方法
+
+- 標準: Web 公開（静的配信）＋ エクスポート ZIP（`project.json + assets + viewer.html`）
+- 補完: LAN プレビュー（同一 Wi‑Fi での即時確認）
+- 任意: ユーザーのクラウドにアップ（API キーは一時利用・保存禁止）
+
+### 実装ガイド（要件）
+
+- ルート: `#/viewer`（`?src=` の URL から `project.json` を fetch して表示）
+- Export ZIP 構成: `project.json`, `assets/…`, `viewer.html`（相対パス参照）
+- QR 発行 UI: タブ「Local(LAN) / Web（公開 URL）」＋ URL コピー / QR 再生成
+- LAN 公開: 開発時 `server.host = true` で `http://<LAN-IP>:3000/` を QR 化
+
+### 運用上の注意
+
+- CORS 設定必須（公開先 CDN で `Access-Control-Allow-Origin: *` など）
+- ライセンス・著作権はユーザー責任で確認
+- 大容量 GLB は CDN 配信推奨／ZIP 配布時はサイズ注意
+- API キーは保存しない（入力 → 当回のみ使用）
+- バックアップ推奨（Export ZIP で取得）
+
+### UI 文言ポリシー
+
+- 「ログイン不要」「PC 専用」「ブラウザだけで編集・共有」を明示
+- 公開は「ご自身のサーバー/クラウドに配置してください」と明記
+- データ非保持を明言（安心感の提供）
+
+### チェックリスト
+
+- [ ] `#/viewer?src=` で表示できる
+- [ ] Export ZIP が生成・動作する
+- [ ] QR：Local/公開 URL 切替で URL が正しく変わる
+- [ ] CORS / 大容量 / 著作権の注意文が UI に表示される
+
+### 次の実装
+
+- `src/views/ar-viewer.js`（`?src=`読込）
+- QR 発行 UI に公開タブ/URL コピー追加
+- Export ZIP（`project.json + assets + viewer.html`）
+
+### 公開の流れ（3 分版）
+
+- 事前準備（最初だけ）
+
+  - 推奨ブラウザ: Chrome/Edge（PC）
+  - 開発時 LAN 確認したい場合は設定を変更
+    ```js
+    // vite.config.js
+    server: { host: true, port: 3000, strictPort: true }
+    ```
+
+- 1. 作成・保存（ローカル）
+
+  - GLB をドラッグ&ドロップ
+  - 編集 → 保存（IndexedDB/localStorage に保存）
+
+- 2. その場で確認（LAN プレビュー）
+
+  - 同一 Wi‑Fi のスマホから閲覧
+  - ツール内の QR 発行でアクセス（例）
+    ```
+    http://<あなたのLAN IP>:3000/#/viewer?src=http://<LAN IP>:3000/public/projects/<id>/project.json
+    ```
+
+- 3. エクスポート（公開用）
+
+  - Export ZIP を生成（構成例）
+    ```
+    project.json
+    assets/...(glb, 画像)
+    viewer.html（固定ビューア、?src=対応）
+    ```
+
+- 4. 公開（ユーザー自身のホスティング）
+
+  - 置き場所（どれでも OK）
+    - Vercel / Cloudflare Pages / Netlify（ドラッグ&ドロップ）
+    - GitHub Pages（リポに push）
+    - S3 + CloudFront（CDN）
+  - 公開後の URL 例
+    ```
+    https://your-domain.com/viewer.html?src=https://your-domain.com/projects/xxx/project.json
+    ```
+
+- 5. 共有（QR）
+
+  - 公開 URL を QR 化（ツールの QR 発行 UI で URL 貼付 → 生成）
+  - 印刷・配布・SNS などに利用
+
+- 6. 更新
+  - エクスポート → 同じ場所へ上書き
+  - URL/QR は固定のまま更新反映
+
+#### 注意（短縮）
+
+- CORS: 公開先で静的配信の CORS を許可（`Access-Control-Allow-Origin: *` 推奨）
+- 大容量 GLB は CDN 配信推奨
+- 著作権・ライセンスは各自確認
+- ツールはデータを保持しない（BYO ホスティング）
+
+- まとめ
+  - Web 公開が基本（無料枠で OK）、LAN プレビューと ZIP エクスポートで即運用可能
+  - 固定のビューア URL に`?src=project.json`を渡す形が最もシンプルで拡張性 ◎

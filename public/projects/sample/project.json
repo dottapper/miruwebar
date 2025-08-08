@@ -1,0 +1,11 @@
+{
+  "name": "サンプルAR",
+  "description": "サンプルGLBの表示テスト",
+  "type": "markerless",
+  "models": [
+    {
+      "url": "/assets/sample.glb",
+      "fileName": "sample.glb"
+    }
+  ]
+}

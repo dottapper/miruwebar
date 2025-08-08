@@ -274,26 +274,81 @@ export function showNewProjectModal() {
     
     // 選択中のモデル名をIDとして使用（本番環境では実際のIDを使用）
     const modelId = options.modelName ? encodeURIComponent(options.modelName) : 'sample';
-    const arViewerUrl = `https://example.com/ar-viewer?id=${modelId}`;
+    
+    // 現在のホスト情報を取得
+    const currentHost = window.location.host;
+    const isLocalhost = currentHost.includes('localhost') || currentHost.includes('127.0.0.1');
+    
+    // URL生成
+    const localUrl = `http://${currentHost}/#/viewer?src=http://${currentHost}/public/projects/${modelId}/project.json`;
+    const appOrigin = window.location.origin;
+    const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${modelId}/project.json`;
     
     modalOverlay.innerHTML = `
         <div class="modal-content">
             <h2>ARをスマホで見る</h2>
-            <div class="form-group" style="margin-bottom: 1.5rem;">
-                <label style="display: block; margin-bottom: 0.5rem;">AR表示URL</label>
-                <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all;">
-                    ${arViewerUrl}
+            
+            <!-- 公開方法選択 -->
+            <div class="publish-method" style="margin-bottom: 1.5rem;">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">公開方法を選択</h3>
+                <div class="method-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button id="local-tab" class="method-tab active" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-primary); color: white; border-radius: 6px; cursor: pointer;">
+                        Local (LAN)
+                    </button>
+                    <button id="web-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer;">
+                        Web (公開URL)
+                    </button>
+                </div>
+                
+                <!-- Local設定 -->
+                <div id="local-settings" class="method-settings">
+                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
+                        📱 同一Wi-Fi内のスマホからアクセス可能
+                    </p>
+                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
+                        <span id="local-url">${localUrl}</span>
+                    </div>
+                    <button id="copy-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
+                        ローカルURLをコピー
+                    </button>
+                    <button id="test-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
+                        ブラウザで開く
+                    </button>
+                </div>
+                
+                <!-- Web設定 -->
+                <div id="web-settings" class="method-settings" style="display: none;">
+                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
+                        🌐 インターネット経由で誰でもアクセス可能
+                    </p>
+                    <div class="url-input-group" style="margin-bottom: 0.5rem;">
+                        <label style="display: block; margin-bottom: 0.3rem; font-size: 0.9rem;">公開URL:</label>
+                        <input type="text" id="web-url-input" placeholder="https://your-domain.com" value="https://your-domain.com" style="width: 100%; padding: 0.5rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: var(--color-surface); color: var(--color-text-primary);">
+                    </div>
+                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
+                        <span id="web-url">${webUrl}</span>
+                    </div>
+                    <button id="copy-web-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
+                        公開URLをコピー
+                    </button>
+                    <button id="update-web-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
+                        URL更新
+                    </button>
                 </div>
             </div>
+            
             <div class="form-group" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center;">
                 <label style="display: block; margin-bottom: 0.5rem;">QRコード</label>
                 <div id="qrcode-container" style="background: white; padding: 1rem; margin-bottom: 1rem;">
                     <canvas id="qrcode-canvas" width="200" height="200"></canvas>
                 </div>
-                <button id="download-qrcode" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                    QRコードをダウンロード
-                </button>
+                <div class="qr-actions" style="display: flex; gap: 0.5rem;">
+                    <button id="download-qrcode" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
+                        QRコードをダウンロード
+                    </button>
+                </div>
             </div>
+            
             <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button id="close-qrcode-modal" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
                     閉じる
@@ -303,6 +358,79 @@ export function showNewProjectModal() {
     `;
     
     document.body.appendChild(modalOverlay);
+
+    // タブ切り替え機能
+    const localTab = modalOverlay.querySelector('#local-tab');
+    const webTab = modalOverlay.querySelector('#web-tab');
+    const localSettings = modalOverlay.querySelector('#local-settings');
+    const webSettings = modalOverlay.querySelector('#web-settings');
+    
+    let currentMethod = 'local';
+    let currentUrl = localUrl;
+
+    function switchTab(method) {
+      currentMethod = method;
+      
+      // タブの見た目を切り替え
+      localTab.classList.toggle('active', method === 'local');
+      webTab.classList.toggle('active', method === 'web');
+      
+      // 設定の表示を切り替え
+      localSettings.style.display = method === 'local' ? 'block' : 'none';
+      webSettings.style.display = method === 'web' ? 'block' : 'none';
+      
+      // URLを更新
+      if (method === 'local') {
+        currentUrl = localUrl;
+        modalOverlay.querySelector('#local-url').textContent = localUrl;
+      } else {
+        const webUrlInput = modalOverlay.querySelector('#web-url-input').value;
+        const newWebUrl = `${webUrlInput}/viewer.html?src=${webUrlInput}/projects/${modelId}/project.json`;
+        currentUrl = newWebUrl;
+        modalOverlay.querySelector('#web-url').textContent = newWebUrl;
+      }
+      
+      // QRコードを再生成
+      generateQRCode();
+    }
+
+    localTab.addEventListener('click', () => switchTab('local'));
+    webTab.addEventListener('click', () => switchTab('web'));
+
+    // URLコピー機能
+    modalOverlay.querySelector('#copy-local-url').addEventListener('click', () => {
+      navigator.clipboard.writeText(localUrl).then(() => {
+        alert('ローカルURLをクリップボードにコピーしました');
+      }).catch(() => {
+        alert('URLのコピーに失敗しました');
+      });
+    });
+
+    modalOverlay.querySelector('#copy-web-url').addEventListener('click', () => {
+      const webUrl = modalOverlay.querySelector('#web-url').textContent;
+      navigator.clipboard.writeText(webUrl).then(() => {
+        alert('公開URLをクリップボードにコピーしました');
+      }).catch(() => {
+        alert('URLのコピーに失敗しました');
+      });
+    });
+
+    // ブラウザで開く
+    modalOverlay.querySelector('#test-local-url').addEventListener('click', () => {
+      window.open(localUrl, '_blank');
+    });
+
+    // Web URL更新
+    modalOverlay.querySelector('#update-web-url').addEventListener('click', () => {
+      switchTab('web');
+    });
+
+    // Web URL入力時の自動更新
+    modalOverlay.querySelector('#web-url-input').addEventListener('input', () => {
+      if (currentMethod === 'web') {
+        switchTab('web');
+      }
+    });
 
     // QRコード生成
     const generateQRCode = async () => {
@@ -326,7 +454,7 @@ export function showNewProjectModal() {
                 throw new Error('QRCode library not available');
             }
 
-            await QRCode.toCanvas(canvas, arViewerUrl, {
+            await QRCode.toCanvas(canvas, currentUrl, {
                 width: 200,
                 margin: 1,
                 color: {
@@ -356,7 +484,7 @@ export function showNewProjectModal() {
                 container.innerHTML = `
                     <div style="color: red; text-align: center;">
                         <p>QRコードの生成に失敗しました。</p>
-                        <p style="font-size: 0.9em;">URL: ${arViewerUrl}</p>
+                        <p style="font-size: 0.9em;">URL: ${currentUrl}</p>
                     </div>
                 `;
             }

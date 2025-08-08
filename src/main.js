@@ -8,6 +8,7 @@ import './styles/loading-screen-editor.css'; // ローディング画面エデ�
 import './styles/loading-screen.css'; // ローディング画面のスタイルをインポート
 import './styles/loading-screen-selector.css'; // ローディング画面選択モーダルのスタイル
 import './styles/usage-guide.css'; // 使い方ガイドページのスタイル
+import './styles/ar-viewer.css'; // ARビューアー用のスタイルをインポート
 
 // QRCode ライブラリを遅延読み込みに変更
 // import QRCode from 'qrcode'
@@ -86,7 +87,8 @@ const viewModules = {
   '#/editor': () => import('./views/editor.js'),
   '#/qr-code': () => import('./views/qr-code.js'),
   '#/loading-screen': () => import('./views/loading-screen-editor.js'),
-  '#/usage-guide': () => import('./views/usage-guide.js')
+  '#/usage-guide': () => import('./views/usage-guide.js'),
+  '#/viewer': () => import('./views/ar-viewer.js')
 };
 
 // アプリケーションのメインコンテナ
