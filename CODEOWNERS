@@ -1,0 +1,7 @@
+# UI/共通スタイル/主要導線の変更はオーナー承認必須
+/index.html                      @dottapper
+/src/styles/**                  @dottapper
+/src/views/**                   @dottapper
+/src/components/**              @dottapper
+/src/main.js                    @dottapper
+
