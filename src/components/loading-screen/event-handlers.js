@@ -295,58 +295,73 @@ export function setupTextInputs() {
 }
 
 // ファイルドロップゾーンの設定
+// 単一のドロップゾーンのイベントリスナーを設定
+function setupSingleDropzone(dropzone) {
+  const fileInput = dropzone.querySelector('.loading-screen-editor__file-input');
+  const removeButton = dropzone.querySelector('.loading-screen-editor__remove-button');
+  
+  if (!fileInput) return;
+
+  // 既存のイベントリスナーをクリア（重複を防ぐ）
+  const newDropzone = dropzone.cloneNode(true);
+  dropzone.parentNode.replaceChild(newDropzone, dropzone);
+  
+  // 新しい要素の参照を取得
+  const newFileInput = newDropzone.querySelector('.loading-screen-editor__file-input');
+  const newRemoveButton = newDropzone.querySelector('.loading-screen-editor__remove-button');
+
+  // クリックでファイル選択
+  newDropzone.addEventListener('click', () => {
+    newFileInput.click();
+  });
+
+  // ファイル選択時の処理
+  newFileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleFileSelection(e.target.files[0], newDropzone, newRemoveButton);
+    }
+  });
+
+  // ドラッグ&ドロップの処理
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    newDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  newDropzone.addEventListener('dragenter', () => {
+    newDropzone.classList.add('drag-active');
+  });
+
+  newDropzone.addEventListener('dragleave', () => {
+    newDropzone.classList.remove('drag-active');
+  });
+
+  newDropzone.addEventListener('drop', (e) => {
+    newDropzone.classList.remove('drag-active');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileSelection(files[0], newDropzone, newRemoveButton);
+    }
+  });
+
+  // 削除ボタンの処理
+  if (newRemoveButton) {
+    newRemoveButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeFile(newDropzone, newRemoveButton);
+    });
+  }
+  
+  return newDropzone;
+}
+
 export function setupFileDropzones() {
   const dropzones = document.querySelectorAll('.loading-screen-editor__file-preview');
   
   dropzones.forEach(dropzone => {
-    const fileInput = dropzone.querySelector('.loading-screen-editor__file-input');
-    const removeButton = dropzone.querySelector('.loading-screen-editor__remove-button');
-    
-    if (!fileInput) return;
-
-    // クリックでファイル選択
-    dropzone.addEventListener('click', () => {
-      fileInput.click();
-    });
-
-    // ファイル選択時の処理
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length > 0) {
-        handleFileSelection(e.target.files[0], dropzone, removeButton);
-      }
-    });
-
-    // ドラッグ&ドロップの処理
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      dropzone.addEventListener(eventName, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      });
-    });
-
-    dropzone.addEventListener('dragenter', () => {
-      dropzone.classList.add('drag-active');
-    });
-
-    dropzone.addEventListener('dragleave', () => {
-      dropzone.classList.remove('drag-active');
-    });
-
-    dropzone.addEventListener('drop', (e) => {
-      dropzone.classList.remove('drag-active');
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        handleFileSelection(files[0], dropzone, removeButton);
-      }
-    });
-
-    // 削除ボタンの処理
-    if (removeButton) {
-      removeButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        removeFile(dropzone, removeButton);
-      });
-    }
+    setupSingleDropzone(dropzone);
   });
 }
 
@@ -447,39 +462,53 @@ function handleFileSelection(file, dropzone, removeButton) {
 
 // ファイル削除処理
 function removeFile(dropzone, removeButton) {
-  const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
   const id = dropzone.id;
   
   let defaultText = 'ファイルをドロップ';
   let icon = '📁';
   let formats = 'JPG, PNG, WebP (最大2MB)';
+  let acceptTypes = 'image/*';
   
   if (id === 'thumbnailDropzone') {
     defaultText = 'サムネイル画像をドロップ';
+    icon = '🖼️';
   } else if (id === 'startLogoDropzone') {
     defaultText = 'ロゴ画像をドロップ';
     icon = '🖼️';
     formats = 'PNG, JPG, GIF, WebP (最大2MB)';
+    acceptTypes = 'image/*,.gif';
   } else if (id === 'loadingLogoDropzone') {
     defaultText = 'ロゴをドロップ';
     icon = '🖼️';
     formats = 'PNG, JPG, WebP (最大2MB、透過PNG推奨)';
-  } else if (id === 'guideImageDropzone' || id === 'surfaceGuideImageDropzone' || id === 'worldGuideImageDropzone') {
+  } else if (id === 'surfaceGuideImageDropzone') {
+    defaultText = 'マーカー画像をドロップ';
+  } else if (id === 'worldGuideImageDropzone') {
     defaultText = 'ガイド画像をドロップ';
   }
   
-  dropZone.innerHTML = `
-    <div class="loading-screen-editor__drop-zone-icon">${icon}</div>
-    <div class="loading-screen-editor__drop-zone-text">${defaultText}</div>
-    <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-    <div class="loading-screen-editor__supported-formats">
-      ${formats}
+  // 完全なドロップゾーン構造を再作成
+  dropzone.innerHTML = `
+    <input type="file" class="loading-screen-editor__file-input" accept="${acceptTypes}" style="display: none;">
+    <div class="loading-screen-editor__drop-zone">
+      <div class="loading-screen-editor__drop-zone-icon">${icon}</div>
+      <div class="loading-screen-editor__drop-zone-text">${defaultText}</div>
+      <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+      <div class="loading-screen-editor__supported-formats">
+        ${formats}
+      </div>
     </div>
+    <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
   `;
   
-  if (removeButton) {
-    removeButton.style.display = 'none';
-  }
+  // イベントリスナーを再設定（少し遅延させて確実に）
+  setTimeout(() => {
+    const updatedDropzone = document.getElementById(id);
+    if (updatedDropzone) {
+      setupSingleDropzone(updatedDropzone);
+      console.log(`🔄 ${id} のイベントリスナーを再設定`);
+    }
+  }, 10);
   
   const currentScreenType = getCurrentActiveScreenType();
   updatePreview(currentScreenType);
@@ -666,13 +695,11 @@ export function setupSidebarMenuHandlers() {
       });
     }
     
-    // ログアウトボタン
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        if (confirm('ログアウトしますか？')) {
-          window.location.hash = '#/login';
-        }
+    // ホームに戻るボタン
+    const homeBtn = document.getElementById('home-btn');
+    if (homeBtn) {
+      homeBtn.addEventListener('click', () => {
+        window.location.hash = '#/login';
       });
     }
   } catch (error) {
@@ -1450,13 +1477,76 @@ function resetDOMElements() {
     dropzones.forEach(dropzoneId => {
       const dropzone = document.getElementById(dropzoneId);
       if (dropzone) {
-        // デフォルトのドロップゾーンHTMLに戻す
-        dropzone.innerHTML = `
-          <div class="loading-screen-editor__drop-zone-icon">📁</div>
-          <div class="loading-screen-editor__drop-zone-text">画像をドラッグ&ドロップ</div>
-          <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-          <div class="loading-screen-editor__supported-formats">対応形式: PNG, JPG, GIF</div>
-        `;
+        // デフォルトのドロップゾーンHTMLに戻す（各ドロップゾーンに適したテキストで）
+        let defaultHTML;
+        
+        if (dropzoneId === 'startLogoDropzone') {
+          defaultHTML = `
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*,.gif" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+              <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                PNG, JPG, GIF, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+          `;
+        } else if (dropzoneId === 'loadingLogoDropzone') {
+          defaultHTML = `
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+              <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                PNG, JPG, WebP (最大2MB、透過PNG推奨)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+          `;
+        } else if (dropzoneId === 'surfaceGuideImageDropzone') {
+          defaultHTML = `
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">📁</div>
+              <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                JPG, PNG, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+          `;
+        } else if (dropzoneId === 'worldGuideImageDropzone') {
+          defaultHTML = `
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">📁</div>
+              <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">
+                JPG, PNG, WebP (最大2MB)
+              </div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+          `;
+        } else {
+          // thumbnailDropzone やその他の場合のデフォルト
+          defaultHTML = `
+            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <div class="loading-screen-editor__drop-zone">
+              <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+              <div class="loading-screen-editor__drop-zone-text">画像をドラッグ&ドロップ</div>
+              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+              <div class="loading-screen-editor__supported-formats">対応形式: PNG, JPG, GIF</div>
+            </div>
+            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+          `;
+        }
+        
+        dropzone.innerHTML = defaultHTML;
       }
     });
     
@@ -1467,6 +1557,12 @@ function resetDOMElements() {
     }
     
     console.log('🧹 DOM要素リセット完了');
+    
+    // ファイルドロップゾーンのイベントリスナーを再設定
+    setTimeout(() => {
+      setupFileDropzones();
+      console.log('🔄 ファイルドロップゾーンのイベントリスナーを再設定');
+    }, 50);
     
     // プレビューを更新
     setTimeout(() => {

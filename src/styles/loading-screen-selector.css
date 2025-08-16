@@ -28,7 +28,7 @@
   background-color: var(--color-surface);
   border-radius: var(--border-radius-large);
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   max-height: 80vh;
   box-shadow: var(--shadow-large);
   border: 1px solid var(--color-border);
@@ -236,6 +236,90 @@
 
 .loading-screen-selector-content::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-secondary);
+}
+
+/* プロジェクトリストのスタイル */
+#templates-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-medium);
+  background-color: var(--color-background);
+  transition: all 0.2s ease;
+}
+
+.project-item:hover {
+  background-color: var(--color-surface);
+  border-color: var(--color-accent);
+}
+
+.project-icon {
+  font-size: 1.5rem;
+  width: 2rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.project-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-name {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-details {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+
+
+.project-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.project-action-btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-small);
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.project-edit-btn:hover {
+  background-color: var(--color-accent);
+  color: white;
+  border-color: var(--color-accent);
+}
+
+.project-delete-btn:hover {
+  background-color: var(--color-error);
+  color: white;
+  border-color: var(--color-error);
 }
 
 /* 名前入力ダイアログのスタイル */

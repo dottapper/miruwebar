@@ -241,64 +241,43 @@ export function showEditor(container) {
             <!-- ローディング設定タブのコンテンツ -->
             <div id="loading-settings-panel" class="panel-content">
               <div class="panel-section">
-                <h3>ローディング設定</h3>
+                <h3>このプロジェクトのローディング画面</h3>
                 
-                <!-- ローディング画面の有効/無効 -->
+                <!-- ローディング画面選択 -->
                 <div class="control-group">
-                  <label>
-                    <input type="checkbox" id="loading-enabled" checked>
-                    ローディング画面を有効にする
-                  </label>
+                  <label for="loading-screen-select">ローディング画面を選択:</label>
+                  <select id="loading-screen-select" class="control-select" style="width: 100%; margin-top: 5px;">
+                    <option value="none">なし（ローディング画面を使用しない）</option>
+                    <!-- 既存のローディング画面がここに動的に挿入される -->
+                  </select>
                 </div>
                 
-                <!-- ローディング画面エディタへのリンク -->
+                <!-- アクションボタン -->
                 <div class="control-group">
-                  <label>ローディング画面の詳細設定:</label>
-                  <button id="open-loading-editor" class="btn-secondary" style="width: 100%; margin-top: 5px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                    ローディング画面エディタを開く
-                  </button>
-                </div>
-                
-                <!-- 現在のローディング設定の表示 -->
-                <div class="control-group">
-                  <label>現在の設定:</label>
-                  <div id="current-loading-settings" class="settings-summary">
-                    <div class="setting-item">
-                      <span class="setting-label">テンプレート:</span>
-                      <span id="current-template" class="setting-value">デフォルト</span>
-                    </div>
-                    <div class="setting-item">
-                      <span class="setting-label">メッセージ:</span>
-                      <span id="current-message" class="setting-value">モデルを読み込んでいます...</span>
-                    </div>
-                    <div class="setting-item">
-                      <span class="setting-label">ロゴ:</span>
-                      <span id="current-logo" class="setting-value">なし</span>
-                    </div>
+                  <div style="display: flex; gap: 8px;">
+                    <button id="create-loading-screen" class="btn-secondary" style="flex: 1;">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                      </svg>
+                      新規作成
+                    </button>
+                    <button id="edit-loading-screen" class="btn-secondary" style="flex: 1;" disabled>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                      </svg>
+                      編集
+                    </button>
                   </div>
                 </div>
                 
-                <!-- プレビューボタン -->
-                <div class="control-group">
-                  <button id="loading-preview-button" class="btn-primary" style="width: 100%;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                    ローディング画面をプレビュー
-                  </button>
-                </div>
                 
-                <!-- 設定の説明 -->
+                <!-- 説明 -->
                 <div class="control-group">
                   <div class="info-box">
                     <p style="font-size: 0.9rem; color: var(--color-text-secondary); margin: 0;">
-                      💡 ローディング画面の詳細設定は専用エディタで行います。<br>
-                      設定後、このプロジェクトに紐付けられます。
+                      💡 このプロジェクト専用のローディング画面を作成・選択できます。
                     </p>
                   </div>
                 </div>
@@ -820,6 +799,11 @@ export function showEditor(container) {
           targetContent.classList.add('active');
           targetContent.style.display = 'block';
           console.log(`✅ タブ "${targetTab}" に切り替えました`);
+          
+          // ローディング設定タブが表示された時にローディング画面一覧を読み込み
+          if (targetTab === 'loading-settings') {
+            loadLoadingScreens();
+          }
         } else {
           console.warn(`⚠️ タブコンテンツ "${targetTab}-panel" が見つかりません`);
         }
@@ -1000,6 +984,40 @@ export function showEditor(container) {
     }
     
     // ローディング設定のイベントリスナー
+    
+    // ローディング画面選択のイベントリスナー
+    const loadingScreenSelect = document.getElementById('loading-screen-select');
+    if (loadingScreenSelect) {
+      loadingScreenSelect.addEventListener('change', updateEditButtonState);
+    }
+    
+    // 新規作成ボタン
+    const createLoadingScreenBtn = document.getElementById('create-loading-screen');
+    if (createLoadingScreenBtn) {
+      createLoadingScreenBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        console.log('新規ローディング画面作成ボタンがクリックされました');
+        
+        // 直接ローディング画面エディターを開く（新規作成モード）
+        window.location.hash = '#/loading-screen-editor?mode=new';
+      });
+    }
+    
+    // 編集ボタン
+    const editLoadingScreenBtn = document.getElementById('edit-loading-screen');
+    if (editLoadingScreenBtn) {
+      editLoadingScreenBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const selectedTemplateId = loadingScreenSelect?.value;
+        if (selectedTemplateId && selectedTemplateId !== 'none') {
+          console.log('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
+          
+          // 直接ローディング画面エディターを開く（編集モード）
+          window.location.hash = `#/loading-screen-editor?template=${selectedTemplateId}`;
+        }
+      });
+    }
+    
     if (exportButton) {
       exportButton.addEventListener('click', async () => {
         try {
@@ -1025,6 +1043,59 @@ export function showEditor(container) {
   }
 
   // --- 関数定義 ---
+
+  // ローディング画面一覧を読み込む関数
+  function loadLoadingScreens() {
+    try {
+      console.log('🔄 ローディング画面一覧を読み込み中...');
+      
+      // localStorageから保存済みのローディング画面を取得
+      const stored = localStorage.getItem('loadingScreenTemplates');
+      const templates = stored ? JSON.parse(stored) : [];
+      
+      console.log('📋 取得したローディング画面:', templates);
+      
+      // ドロップダウンを更新
+      const selectElement = document.getElementById('loading-screen-select');
+      if (selectElement) {
+        // 既存のオプションをクリア（「なし」は残す）
+        const noneOption = selectElement.querySelector('option[value="none"]');
+        selectElement.innerHTML = '';
+        if (noneOption) {
+          selectElement.appendChild(noneOption);
+        } else {
+          selectElement.innerHTML = '<option value="none">なし（ローディング画面を使用しない）</option>';
+        }
+        
+        // 既存のローディング画面をオプションとして追加
+        templates.forEach(template => {
+          const option = document.createElement('option');
+          option.value = template.id;
+          option.textContent = `${template.name} (${template.createdAt})`;
+          selectElement.appendChild(option);
+        });
+        
+        console.log(`✅ ローディング画面ドロップダウンを更新: ${templates.length}個`);
+      }
+      
+      // 編集ボタンの状態を更新
+      updateEditButtonState();
+      
+    } catch (error) {
+      console.error('❌ ローディング画面の読み込みエラー:', error);
+    }
+  }
+
+  // 編集ボタンの状態を更新する関数
+  function updateEditButtonState() {
+    const selectElement = document.getElementById('loading-screen-select');
+    const editButton = document.getElementById('edit-loading-screen');
+    
+    if (selectElement && editButton) {
+      const selectedValue = selectElement.value;
+      editButton.disabled = selectedValue === 'none';
+    }
+  }
 
 
 

@@ -10,6 +10,9 @@ import './styles/loading-screen-selector.css'; // ローディング画面選択
 import './styles/usage-guide.css'; // 使い方ガイドページのスタイル
 import './styles/ar-viewer.css'; // ARビューアー用のスタイルをインポート
 
+// HMRクライアントをインポート
+import hmrClient from './utils/hmr-client.js';
+
 // QRCode ライブラリを遅延読み込みに変更
 // import QRCode from 'qrcode'
 
@@ -24,6 +27,15 @@ function debugLog(message, ...args) {
   if (DEBUG_MODE) {
     console.log(message, ...args);
   }
+}
+
+// HMRの設定
+if (import.meta.hot) {
+  import.meta.hot.accept((newModule) => {
+    console.log('🔄 HMR更新を検知しました');
+    // ページをリロードしてHMRを確実に適用
+    window.location.reload();
+  });
 }
 
 // LocatorJS警告の抑制

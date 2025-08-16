@@ -2,11 +2,15 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // ★★★ キャッシュ無効化設定（緊急対策） ★★★
+  // ★★★ HMR設定の改善 ★★★
   server: {
     host: true,
     port: 3000,
     strictPort: true,
+    hmr: {
+      overlay: true, // エラーオーバーレイを有効化
+      port: 3000
+    },
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',

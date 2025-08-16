@@ -124,13 +124,12 @@ export default function showProjects(container) {
           </svg>
           バージョン情報
         </div>
-        <div class="menu-item" id="logout-btn">
+        <div class="menu-item" id="home-btn">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
           </svg>
-          ログアウト
+          ホームに戻る
         </div>
       </div>
       
@@ -471,12 +470,10 @@ export default function showProjects(container) {
     showNewProjectModal();
   });
   
-  // ログアウトボタンのイベントリスナー
-  const logoutBtn = document.getElementById('logout-btn');
-  logoutBtn.addEventListener('click', () => {
-    if (confirm('ログアウトしますか？')) {
-      window.location.hash = '#/login';
-    }
+  // ホームに戻るボタンのイベントリスナー
+  const homeBtn = document.getElementById('home-btn');
+  homeBtn.addEventListener('click', () => {
+    window.location.hash = '#/login';
   });
   
   // --- イベントリスナー管理 ---

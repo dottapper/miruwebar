@@ -15,7 +15,7 @@ function createModalHTML() {
     <div class="loading-screen-selector-overlay" id="loading-screen-selector-overlay">
       <div class="loading-screen-selector-modal">
         <div class="loading-screen-selector-header">
-          <h2 class="loading-screen-selector-title">ローディング画面を選択</h2>
+          <h2 class="loading-screen-selector-title">ローディング画面エディター</h2>
           <button class="loading-screen-selector-close" id="close-selector-modal">
             ×
           </button>
@@ -25,19 +25,19 @@ function createModalHTML() {
           <!-- 新規作成セクション -->
           <div class="new-template-section">
             <button class="new-template-button" id="create-new-template">
-              <span class="new-template-icon">📝</span>
+              <span class="new-template-icon">🏢</span>
               <div class="new-template-text">
-                <h3>新規作成</h3>
-                <p>新しいローディング画面を作成します</p>
+                <h3>新規プロジェクト</h3>
+                <p>新しいプロジェクト用のローディング画面を作成</p>
               </div>
             </button>
           </div>
           
-          <!-- 保存済みテンプレートセクション -->
+          <!-- 既存プロジェクトセクション -->
           <div class="saved-templates-section">
-            <h3 class="saved-templates-title">保存済みテンプレート</h3>
+            <h3 class="saved-templates-title">既存プロジェクト</h3>
             <div id="templates-list-container">
-              <!-- テンプレート一覧がここに動的に挿入される -->
+              <!-- プロジェクト一覧がここに動的に挿入される -->
             </div>
           </div>
           
@@ -62,44 +62,40 @@ function generateTemplatesList() {
   if (templates.length === 0) {
     return `
       <div class="no-templates">
-        保存済みテンプレートはありません
+        既存プロジェクトはありません
       </div>
     `;
   }
   
-  // カード形式でテンプレート一覧を表示
-  const templateCards = templates.map(template => {
+  // リスト形式でプロジェクト一覧を表示
+  const projectList = templates.map(template => {
     const previewColors = template.settings?.startScreen || {};
     const backgroundColor = previewColors.backgroundColor || '#121212';
     const accentColor = previewColors.accentColor || '#6c5ce7';
+    const title = template.settings?.startScreen?.title || 'AR体験を開始';
     
     return `
-      <div class="template-card" data-template-id="${template.id}">
-        <div class="template-preview" style="background-color: ${backgroundColor};">
-          <div class="template-preview-content">
-            <div class="template-preview-logo" style="background-color: ${accentColor};"></div>
-            <div class="template-preview-title" style="color: ${previewColors.textColor || '#ffffff'};">
-              ${template.settings?.startScreen?.title || 'AR体験を開始'}
-            </div>
+      <div class="project-item" data-template-id="${template.id}">
+        <div class="project-icon">🏢</div>
+        <div class="project-info">
+          <div class="project-name">${template.name}</div>
+          <div class="project-details">
+            <span class="project-date">${template.createdAt}</span>
           </div>
         </div>
-        <div class="template-info">
-          <div class="template-name">${template.name}</div>
-          <div class="template-date">作成日: ${template.createdAt}</div>
-          <div class="template-actions">
-            <button class="template-action-btn template-select-btn" data-template-id="${template.id}">
-              選択
-            </button>
-            <button class="template-action-btn template-delete-btn" data-template-id="${template.id}">
-              削除
-            </button>
-          </div>
+        <div class="project-actions">
+          <button class="project-action-btn project-edit-btn" data-template-id="${template.id}">
+            編集
+          </button>
+          <button class="project-action-btn project-delete-btn" data-template-id="${template.id}">
+            削除
+          </button>
         </div>
       </div>
     `;
   }).join('');
   
-  return templateCards;
+  return projectList;
 }
 
 /**
@@ -212,9 +208,9 @@ function setupModalEventListeners() {
  * テンプレートカードのイベントリスナーを設定
  */
 function setupTemplateCardListeners() {
-  // 選択ボタン
-  const selectButtons = document.querySelectorAll('.template-select-btn');
-  selectButtons.forEach(button => {
+  // 編集ボタン（旧選択ボタン）
+  const editButtons = document.querySelectorAll('.project-edit-btn');
+  editButtons.forEach(button => {
     button.addEventListener('click', (e) => {
       e.stopPropagation();
       const templateId = button.dataset.templateId;
@@ -223,7 +219,7 @@ function setupTemplateCardListeners() {
   });
   
   // 削除ボタン
-  const deleteButtons = document.querySelectorAll('.template-delete-btn');
+  const deleteButtons = document.querySelectorAll('.project-delete-btn');
   deleteButtons.forEach(button => {
     button.addEventListener('click', (e) => {
       e.stopPropagation();
