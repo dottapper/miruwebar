@@ -40,7 +40,7 @@ git pull origin indexeddb-storage-refactor
 npm run dev
 ```
 
-**注意**: mainブランチに戻るのではなく、必ず `indexeddb-storage-refactor` ブランチに戻ってください。mainブランチは古い状態のため、最新の機能が含まれていません。
+**注意**: main ブランチに戻るのではなく、必ず `indexeddb-storage-refactor` ブランチに戻ってください。main ブランチは古い状態のため、最新の機能が含まれていません。
 
 ### よくある問題
 
