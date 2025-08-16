@@ -19,3 +19,31 @@
 - プレビュー: `npm run preview`
 
 詳細な貢献ルールは `CONTRIBUTING.md` を参照してください。
+
+## トラブルシューティング
+
+### ブランチ復旧手順（重要）
+
+問題が発生して「一個前に戻したい！」と思った場合：
+
+```bash
+# 1. 現在のブランチを確認
+git branch
+
+# 2. indexeddb-storage-refactorブランチに戻る
+git checkout indexeddb-storage-refactor
+
+# 3. リモートの最新状態を取得
+git pull origin indexeddb-storage-refactor
+
+# 4. 動作確認
+npm run dev
+```
+
+**注意**: mainブランチに戻るのではなく、必ず `indexeddb-storage-refactor` ブランチに戻ってください。mainブランチは古い状態のため、最新の機能が含まれていません。
+
+### よくある問題
+
+- **アプリが起動しない**: `indexeddb-storage-refactor` ブランチに戻る
+- **機能が動作しない**: 依存関係を再インストール `npm install`
+- **スタイルが崩れている**: ブラウザのキャッシュをクリア
