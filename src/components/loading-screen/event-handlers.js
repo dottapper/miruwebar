@@ -1758,6 +1758,69 @@ function resetDOMElements() {
       guideModeSelect.value = 'surface';
     }
     
+    // ガイド画面の特別な設定をリセット（surfaceDetection, worldTracking）
+    // 平面検出設定のリセット
+    const surfaceTitle = document.getElementById('guideScreen-surfaceTitle');
+    const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
+    const surfaceTextPosition = document.getElementById('guideScreen-surfaceTextPosition');
+    const surfaceTextSize = document.getElementById('guideScreen-surfaceTextSize');
+    const markerSize = document.getElementById('guideScreen-markerSize');
+    
+    if (surfaceTitle) {
+      surfaceTitle.value = defaultSettings.guideScreen.surfaceDetection.title;
+    }
+    if (surfaceDescription) {
+      surfaceDescription.value = defaultSettings.guideScreen.surfaceDetection.description;
+    }
+    if (surfaceTextPosition) {
+      surfaceTextPosition.value = defaultSettings.guideScreen.surfaceDetection.textPosition;
+      const valueDisplay = document.getElementById('guideScreen-surfaceTextPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.surfaceDetection.textPosition + '%';
+      }
+    }
+    if (surfaceTextSize) {
+      surfaceTextSize.value = defaultSettings.guideScreen.surfaceDetection.textSize;
+      const valueDisplay = document.getElementById('guideScreen-surfaceTextSize-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.surfaceDetection.textSize + 'x';
+      }
+    }
+    if (markerSize) {
+      markerSize.value = defaultSettings.guideScreen.surfaceDetection.markerSize;
+      const valueDisplay = document.getElementById('markerSize-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.surfaceDetection.markerSize + 'x';
+      }
+    }
+    
+    // 空間検出設定のリセット
+    const worldTitle = document.getElementById('guideScreen-worldTitle');
+    const worldDescription = document.getElementById('guideScreen-worldDescription');
+    const worldTextPosition = document.getElementById('guideScreen-worldTextPosition');
+    const worldTextSize = document.getElementById('guideScreen-worldTextSize');
+    
+    if (worldTitle) {
+      worldTitle.value = defaultSettings.guideScreen.worldTracking.title;
+    }
+    if (worldDescription) {
+      worldDescription.value = defaultSettings.guideScreen.worldTracking.description;
+    }
+    if (worldTextPosition) {
+      worldTextPosition.value = defaultSettings.guideScreen.worldTracking.textPosition;
+      const valueDisplay = document.getElementById('guideScreen-worldTextPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.worldTracking.textPosition + '%';
+      }
+    }
+    if (worldTextSize) {
+      worldTextSize.value = defaultSettings.guideScreen.worldTracking.textSize;
+      const valueDisplay = document.getElementById('guideScreen-worldTextSize-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.worldTracking.textSize + 'x';
+      }
+    }
+    
     console.log('🧹 DOM要素リセット完了');
     
     // ファイルドロップゾーンのイベントリスナーを再設定

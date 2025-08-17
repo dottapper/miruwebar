@@ -45,7 +45,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">ロゴサイズ</label>
           <div class="loading-screen-editor__slider-with-value">
-            <input type="range" class="loading-screen-editor__slider" id="startScreen-logoSize" min="0.3" max="2.0" step="0.1" value="${currentSettings.startScreen.logoSize}">
+            <input type="range" class="loading-screen-editor__slider" id="startScreen-logoSize" min="1.2" max="2.5" step="0.1" value="${currentSettings.startScreen.logoSize}">
             <span class="loading-screen-editor__value-display" id="startScreen-logoSize-value">${currentSettings.startScreen.logoSize}x</span>
           </div>
         </div>
@@ -151,6 +151,14 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__color-input">
           <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-backgroundColor" value="${currentSettings.loadingScreen.backgroundColor}">
           <input type="text" class="loading-screen-editor__input" id="loadingScreen-backgroundColorText" value="${currentSettings.loadingScreen.backgroundColor}">
+        </div>
+      </div>
+      
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">テキスト色</label>
+        <div class="loading-screen-editor__color-input">
+          <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-textColor" value="${currentSettings.loadingScreen.textColor}">
+          <input type="text" class="loading-screen-editor__input" id="loadingScreen-textColorText" value="${currentSettings.loadingScreen.textColor}">
         </div>
       </div>
       
@@ -307,6 +315,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         </div>
         
         <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキストサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-surfaceTextSize" min="0.7" max="1.5" step="0.1" value="${currentSettings.guideScreen.surfaceDetection?.textSize || 1.0}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-surfaceTextSize-value">${currentSettings.guideScreen.surfaceDetection?.textSize || 1.0}x</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">マーカー画像</label>
           <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
             <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
@@ -350,6 +366,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
           <div class="loading-screen-editor__slider-with-value">
             <input type="range" class="loading-screen-editor__slider" id="guideScreen-worldTextPosition" min="5" max="50" step="1" value="${currentSettings.guideScreen.worldTracking?.textPosition || 20}">
             <span class="loading-screen-editor__value-display" id="guideScreen-worldTextPosition-value">${currentSettings.guideScreen.worldTracking?.textPosition || 20}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキストサイズ</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-worldTextSize" min="0.7" max="1.5" step="0.1" value="${currentSettings.guideScreen.worldTracking?.textSize || 1.0}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-worldTextSize-value">${currentSettings.guideScreen.worldTracking?.textSize || 1.0}x</span>
           </div>
         </div>
         

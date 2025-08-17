@@ -355,8 +355,8 @@ function updateGuidePreview(previewScreen, settings) {
     }
   }
   
-  // モードに応じたタイトル、説明、テキスト位置を取得
-  let title, description, textPosition;
+  // モードに応じたタイトル、説明、テキスト位置、テキストサイズを取得
+  let title, description, textPosition, textSize;
   if (mode === 'surface') {
     const surfaceTitleInput = document.getElementById('guideScreen-surfaceTitle')?.value;
     title = surfaceTitleInput !== undefined ? surfaceTitleInput : 
@@ -368,6 +368,8 @@ function updateGuidePreview(previewScreen, settings) {
                   'マーカー画像を画面内に収めてください');
     const textPositionSlider = document.getElementById('guideScreen-surfaceTextPosition');
     textPosition = textPositionSlider?.value || screen.surfaceDetection?.textPosition || defaultSettings.guideScreen.surfaceDetection.textPosition;
+    const textSizeSlider = document.getElementById('guideScreen-surfaceTextSize');
+    textSize = textSizeSlider?.value || screen.surfaceDetection?.textSize || defaultSettings.guideScreen.surfaceDetection.textSize;
   } else {
     const worldTitleInput = document.getElementById('guideScreen-worldTitle')?.value;
     title = worldTitleInput !== undefined ? worldTitleInput : 
@@ -379,6 +381,8 @@ function updateGuidePreview(previewScreen, settings) {
                   '平らな面を見つけて画面をタップしてください');
     const textPositionSlider = document.getElementById('guideScreen-worldTextPosition');
     textPosition = textPositionSlider?.value || screen.worldTracking?.textPosition || defaultSettings.guideScreen.worldTracking.textPosition;
+    const textSizeSlider = document.getElementById('guideScreen-worldTextSize');
+    textSize = textSizeSlider?.value || screen.worldTracking?.textSize || defaultSettings.guideScreen.worldTracking.textSize;
   }
 
   previewScreen.innerHTML = `
@@ -403,7 +407,7 @@ function updateGuidePreview(previewScreen, settings) {
         width: 90%;
       ">
         <div class="guide-title" style="
-          font-size: 16px;
+          font-size: ${16 * textSize}px;
           font-weight: bold;
           margin-bottom: 8px;
           text-align: center;
@@ -414,7 +418,7 @@ function updateGuidePreview(previewScreen, settings) {
         </div>
         
         <div class="guide-description" style="
-          font-size: 12px;
+          font-size: ${12 * textSize}px;
           line-height: 1.4;
           text-align: center;
           opacity: 0.9;
@@ -624,10 +628,8 @@ export function getCurrentSettingsFromDOM() {
         value = parseFloat(value);
       }
       
-      // 空文字列の場合はデフォルト値を使用
-      if (value === '') {
-        value = defaultSettings[screenType]?.[property] || '';
-      }
+      // 空文字列もユーザーの意図として尊重（デフォルト値は使用しない）
+      // NOTE: 空文字列の場合、プレビューでは `!== undefined` チェックで処理
       
       settings[screenType][property] = value;
     }
@@ -644,6 +646,7 @@ export function getCurrentSettingsFromDOM() {
   const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
   const markerSizeSlider = document.getElementById('guideScreen-markerSize');
   const surfaceTextPositionSlider = document.getElementById('guideScreen-surfaceTextPosition');
+  const surfaceTextSizeSlider = document.getElementById('guideScreen-surfaceTextSize');
   if (surfaceTitle) {
     settings.guideScreen.surfaceDetection.title = surfaceTitle.value;
   }
@@ -656,11 +659,15 @@ export function getCurrentSettingsFromDOM() {
   if (surfaceTextPositionSlider) {
     settings.guideScreen.surfaceDetection.textPosition = parseFloat(surfaceTextPositionSlider.value);
   }
+  if (surfaceTextSizeSlider) {
+    settings.guideScreen.surfaceDetection.textSize = parseFloat(surfaceTextSizeSlider.value);
+  }
   
   // 空間検出設定
   const worldTitle = document.getElementById('guideScreen-worldTitle');
   const worldDescription = document.getElementById('guideScreen-worldDescription');
   const worldTextPositionSlider = document.getElementById('guideScreen-worldTextPosition');
+  const worldTextSizeSlider = document.getElementById('guideScreen-worldTextSize');
   if (worldTitle) {
     settings.guideScreen.worldTracking.title = worldTitle.value;
   }
@@ -669,6 +676,9 @@ export function getCurrentSettingsFromDOM() {
   }
   if (worldTextPositionSlider) {
     settings.guideScreen.worldTracking.textPosition = parseFloat(worldTextPositionSlider.value);
+  }
+  if (worldTextSizeSlider) {
+    settings.guideScreen.worldTracking.textSize = parseFloat(worldTextSizeSlider.value);
   }
   
   // 画像データを取得

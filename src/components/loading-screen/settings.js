@@ -19,7 +19,7 @@ export const defaultSettings = {
     buttonTextColor: '#ffffff',
     logo: null,
     logoPosition: 20,
-    logoSize: 1.5
+    logoSize: 1.8
   },
   loadingScreen: {
     backgroundColor: '#121212',
@@ -48,14 +48,16 @@ export const defaultSettings = {
       instructionText: '画像を認識しています...',
       guideImage: null, // ガイド用のマーカー画像
       markerSize: 1.0, // マーカー画像のサイズ倍率
-      textPosition: 20 // テキストの上からの位置（%）
+      textPosition: 20, // テキストの上からの位置（%）
+      textSize: 1.0 // テキストサイズの倍率
     },
     worldTracking: {
       title: '画面をタップしてください',
       description: '平らな面を見つけて画面をタップしてください',
       instructionText: '平面を検出中...',
       guideImage: null, // ガイド用の平面検出画像
-      textPosition: 20 // テキストの上からの位置（%）
+      textPosition: 20, // テキストの上からの位置（%）
+      textSize: 1.0 // テキストサイズの倍率
     }
   }
 };
@@ -202,12 +204,30 @@ export const settingsAPI = {
     ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
       if (settings[screenType]) {
         // 各プロパティを個別に確認してマージ
-        Object.keys(merged[screenType]).forEach(key => {
-          // 空文字列も有効な値として扱う
+        Object.keys(settings[screenType]).forEach(key => {
+          // 空文字列も有効な値として扱う（ユーザーの意図を尊重）
           if (settings[screenType][key] !== undefined) {
             merged[screenType][key] = settings[screenType][key];
           }
         });
+        
+        // ガイド画面の特別処理（ネストしたオブジェクト）
+        if (screenType === 'guideScreen') {
+          if (settings[screenType].surfaceDetection) {
+            Object.keys(settings[screenType].surfaceDetection).forEach(key => {
+              if (settings[screenType].surfaceDetection[key] !== undefined) {
+                merged[screenType].surfaceDetection[key] = settings[screenType].surfaceDetection[key];
+              }
+            });
+          }
+          if (settings[screenType].worldTracking) {
+            Object.keys(settings[screenType].worldTracking).forEach(key => {
+              if (settings[screenType].worldTracking[key] !== undefined) {
+                merged[screenType].worldTracking[key] = settings[screenType].worldTracking[key];
+              }
+            });
+          }
+        }
         
         // カラー値の検証と修正
         ['backgroundColor', 'textColor', 'accentColor', 'buttonColor', 'buttonTextColor'].forEach(colorProp => {
