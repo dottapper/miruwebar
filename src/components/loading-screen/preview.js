@@ -355,8 +355,8 @@ function updateGuidePreview(previewScreen, settings) {
     }
   }
   
-  // モードに応じたタイトル、説明、テキスト位置、テキストサイズを取得
-  let title, description, textPosition, textSize;
+  // モードに応じたタイトル、説明、テキスト位置、テキストサイズ、フッター位置を取得
+  let title, description, textPosition, textSize, footerPosition;
   if (mode === 'surface') {
     const surfaceTitleInput = document.getElementById('guideScreen-surfaceTitle')?.value;
     title = surfaceTitleInput !== undefined ? surfaceTitleInput : 
@@ -370,6 +370,8 @@ function updateGuidePreview(previewScreen, settings) {
     textPosition = textPositionSlider?.value || screen.surfaceDetection?.textPosition || defaultSettings.guideScreen.surfaceDetection.textPosition;
     const textSizeSlider = document.getElementById('guideScreen-surfaceTextSize');
     textSize = textSizeSlider?.value || screen.surfaceDetection?.textSize || defaultSettings.guideScreen.surfaceDetection.textSize;
+    const footerPositionSlider = document.getElementById('guideScreen-surfaceFooterPosition');
+    footerPosition = footerPositionSlider?.value || screen.surfaceDetection?.footerPosition || defaultSettings.guideScreen.surfaceDetection.footerPosition;
   } else {
     const worldTitleInput = document.getElementById('guideScreen-worldTitle')?.value;
     title = worldTitleInput !== undefined ? worldTitleInput : 
@@ -383,6 +385,8 @@ function updateGuidePreview(previewScreen, settings) {
     textPosition = textPositionSlider?.value || screen.worldTracking?.textPosition || defaultSettings.guideScreen.worldTracking.textPosition;
     const textSizeSlider = document.getElementById('guideScreen-worldTextSize');
     textSize = textSizeSlider?.value || screen.worldTracking?.textSize || defaultSettings.guideScreen.worldTracking.textSize;
+    const footerPositionSlider = document.getElementById('guideScreen-worldFooterPosition');
+    footerPosition = footerPositionSlider?.value || screen.worldTracking?.footerPosition || defaultSettings.guideScreen.worldTracking.footerPosition;
   }
 
   previewScreen.innerHTML = `
@@ -481,11 +485,11 @@ function updateGuidePreview(previewScreen, settings) {
           <div class="marker-label" style="
             margin-top: 8px;
             font-size: 10px;
-            opacity: 0.7;
+            opacity: 0.9;
             text-align: center;
-            background: rgba(0,0,0,0.5);
-            padding: 2px 6px;
-            border-radius: 4px;
+            color: ${screen.textColor || defaultSettings.guideScreen.textColor};
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+            animation: status-pulse 3s ease-in-out infinite;
           ">
             マーカー画像
           </div>
@@ -555,7 +559,7 @@ function updateGuidePreview(previewScreen, settings) {
       
       <div class="guide-footer" style="
         position: absolute;
-        bottom: 20px;
+        top: ${footerPosition}%;
         left: 50%;
         transform: translateX(-50%);
         text-align: center;
@@ -563,12 +567,11 @@ function updateGuidePreview(previewScreen, settings) {
       ">
         <div class="guide-status" style="
           font-size: 12px;
-          opacity: 0.7;
+          opacity: 0.9;
           text-align: center;
-          background: rgba(0,0,0,0.5);
-          padding: 4px 12px;
-          border-radius: 12px;
-          text-shadow: none;
+          color: ${screen.textColor || defaultSettings.guideScreen.textColor};
+          text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+          animation: status-pulse 3s ease-in-out infinite;
         ">
           ${mode === 'surface' ? '画像を認識しています...' : '平面を検出中...'}
         </div>
@@ -590,6 +593,17 @@ function updateGuidePreview(previewScreen, settings) {
       @keyframes tap-pulse {
         0%, 100% { transform: scale(1); opacity: 1; }
         50% { transform: scale(1.1); opacity: 0.7; }
+      }
+      
+      @keyframes status-pulse {
+        0%, 100% { 
+          opacity: 0.9; 
+          transform: scale(1);
+        }
+        50% { 
+          opacity: 0.6; 
+          transform: scale(0.98);
+        }
       }
     </style>
   `;
@@ -679,6 +693,16 @@ export function getCurrentSettingsFromDOM() {
   }
   if (worldTextSizeSlider) {
     settings.guideScreen.worldTracking.textSize = parseFloat(worldTextSizeSlider.value);
+  }
+  
+  // フッター位置の設定を取得
+  const surfaceFooterPositionSlider = document.getElementById('guideScreen-surfaceFooterPosition');
+  const worldFooterPositionSlider = document.getElementById('guideScreen-worldFooterPosition');
+  if (surfaceFooterPositionSlider) {
+    settings.guideScreen.surfaceDetection.footerPosition = parseFloat(surfaceFooterPositionSlider.value);
+  }
+  if (worldFooterPositionSlider) {
+    settings.guideScreen.worldTracking.footerPosition = parseFloat(worldFooterPositionSlider.value);
   }
   
   // 画像データを取得

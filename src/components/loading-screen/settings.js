@@ -49,7 +49,8 @@ export const defaultSettings = {
       guideImage: null, // ガイド用のマーカー画像
       markerSize: 1.0, // マーカー画像のサイズ倍率
       textPosition: 20, // テキストの上からの位置（%）
-      textSize: 1.0 // テキストサイズの倍率
+      textSize: 1.0, // テキストサイズの倍率
+      footerPosition: 85 // フッターテキスト位置（上から%）
     },
     worldTracking: {
       title: '画面をタップしてください',
@@ -57,7 +58,8 @@ export const defaultSettings = {
       instructionText: '平面を検出中...',
       guideImage: null, // ガイド用の平面検出画像
       textPosition: 20, // テキストの上からの位置（%）
-      textSize: 1.0 // テキストサイズの倍率
+      textSize: 1.0, // テキストサイズの倍率
+      footerPosition: 85 // フッターテキスト位置（上から%）
     }
   }
 };
@@ -126,35 +128,37 @@ export const settingsAPI = {
       const optimizedSettings = this.optimizeImageData(merged);
       const settingsJson = JSON.stringify(optimizedSettings);
       
-      // localStorageの容量制限をチェック（ローディング画面は2MB）
-      const maxSize = 2 * 1024 * 1024; // 2MB
+      // localStorageの容量制限をチェック（画像データのみ2MB制限）
+      const maxImageSize = 2 * 1024 * 1024; // 2MB
       
-      // 容量チェック前にlocalStorageの利用可能領域を確認
-      const currentUsage = this.getLocalStorageUsage();
-      console.log('現在のlocalStorage使用量:', {
-        total: (currentUsage.total / 1024).toFixed(2) + 'KB',
-        available: ((maxSize - currentUsage.total) / 1024 / 1024).toFixed(2) + 'MB'
+      // 画像データのみのサイズを計算
+      const imageDataSize = this.calculateImageDataSize(optimizedSettings);
+      
+      console.log('画像データ容量チェック:', {
+        imageSize: (imageDataSize / 1024).toFixed(2) + 'KB',
+        maxSize: (maxImageSize / 1024 / 1024).toFixed(2) + 'MB',
+        usagePercentage: ((imageDataSize / maxImageSize) * 100).toFixed(1) + '%'
       });
       
-      if (settingsJson.length > maxSize) {
-        console.warn('設定データが大きすぎます:', {
-          size: settingsJson.length,
-          maxSize: maxSize,
-          sizeInMB: (settingsJson.length / 1024 / 1024).toFixed(2)
+      if (imageDataSize > maxImageSize) {
+        console.warn('画像データが大きすぎます:', {
+          size: imageDataSize,
+          maxSize: maxImageSize,
+          sizeInMB: (imageDataSize / 1024 / 1024).toFixed(2)
         });
         
         // 画像データを削除して再試行
         const settingsWithoutImages = this.removeImageData(merged);
-        const settingsWithoutImagesJson = JSON.stringify(settingsWithoutImages);
+        const imageDataSizeWithoutImages = this.calculateImageDataSize(settingsWithoutImages);
         
-        if (settingsWithoutImagesJson.length > maxSize) {
-          throw new Error(`ローディング画面のデータ容量が制限を超えています（${(settingsJson.length / 1024 / 1024).toFixed(2)}MB）。\n\nローディング画面全体の制限: 2MB\n\n💡 解決方法:\n• 画像サイズを小さくする（推奨: 1MB以下）\n• 解像度を下げる（推奨: 1920x1080以下）\n• 不要なテンプレートを削除する`);
+        if (imageDataSizeWithoutImages > 0) {
+          throw new Error(`画像データの容量が制限を超えています（${(imageDataSize / 1024 / 1024).toFixed(2)}MB）。\n\n画像データの制限: 2MB\n\n💡 解決方法:\n• 画像サイズを小さくする（推奨: 1MB以下）\n• 解像度を下げる（推奨: 1920x1080以下）\n• 不要な画像を削除する`);
         } else {
           console.log('⚠️ 画像データが大きすぎるため、画像なしで保存します');
-          localStorage.setItem('loadingScreenSettings', settingsWithoutImagesJson);
+          localStorage.setItem('loadingScreenSettings', JSON.stringify(settingsWithoutImages));
           
           // ユーザーに通知するためのカスタムエラーを投げる
-          const warningError = new Error(`⚠️ 画像が大きすぎるため、画像なしで保存されました。\n\n📊 ローディング画面の容量制限: 2MB\n💡 画像を圧縮してから再保存してください。`);
+          const warningError = new Error(`⚠️ 画像が大きすぎるため、画像なしで保存されました。\n\n📊 画像データの容量制限: 2MB\n💡 画像を圧縮してから再保存してください。`);
           warningError.type = 'warning';
           throw warningError;
         }
@@ -410,6 +414,38 @@ export const settingsAPI = {
     
     console.log('🧹 画像データを削除しました');
     return cleanedSettings;
+  },
+  
+  // 画像データのみの容量を計算する関数
+  calculateImageDataSize(settingsObject) {
+    let totalImageSize = 0;
+    
+    try {
+      if (settingsObject) {
+        // 設定オブジェクトから画像データサイズを計算
+        const imagePaths = [
+          settingsObject.startScreen?.thumbnail,
+          settingsObject.startScreen?.logo,
+          settingsObject.loadingScreen?.logo,
+          settingsObject.guideScreen?.surfaceDetection?.guideImage,
+          settingsObject.guideScreen?.worldTracking?.guideImage
+        ];
+        
+        imagePaths.forEach(imageSrc => {
+          if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
+            const base64Data = imageSrc.split(',')[1];
+            if (base64Data) {
+              // Base64は元データの約1.33倍なので、元のサイズに近似
+              totalImageSize += (base64Data.length * 0.75);
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.warn('画像データサイズ計算中にエラー:', error);
+    }
+    
+    return Math.round(totalImageSize);
   }
 };
 

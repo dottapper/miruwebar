@@ -1161,9 +1161,9 @@ export function setupButtons() {
     console.warn('キャンセルボタンが見つかりません');
   }
 
-  // リセットボタン
-  const resetButtons = document.querySelectorAll('[id*="reset"]');
-  resetButtons.forEach(button => {
+  // リセットボタン（全体リセット）
+  const fullResetButtons = document.querySelectorAll('#reset-start-settings, #reset-guide-settings');
+  fullResetButtons.forEach(button => {
     button.addEventListener('click', () => {
       if (confirm('設定をリセットしますか？\n\nすべての設定とアップロードした画像がデフォルト状態に戻ります。')) {
         try {
@@ -1186,6 +1186,38 @@ export function setupButtons() {
       }
     });
   });
+  
+  // ローディング画面一般設定リセットボタン
+  const loadingGeneralResetButton = document.getElementById('reset-loading-general-settings');
+  if (loadingGeneralResetButton) {
+    loadingGeneralResetButton.addEventListener('click', () => {
+      if (confirm('ローディング画面の一般設定をリセットしますか？')) {
+        try {
+          resetLoadingGeneralSettings();
+          showNotification('ローディング画面の一般設定をリセットしました', 'success');
+        } catch (error) {
+          console.error('一般設定リセット中にエラー:', error);
+          showNotification('一般設定のリセット中にエラーが発生しました', 'error');
+        }
+      }
+    });
+  }
+  
+  // ローディング画面テキスト設定リセットボタン
+  const loadingTextResetButton = document.getElementById('reset-loading-text-settings');
+  if (loadingTextResetButton) {
+    loadingTextResetButton.addEventListener('click', () => {
+      if (confirm('ローディング画面のテキスト設定をリセットしますか？')) {
+        try {
+          resetLoadingTextSettings();
+          showNotification('ローディング画面のテキスト設定をリセットしました', 'success');
+        } catch (error) {
+          console.error('テキスト設定リセット中にエラー:', error);
+          showNotification('テキスト設定のリセット中にエラーが発生しました', 'error');
+        }
+      }
+    });
+  }
 }
 
 // 未保存の変更があるかチェックする関数
@@ -1497,34 +1529,55 @@ function showSaveConfirmDialog(onNavigate) {
 }
 
 // 画像データのみの容量を計算する関数
-function calculateImageDataSize() {
+function calculateImageDataSize(settingsObject = null) {
   let totalImageSize = 0;
   
   try {
-    // アップロードされた画像のサイズを計算
-    const imageElements = [
-      { id: 'thumbnailDropzone', property: 'thumbnail' },
-      { id: 'startLogoDropzone', property: 'logo' },
-      { id: 'loadingLogoDropzone', property: 'logo' },
-      { id: 'surfaceGuideImageDropzone', property: 'guideImage' },
-      { id: 'worldGuideImageDropzone', property: 'guideImage' }
-    ];
-    
-    imageElements.forEach(({ id }) => {
-      const dropzone = document.getElementById(id);
-      const img = dropzone?.querySelector('img');
-      if (img && img.src && (img.src.startsWith('data:') || img.src.startsWith('blob:'))) {
-        // Base64データのサイズを計算
-        if (img.src.startsWith('data:')) {
-          // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
-          const base64Data = img.src.split(',')[1];
+    if (settingsObject) {
+      // 設定オブジェクトから画像データサイズを計算
+      const imagePaths = [
+        settingsObject.startScreen?.thumbnail,
+        settingsObject.startScreen?.logo,
+        settingsObject.loadingScreen?.logo,
+        settingsObject.guideScreen?.surfaceDetection?.guideImage,
+        settingsObject.guideScreen?.worldTracking?.guideImage
+      ];
+      
+      imagePaths.forEach(imageSrc => {
+        if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
+          const base64Data = imageSrc.split(',')[1];
           if (base64Data) {
             // Base64は元データの約1.33倍なので、元のサイズに近似
             totalImageSize += (base64Data.length * 0.75);
           }
         }
-      }
-    });
+      });
+    } else {
+      // DOMから画像データサイズを計算（従来の方法）
+      const imageElements = [
+        { id: 'thumbnailDropzone', property: 'thumbnail' },
+        { id: 'startLogoDropzone', property: 'logo' },
+        { id: 'loadingLogoDropzone', property: 'logo' },
+        { id: 'surfaceGuideImageDropzone', property: 'guideImage' },
+        { id: 'worldGuideImageDropzone', property: 'guideImage' }
+      ];
+      
+      imageElements.forEach(({ id }) => {
+        const dropzone = document.getElementById(id);
+        const img = dropzone?.querySelector('img');
+        if (img && img.src && (img.src.startsWith('data:') || img.src.startsWith('blob:'))) {
+          // Base64データのサイズを計算
+          if (img.src.startsWith('data:')) {
+            // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
+            const base64Data = img.src.split(',')[1];
+            if (base64Data) {
+              // Base64は元データの約1.33倍なので、元のサイズに近似
+              totalImageSize += (base64Data.length * 0.75);
+            }
+          }
+        }
+      });
+    }
     
   } catch (error) {
     console.warn('画像データサイズ計算中にエラー:', error);
@@ -1574,11 +1627,14 @@ export function updateStorageUsageDisplay() {
       textElement.classList.add('warning');
     }
     
-    // テキストを更新
+    // テキストを更新（1MB超えたらMB表記）
     if (usageInfo.total === 0) {
       textElement.textContent = `画像: 未使用 / ${usageInfo.maxSizeMB}MB`;
     } else {
-      textElement.textContent = `画像: ${usageInfo.totalKB}KB / ${usageInfo.maxSizeMB}MB (${usageInfo.usagePercentage}%)`;
+      const usageSizeKB = parseFloat(usageInfo.totalKB);
+      const usageDisplay = usageSizeKB >= 1024 ? 
+        `${usageInfo.totalMB}MB` : `${usageInfo.totalKB}KB`;
+      textElement.textContent = `画像: ${usageDisplay} / ${usageInfo.maxSizeMB}MB (${usageInfo.usagePercentage}%)`;
     }
     
     console.log('📊 画像データ使用量を更新:', {
@@ -1821,6 +1877,25 @@ function resetDOMElements() {
       }
     }
     
+    // フッター位置をリセット
+    const surfaceFooterPosition = document.getElementById('guideScreen-surfaceFooterPosition');
+    const worldFooterPosition = document.getElementById('guideScreen-worldFooterPosition');
+    
+    if (surfaceFooterPosition) {
+      surfaceFooterPosition.value = defaultSettings.guideScreen.surfaceDetection.footerPosition;
+      const valueDisplay = document.getElementById('guideScreen-surfaceFooterPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.surfaceDetection.footerPosition + '%';
+      }
+    }
+    if (worldFooterPosition) {
+      worldFooterPosition.value = defaultSettings.guideScreen.worldTracking.footerPosition;
+      const valueDisplay = document.getElementById('guideScreen-worldFooterPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.guideScreen.worldTracking.footerPosition + '%';
+      }
+    }
+    
     console.log('🧹 DOM要素リセット完了');
     
     // ファイルドロップゾーンのイベントリスナーを再設定
@@ -1838,6 +1913,166 @@ function resetDOMElements() {
     
   } catch (error) {
     console.error('❌ DOM要素リセット中にエラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ローディング画面の一般設定をリセット
+ */
+function resetLoadingGeneralSettings() {
+  try {
+    console.log('🧹 ローディング画面一般設定リセット開始');
+    
+    // 背景色をリセット
+    const backgroundColorPicker = document.getElementById('loadingScreen-backgroundColor');
+    const backgroundColorText = document.getElementById('loadingScreen-backgroundColorText');
+    if (backgroundColorPicker) {
+      backgroundColorPicker.value = defaultSettings.loadingScreen.backgroundColor;
+    }
+    if (backgroundColorText) {
+      backgroundColorText.value = defaultSettings.loadingScreen.backgroundColor;
+    }
+    
+    // テキスト色をリセット
+    const textColorPicker = document.getElementById('loadingScreen-textColor');
+    const textColorText = document.getElementById('loadingScreen-textColorText');
+    if (textColorPicker) {
+      textColorPicker.value = defaultSettings.loadingScreen.textColor;
+    }
+    if (textColorText) {
+      textColorText.value = defaultSettings.loadingScreen.textColor;
+    }
+    
+    // アクセントカラー（進捗バー色）をリセット
+    const accentColorPicker = document.getElementById('loadingScreen-accentColor');
+    const accentColorText = document.getElementById('loadingScreen-accentColorText');
+    if (accentColorPicker) {
+      accentColorPicker.value = defaultSettings.loadingScreen.accentColor;
+    }
+    if (accentColorText) {
+      accentColorText.value = defaultSettings.loadingScreen.accentColor;
+    }
+    
+    // ロゴタイプをリセット
+    const logoTypeRadio = document.querySelector('input[name="loadingLogoType"][value="none"]');
+    if (logoTypeRadio) {
+      logoTypeRadio.checked = true;
+      
+      // UI表示の更新
+      const customLogoSection = document.getElementById('loading-custom-logo-section');
+      const logoControls = document.getElementById('loading-logo-controls');
+      const logoSizeControls = document.getElementById('loading-logo-size-controls');
+      
+      if (customLogoSection) {
+        customLogoSection.style.display = 'none';
+      }
+      if (logoControls) {
+        logoControls.style.display = 'none';
+      }
+      if (logoSizeControls) {
+        logoSizeControls.style.display = 'none';
+      }
+    }
+    
+    // ロゴ位置とサイズをリセット
+    const logoPositionSlider = document.getElementById('loadingScreen-logoPosition');
+    if (logoPositionSlider) {
+      logoPositionSlider.value = defaultSettings.loadingScreen.logoPosition;
+      const valueDisplay = document.getElementById('loadingScreen-logoPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.loadingScreen.logoPosition + '%';
+      }
+    }
+    
+    const logoSizeSlider = document.getElementById('loadingScreen-logoSize');
+    if (logoSizeSlider) {
+      logoSizeSlider.value = defaultSettings.loadingScreen.logoSize;
+      const valueDisplay = document.getElementById('loadingScreen-logoSize-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.loadingScreen.logoSize + 'x';
+      }
+    }
+    
+    // ローディング画面のカスタムロゴを削除
+    const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
+    if (loadingLogoDropzone) {
+      loadingLogoDropzone.innerHTML = `
+        <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+        <div class="loading-screen-editor__drop-zone">
+          <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
+          <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
+          <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
+          <div class="loading-screen-editor__supported-formats">
+            PNG, JPG, WebP (最大2MB、透過PNG推奨)
+          </div>
+        </div>
+        <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
+      `;
+    }
+    
+    console.log('🧹 ローディング画面一般設定リセット完了');
+    
+    // ファイルドロップゾーンのイベントリスナーを再設定
+    setTimeout(() => {
+      setupFileDropzones();
+    }, 50);
+    
+    // プレビューを更新
+    setTimeout(() => {
+      updatePreview('loadingScreen');
+    }, 100);
+    
+  } catch (error) {
+    console.error('❌ ローディング画面一般設定リセット中にエラー:', error);
+    throw error;
+  }
+}
+
+/**
+ * ローディング画面のテキスト設定をリセット
+ */
+function resetLoadingTextSettings() {
+  try {
+    console.log('🧹 ローディング画面テキスト設定リセット開始');
+    
+    // ブランド名をリセット
+    const brandNameInput = document.getElementById('loadingScreen-brandName');
+    if (brandNameInput) {
+      brandNameInput.value = defaultSettings.loadingScreen.brandName;
+    }
+    
+    // サブタイトルをリセット
+    const subTitleInput = document.getElementById('loadingScreen-subTitle');
+    if (subTitleInput) {
+      subTitleInput.value = defaultSettings.loadingScreen.subTitle;
+    }
+    
+    // ローディングメッセージをリセット
+    const loadingMessageInput = document.getElementById('loadingScreen-loadingMessage');
+    if (loadingMessageInput) {
+      loadingMessageInput.value = defaultSettings.loadingScreen.loadingMessage;
+    }
+    
+    // フォントスケールをリセット
+    const fontScaleSlider = document.getElementById('loadingScreen-fontScale');
+    if (fontScaleSlider) {
+      fontScaleSlider.value = defaultSettings.loadingScreen.fontScale;
+      const valueDisplay = document.getElementById('fontScale-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.loadingScreen.fontScale + 'x';
+      }
+    }
+    
+    console.log('🧹 ローディング画面テキスト設定リセット完了');
+    
+    // プレビューを更新
+    setTimeout(() => {
+      updatePreview('loadingScreen');
+    }, 100);
+    
+  } catch (error) {
+    console.error('❌ ローディング画面テキスト設定リセット中にエラー:', error);
     throw error;
   }
 } 

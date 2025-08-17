@@ -146,6 +146,12 @@ export function createStartTabContent(currentSettings = defaultSettings) {
 export function createGeneralTabContent(currentSettings = defaultSettings) {
   return `
     <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__reset-container">
+        <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-loading-general-settings">
+          一般設定をリセット
+        </button>
+      </div>
+      
       <div class="loading-screen-editor__form-group">
         <label class="loading-screen-editor__label">背景色</label>
         <div class="loading-screen-editor__color-input">
@@ -159,6 +165,14 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__color-input">
           <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-textColor" value="${currentSettings.loadingScreen.textColor}">
           <input type="text" class="loading-screen-editor__input" id="loadingScreen-textColorText" value="${currentSettings.loadingScreen.textColor}">
+        </div>
+      </div>
+      
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">アクセントカラー（進捗バー）</label>
+        <div class="loading-screen-editor__color-input">
+          <input type="color" class="loading-screen-editor__color-picker" id="loadingScreen-accentColor" value="${currentSettings.loadingScreen.accentColor}">
+          <input type="text" class="loading-screen-editor__input" id="loadingScreen-accentColorText" value="${currentSettings.loadingScreen.accentColor}">
         </div>
       </div>
       
@@ -220,6 +234,12 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
 export function createTextTabContent(currentSettings = defaultSettings) {
   return `
     <div class="loading-screen-editor__content-section">
+      <div class="loading-screen-editor__reset-container">
+        <button class="loading-screen-editor__button loading-screen-editor__button--outline" id="reset-loading-text-settings">
+          テキスト設定をリセット
+        </button>
+      </div>
+      
       <div class="loading-screen-editor__form-group">
         <label class="loading-screen-editor__label">ブランド名</label>
         <input type="text" class="loading-screen-editor__input" id="loadingScreen-brandName" value="${currentSettings.loadingScreen.brandName}" placeholder="あなたのブランド">
@@ -323,6 +343,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         </div>
         
         <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">認識状況テキスト位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-surfaceFooterPosition" min="70" max="95" step="1" value="${currentSettings.guideScreen.surfaceDetection?.footerPosition || 85}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-surfaceFooterPosition-value">${currentSettings.guideScreen.surfaceDetection?.footerPosition || 85}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">マーカー画像</label>
           <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
             <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
@@ -374,6 +402,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
           <div class="loading-screen-editor__slider-with-value">
             <input type="range" class="loading-screen-editor__slider" id="guideScreen-worldTextSize" min="0.7" max="1.5" step="0.1" value="${currentSettings.guideScreen.worldTracking?.textSize || 1.0}">
             <span class="loading-screen-editor__value-display" id="guideScreen-worldTextSize-value">${currentSettings.guideScreen.worldTracking?.textSize || 1.0}x</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">検出状況テキスト位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-worldFooterPosition" min="70" max="95" step="1" value="${currentSettings.guideScreen.worldTracking?.footerPosition || 85}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-worldFooterPosition-value">${currentSettings.guideScreen.worldTracking?.footerPosition || 85}%</span>
           </div>
         </div>
         
