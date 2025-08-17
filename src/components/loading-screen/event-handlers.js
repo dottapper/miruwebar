@@ -232,6 +232,21 @@ export function setupColorInputs() {
   const colorTextInputs = document.querySelectorAll('.loading-screen-editor__input[id$="ColorText"]');
 
   colorPickers.forEach(picker => {
+    // リアルタイム色変更のためinputイベントを使用
+    picker.addEventListener('input', (e) => {
+      const color = e.target.value;
+      const textInputId = e.target.id + 'Text';
+      const textInput = document.getElementById(textInputId);
+      
+      if (textInput) {
+        textInput.value = color;
+      }
+      
+      const currentScreenType = getCurrentActiveScreenType();
+      updatePreview(currentScreenType);
+    });
+    
+    // 互換性のためchangeイベントも残しておく
     picker.addEventListener('change', (e) => {
       const color = e.target.value;
       const textInputId = e.target.id + 'Text';
@@ -447,6 +462,8 @@ function handleFileSelection(file, dropzone, removeButton) {
       setTimeout(() => {
         const currentScreenType = getCurrentActiveScreenType();
         updatePreview(currentScreenType);
+        // ストレージ使用量も更新
+        updateStorageUsageDisplay();
       }, 50);
     };
     
@@ -512,6 +529,8 @@ function removeFile(dropzone, removeButton) {
   
   const currentScreenType = getCurrentActiveScreenType();
   updatePreview(currentScreenType);
+  // ストレージ使用量も更新
+  updateStorageUsageDisplay();
 }
 
 // スライダーの設定
@@ -1052,6 +1071,8 @@ export function setupButtons() {
           
           const savedTemplate = saveLoadingScreenTemplate(templateData);
           showNotification(`テンプレート「${savedTemplate.name}」を保存しました`, 'success');
+          // ストレージ使用量を更新
+          updateStorageUsageDisplay();
           
           // 最後に使用したテンプレートIDを記録
           localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
@@ -1084,6 +1105,8 @@ export function setupButtons() {
               });
               
               showNotification(`テンプレート「${template.name}」を更新しました`, 'success');
+              // ストレージ使用量を更新
+              updateStorageUsageDisplay();
               
               // 最後に使用したテンプレートIDを記録
               localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
@@ -1091,21 +1114,33 @@ export function setupButtons() {
               // テンプレートが見つからない場合は通常保存
               await settingsAPI.saveSettings(settings);
               showNotification('設定を保存しました', 'success');
+              // ストレージ使用量を更新
+              updateStorageUsageDisplay();
             }
           } else {
             // 通常の設定保存
             await settingsAPI.saveSettings(settings);
             showNotification('設定を保存しました', 'success');
+            // ストレージ使用量を更新
+            updateStorageUsageDisplay();
           }
         }
       } catch (error) {
         console.error('設定の保存に失敗しました:', error);
         
-        // 容量制限エラーの場合の特別な処理
-        if (error.message.includes('quota') || error.message.includes('容量') || error.message.includes('QuotaExceededError')) {
-          showNotification('保存容量が不足しています。古いテンプレートを削除してから保存してください。', 'error');
+        // エラータイプに応じた処理
+        if (error.type === 'warning') {
+          // 警告レベル（画像なしで保存成功）
+          showNotification(error.message, 'warning');
+        } else if (error.message.includes('quota') || error.message.includes('容量') || error.message.includes('QuotaExceededError')) {
+          // 容量制限エラー
+          showNotification('💾 ストレージ容量が不足しています。\n\n📁 ブラウザの設定からサイトデータを削除するか、\n🗂️ 不要なテンプレートを削除してください。', 'error');
+        } else if (error.message.includes('画像')) {
+          // 画像関連エラー
+          showNotification(error.message, 'warning');
         } else {
-          showNotification(`設定の保存に失敗しました: ${error.message}`, 'error');
+          // その他のエラー
+          showNotification(`❌ 設定の保存に失敗しました\n\n${error.message}`, 'error');
         }
       }
     });
@@ -1183,8 +1218,18 @@ function checkForUnsavedChanges() {
 function showNotification(message, type = 'info') {
   const notification = document.createElement('div');
   notification.className = `loading-screen-editor__notification loading-screen-editor__notification--${type}`;
-  notification.textContent = message;
+  
+  // マルチライン対応
+  if (message.includes('\n')) {
+    notification.innerHTML = message.replace(/\n/g, '<br>');
+  } else {
+    notification.textContent = message;
+  }
+  
   document.body.appendChild(notification);
+  
+  // タイプに応じて表示時間を調整
+  const displayTime = type === 'warning' ? 6000 : (type === 'error' ? 8000 : 3000);
   
   setTimeout(() => {
     if (document.body.contains(notification)) {
@@ -1195,7 +1240,7 @@ function showNotification(message, type = 'info') {
         }
       }, 300);
     }
-  }, 3000);
+  }, displayTime);
 }
 
 // 現在の設定を取得
@@ -1351,27 +1396,76 @@ function showSaveConfirmDialog(onNavigate) {
     console.log('👤 ユーザーが「保存して戻る」を選択');
     
     try {
-      // 保存処理を実行
+      // 保存処理を直接実行（ボタンクリックではなく）
       console.log('💾 設定を保存中...');
-      const saveButton = document.getElementById('save-button');
-      if (saveButton) {
-        saveButton.click(); // 既存の保存ボタンをクリックして保存処理を実行
+      
+      // 現在の設定を取得
+      const settings = getCurrentSettingsFromDOM();
+      
+      // URLパラメータから新規作成モードと名前を確認
+      const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+      const mode = urlParams.get('mode');
+      const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
+      
+      if (mode === 'new' && templateName) {
+        // 新規作成モード：テンプレートとして保存
+        const templateData = {
+          name: templateName,
+          settings: settings
+        };
         
-        // 保存完了を待つ
-        setTimeout(() => {
-          console.log('💾 保存完了 - プロジェクト一覧に遷移');
-          hideDialog();
-          onNavigate();
-        }, 500);
+        const savedTemplate = saveLoadingScreenTemplate(templateData);
+        console.log('💾 新規テンプレートを保存しました:', savedTemplate.name);
+        
+        // 最後に使用したテンプレートIDを記録
+        localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
       } else {
-        console.warn('⚠️ 保存ボタンが見つかりません');
-        hideDialog();
-        onNavigate();
+        // 既存テンプレートの更新または通常の設定保存
+        const templateId = urlParams.get('template');
+        if (templateId) {
+          // テンプレート編集モード：既存テンプレートを更新
+          const template = getLoadingScreenTemplate(templateId);
+          if (template) {
+            // 既存のテンプレートを削除して新しいものを保存
+            deleteLoadingScreenTemplate(templateId);
+            const savedTemplate = saveLoadingScreenTemplate({
+              name: template.name,
+              settings: settings
+            });
+            
+            console.log('💾 テンプレートを更新しました:', template.name);
+            localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+          } else {
+            // テンプレートが見つからない場合は通常保存
+            await settingsAPI.saveSettings(settings);
+            console.log('💾 設定を保存しました');
+          }
+        } else {
+          // 通常の設定保存
+          await settingsAPI.saveSettings(settings);
+          console.log('💾 設定を保存しました');
+        }
       }
-    } catch (error) {
-      console.error('❌ 保存処理中にエラー:', error);
+      
+      // 保存完了後に遷移
+      console.log('💾 保存完了 - プロジェクト一覧に遷移');
       hideDialog();
       onNavigate();
+      
+    } catch (error) {
+      console.error('❌ 保存処理中にエラー:', error);
+      
+      // エラーの種類に応じて処理
+      if (error.type === 'warning') {
+        // 警告レベル（画像なしで保存成功）
+        console.log('⚠️ 警告付きで保存完了 - プロジェクト一覧に遷移');
+        hideDialog();
+        onNavigate();
+      } else {
+        // 完全な失敗 - ダイアログを閉じてエラーを表示
+        hideDialog();
+        alert(`保存に失敗しました:\n${error.message}`);
+      }
     }
   });
 
@@ -1400,6 +1494,114 @@ function showSaveConfirmDialog(onNavigate) {
       hideDialog();
     }
   });
+}
+
+// 画像データのみの容量を計算する関数
+function calculateImageDataSize() {
+  let totalImageSize = 0;
+  
+  try {
+    // アップロードされた画像のサイズを計算
+    const imageElements = [
+      { id: 'thumbnailDropzone', property: 'thumbnail' },
+      { id: 'startLogoDropzone', property: 'logo' },
+      { id: 'loadingLogoDropzone', property: 'logo' },
+      { id: 'surfaceGuideImageDropzone', property: 'guideImage' },
+      { id: 'worldGuideImageDropzone', property: 'guideImage' }
+    ];
+    
+    imageElements.forEach(({ id }) => {
+      const dropzone = document.getElementById(id);
+      const img = dropzone?.querySelector('img');
+      if (img && img.src && (img.src.startsWith('data:') || img.src.startsWith('blob:'))) {
+        // Base64データのサイズを計算
+        if (img.src.startsWith('data:')) {
+          // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
+          const base64Data = img.src.split(',')[1];
+          if (base64Data) {
+            // Base64は元データの約1.33倍なので、元のサイズに近似
+            totalImageSize += (base64Data.length * 0.75);
+          }
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.warn('画像データサイズ計算中にエラー:', error);
+  }
+  
+  return Math.round(totalImageSize);
+}
+
+// ストレージ使用量表示を更新する関数
+export function updateStorageUsageDisplay() {
+  try {
+    // DOMから画像データのみの容量を計算
+    const imageDataSize = calculateImageDataSize();
+    const maxSize = 2 * 1024 * 1024; // 2MB制限
+    
+    const usageInfo = {
+      total: imageDataSize,
+      totalKB: (imageDataSize / 1024).toFixed(2),
+      totalMB: (imageDataSize / 1024 / 1024).toFixed(2),
+      maxSize,
+      maxSizeMB: (maxSize / 1024 / 1024).toFixed(1),
+      usagePercentage: ((imageDataSize / maxSize) * 100).toFixed(1),
+      isNearLimit: (imageDataSize / maxSize) > 0.8,
+      isOverLimit: imageDataSize > maxSize
+    };
+    
+    const fillElement = document.getElementById('storage-usage-fill');
+    const textElement = document.getElementById('storage-usage-text');
+    
+    if (!fillElement || !textElement) {
+      console.warn('ストレージ使用量表示要素が見つかりません');
+      return;
+    }
+    
+    // プログレスバーの幅を設定
+    fillElement.style.width = `${Math.min(usageInfo.usagePercentage, 100)}%`;
+    
+    // 使用量に応じてスタイルクラスを設定
+    fillElement.classList.remove('warning', 'danger');
+    textElement.classList.remove('warning', 'danger');
+    
+    if (usageInfo.isOverLimit) {
+      fillElement.classList.add('danger');
+      textElement.classList.add('danger');
+    } else if (usageInfo.isNearLimit) {
+      fillElement.classList.add('warning');
+      textElement.classList.add('warning');
+    }
+    
+    // テキストを更新
+    if (usageInfo.total === 0) {
+      textElement.textContent = `画像: 未使用 / ${usageInfo.maxSizeMB}MB`;
+    } else {
+      textElement.textContent = `画像: ${usageInfo.totalKB}KB / ${usageInfo.maxSizeMB}MB (${usageInfo.usagePercentage}%)`;
+    }
+    
+    console.log('📊 画像データ使用量を更新:', {
+      usage: usageInfo.totalKB + 'KB',
+      percentage: usageInfo.usagePercentage + '%',
+      isWarning: usageInfo.isNearLimit,
+      isDanger: usageInfo.isOverLimit
+    });
+    
+  } catch (error) {
+    console.error('ストレージ使用量表示の更新に失敗:', error);
+  }
+}
+
+// 初期化時にストレージ使用量表示をセットアップ
+export function setupStorageUsageDisplay() {
+  // 初回表示
+  setTimeout(() => {
+    updateStorageUsageDisplay();
+  }, 500);
+  
+  // 定期的に更新（5秒間隔）
+  setInterval(updateStorageUsageDisplay, 5000);
 }
 
 // グローバルスコープで removeFile 関数を利用可能にする

@@ -47,13 +47,15 @@ export const defaultSettings = {
       description: 'マーカー画像を画面内に収めてください',
       instructionText: '画像を認識しています...',
       guideImage: null, // ガイド用のマーカー画像
-      markerSize: 1.0 // マーカー画像のサイズ倍率
+      markerSize: 1.0, // マーカー画像のサイズ倍率
+      textPosition: 20 // テキストの上からの位置（%）
     },
     worldTracking: {
       title: '画面をタップしてください',
       description: '平らな面を見つけて画面をタップしてください',
       instructionText: '平面を検出中...',
-      guideImage: null // ガイド用の平面検出画像
+      guideImage: null, // ガイド用の平面検出画像
+      textPosition: 20 // テキストの上からの位置（%）
     }
   }
 };
@@ -117,12 +119,23 @@ export const settingsAPI = {
   saveSettings(settings) {
     try {
       const merged = this.mergeWithDefaults(settings);
-      const settingsJson = JSON.stringify(merged);
       
-      // localStorageの容量制限をチェック（約5MB）
-      const maxSize = 5 * 1024 * 1024; // 5MB
+      // まず画像圧縮を試行
+      const optimizedSettings = this.optimizeImageData(merged);
+      const settingsJson = JSON.stringify(optimizedSettings);
+      
+      // localStorageの容量制限をチェック（ローディング画面は2MB）
+      const maxSize = 2 * 1024 * 1024; // 2MB
+      
+      // 容量チェック前にlocalStorageの利用可能領域を確認
+      const currentUsage = this.getLocalStorageUsage();
+      console.log('現在のlocalStorage使用量:', {
+        total: (currentUsage.total / 1024).toFixed(2) + 'KB',
+        available: ((maxSize - currentUsage.total) / 1024 / 1024).toFixed(2) + 'MB'
+      });
+      
       if (settingsJson.length > maxSize) {
-        console.error('設定データが大きすぎます:', {
+        console.warn('設定データが大きすぎます:', {
           size: settingsJson.length,
           maxSize: maxSize,
           sizeInMB: (settingsJson.length / 1024 / 1024).toFixed(2)
@@ -133,20 +146,51 @@ export const settingsAPI = {
         const settingsWithoutImagesJson = JSON.stringify(settingsWithoutImages);
         
         if (settingsWithoutImagesJson.length > maxSize) {
-          throw new Error(`設定データが大きすぎます（${(settingsJson.length / 1024 / 1024).toFixed(2)}MB）。画像を削除してから保存してください。`);
+          throw new Error(`ローディング画面のデータ容量が制限を超えています（${(settingsJson.length / 1024 / 1024).toFixed(2)}MB）。\n\nローディング画面全体の制限: 2MB\n\n💡 解決方法:\n• 画像サイズを小さくする（推奨: 1MB以下）\n• 解像度を下げる（推奨: 1920x1080以下）\n• 不要なテンプレートを削除する`);
         } else {
-          console.log('画像データを削除して保存します');
+          console.log('⚠️ 画像データが大きすぎるため、画像なしで保存します');
           localStorage.setItem('loadingScreenSettings', settingsWithoutImagesJson);
-          return Promise.resolve(settingsWithoutImages);
+          
+          // ユーザーに通知するためのカスタムエラーを投げる
+          const warningError = new Error(`⚠️ 画像が大きすぎるため、画像なしで保存されました。\n\n📊 ローディング画面の容量制限: 2MB\n💡 画像を圧縮してから再保存してください。`);
+          warningError.type = 'warning';
+          throw warningError;
         }
       }
       
-      localStorage.setItem('loadingScreenSettings', settingsJson);
+      // 正常な保存処理
+      try {
+        localStorage.setItem('loadingScreenSettings', settingsJson);
+        console.log('✅ 設定を正常に保存しました:', {
+          size: (settingsJson.length / 1024).toFixed(2) + 'KB'
+        });
+      } catch (storageError) {
+        // localStorageの容量不足の場合
+        if (storageError.name === 'QuotaExceededError') {
+          // 古いデータを削除して再試行
+          this.cleanupOldData();
+          try {
+            localStorage.setItem('loadingScreenSettings', settingsJson);
+            console.log('✅ データクリーンアップ後に保存成功');
+          } catch (secondError) {
+            throw new Error('ローカルストレージの容量が不足しています。\n\n他のサイトのデータを削除するか、ブラウザのキャッシュをクリアしてください。');
+          }
+        } else {
+          throw storageError;
+        }
+      }
       
-      return Promise.resolve(merged);
+      return Promise.resolve(optimizedSettings);
     } catch (error) {
       console.error('設定保存エラー:', error);
-      throw new Error(`設定の保存に失敗しました: ${error.message}`);
+      
+      if (error.type === 'warning') {
+        // 警告レベルのエラー（画像なしで保存成功）
+        throw error;
+      } else {
+        // 完全な失敗
+        throw new Error(`設定の保存に失敗しました: ${error.message}`);
+      }
     }
   },
   
@@ -185,6 +229,140 @@ export const settingsAPI = {
     return JSON.parse(JSON.stringify(defaultSettings));
   },
 
+  // localStorageの使用量を取得
+  getLocalStorageUsage() {
+    let total = 0;
+    let keys = [];
+    
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        const size = localStorage[key].length + key.length;
+        total += size;
+        keys.push({ key, size });
+      }
+    }
+    
+    return { total, keys };
+  },
+  
+  // ローディング画面関連のストレージ使用量のみを取得
+  getLoadingScreenStorageUsage() {
+    let loadingScreenTotal = 0;
+    const loadingScreenKeys = [];
+    const maxSize = 2 * 1024 * 1024; // 2MB制限
+    
+    // ローディング画面関連のキーのみを対象
+    const relevantKeys = [
+      'loadingScreenSettings',
+      'loadingScreenTemplates',
+      'lastUsedTemplateId'
+    ];
+    
+    for (const key of relevantKeys) {
+      if (localStorage.hasOwnProperty(key)) {
+        const value = localStorage[key];
+        const size = value.length + key.length;
+        loadingScreenTotal += size;
+        loadingScreenKeys.push({ 
+          key, 
+          size,
+          sizeKB: (size / 1024).toFixed(2),
+          sizeMB: (size / 1024 / 1024).toFixed(2)
+        });
+      }
+    }
+    
+    // 使用率を計算
+    const usagePercentage = (loadingScreenTotal / maxSize) * 100;
+    
+    return {
+      total: loadingScreenTotal,
+      totalKB: (loadingScreenTotal / 1024).toFixed(2),
+      totalMB: (loadingScreenTotal / 1024 / 1024).toFixed(2),
+      maxSize,
+      maxSizeMB: (maxSize / 1024 / 1024).toFixed(1),
+      usagePercentage: usagePercentage.toFixed(1),
+      keys: loadingScreenKeys,
+      isNearLimit: usagePercentage > 80,
+      isOverLimit: loadingScreenTotal > maxSize
+    };
+  },
+  
+  // 古いデータをクリーンアップ
+  cleanupOldData() {
+    try {
+      // 古いテンプレートや一時データを削除
+      const keysToClean = [];
+      for (let key in localStorage) {
+        if (key.startsWith('temp_') || 
+            key.startsWith('old_') || 
+            key.includes('backup_')) {
+          keysToClean.push(key);
+        }
+      }
+      
+      keysToClean.forEach(key => {
+        localStorage.removeItem(key);
+      });
+      
+      console.log('🧹 古いデータをクリーンアップしました:', keysToClean.length, 'items');
+    } catch (error) {
+      console.warn('クリーンアップ中にエラー:', error);
+    }
+  },
+  
+  // 画像データを最適化（圧縮）
+  optimizeImageData(settings) {
+    const optimized = JSON.parse(JSON.stringify(settings));
+    
+    // 各画面の画像データを最適化
+    ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
+      if (optimized[screenType]) {
+        Object.keys(optimized[screenType]).forEach(key => {
+          const value = optimized[screenType][key];
+          if (typeof value === 'string' && value.startsWith('data:image/')) {
+            // Base64画像データの場合、品質を調整して圧縮
+            const compressedImage = this.compressBase64Image(value);
+            if (compressedImage && compressedImage.length < value.length) {
+              optimized[screenType][key] = compressedImage;
+              console.log(`📦 ${screenType}.${key} を圧縮: ${(value.length / 1024).toFixed(2)}KB → ${(compressedImage.length / 1024).toFixed(2)}KB`);
+            }
+          }
+        });
+        
+        // ガイド画面の入れ子オブジェクトも処理
+        if (screenType === 'guideScreen') {
+          ['surfaceDetection', 'worldTracking'].forEach(subType => {
+            if (optimized[screenType][subType] && optimized[screenType][subType].guideImage) {
+              const value = optimized[screenType][subType].guideImage;
+              if (typeof value === 'string' && value.startsWith('data:image/')) {
+                const compressedImage = this.compressBase64Image(value);
+                if (compressedImage && compressedImage.length < value.length) {
+                  optimized[screenType][subType].guideImage = compressedImage;
+                  console.log(`📦 ${screenType}.${subType}.guideImage を圧縮`);
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+    
+    return optimized;
+  },
+  
+  // Base64画像を圧縮
+  compressBase64Image(base64String) {
+    try {
+      // この関数は簡易版 - 実際の圧縮は別途実装が必要
+      // 現在は元のデータをそのまま返す
+      return base64String;
+    } catch (error) {
+      console.warn('画像圧縮中にエラー:', error);
+      return base64String;
+    }
+  },
+  
   // 画像データを削除するヘルパー関数
   removeImageData(settings) {
     const cleanedSettings = JSON.parse(JSON.stringify(settings));

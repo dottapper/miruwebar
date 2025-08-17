@@ -132,7 +132,7 @@ function updateStartPreview(previewScreen, settings) {
           font-weight: bold;
           line-height: 1.2;
           color: ${screen.textColor || defaultSettings.startScreen.textColor};
-        ">${screen.title || defaultSettings.startScreen.title}</h1>
+        ">${screen.title !== undefined ? screen.title : defaultSettings.startScreen.title}</h1>
       </div>
       
       <div class="button-container" style="
@@ -154,7 +154,7 @@ function updateStartPreview(previewScreen, settings) {
           transition: all 0.2s ease;
           box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         " onmouseover="this.style.opacity='0.9'; this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)'">
-          ${screen.buttonText || defaultSettings.startScreen.buttonText}
+          ${screen.buttonText !== undefined ? screen.buttonText : defaultSettings.startScreen.buttonText}
         </button>
       </div>
     </div>
@@ -227,7 +227,7 @@ function updateLoadingPreview(previewScreen, settings) {
         margin-bottom: 8px;
         text-align: center;
       ">
-        ${screen.brandName || defaultSettings.loadingScreen.brandName}
+        ${screen.brandName !== undefined ? screen.brandName : defaultSettings.loadingScreen.brandName}
       </div>
       
       <div class="sub-title" style="
@@ -236,7 +236,7 @@ function updateLoadingPreview(previewScreen, settings) {
         opacity: 0.8;
         text-align: center;
       ">
-        ${screen.subTitle || defaultSettings.loadingScreen.subTitle}
+        ${screen.subTitle !== undefined ? screen.subTitle : defaultSettings.loadingScreen.subTitle}
       </div>
       
       <div class="progress-container" style="
@@ -266,7 +266,7 @@ function updateLoadingPreview(previewScreen, settings) {
         opacity: 0.9;
         text-align: center;
       ">
-        ${screen.loadingMessage || defaultSettings.loadingScreen.loadingMessage}
+        ${screen.loadingMessage !== undefined ? screen.loadingMessage : defaultSettings.loadingScreen.loadingMessage}
       </div>
     </div>
     
@@ -355,22 +355,30 @@ function updateGuidePreview(previewScreen, settings) {
     }
   }
   
-  // モードに応じたタイトルと説明を取得
-  let title, description;
+  // モードに応じたタイトル、説明、テキスト位置を取得
+  let title, description, textPosition;
   if (mode === 'surface') {
-    title = document.getElementById('guideScreen-surfaceTitle')?.value || 
-            screen.surfaceDetection?.title || 
-            '画像の上にカメラを向けて合わせてください';
-    description = document.getElementById('guideScreen-surfaceDescription')?.value || 
-                  screen.surfaceDetection?.description || 
-                  'マーカー画像を画面内に収めてください';
+    const surfaceTitleInput = document.getElementById('guideScreen-surfaceTitle')?.value;
+    title = surfaceTitleInput !== undefined ? surfaceTitleInput : 
+            (screen.surfaceDetection?.title !== undefined ? screen.surfaceDetection.title : 
+            '画像の上にカメラを向けて合わせてください');
+    const surfaceDescInput = document.getElementById('guideScreen-surfaceDescription')?.value;
+    description = surfaceDescInput !== undefined ? surfaceDescInput : 
+                  (screen.surfaceDetection?.description !== undefined ? screen.surfaceDetection.description : 
+                  'マーカー画像を画面内に収めてください');
+    const textPositionSlider = document.getElementById('guideScreen-surfaceTextPosition');
+    textPosition = textPositionSlider?.value || screen.surfaceDetection?.textPosition || defaultSettings.guideScreen.surfaceDetection.textPosition;
   } else {
-    title = document.getElementById('guideScreen-worldTitle')?.value || 
-            screen.worldTracking?.title || 
-            '画面をタップしてください';
-    description = document.getElementById('guideScreen-worldDescription')?.value || 
-                  screen.worldTracking?.description || 
-                  '平らな面を見つけて画面をタップしてください';
+    const worldTitleInput = document.getElementById('guideScreen-worldTitle')?.value;
+    title = worldTitleInput !== undefined ? worldTitleInput : 
+            (screen.worldTracking?.title !== undefined ? screen.worldTracking.title : 
+            '画面をタップしてください');
+    const worldDescInput = document.getElementById('guideScreen-worldDescription')?.value;
+    description = worldDescInput !== undefined ? worldDescInput : 
+                  (screen.worldTracking?.description !== undefined ? screen.worldTracking.description : 
+                  '平らな面を見つけて画面をタップしてください');
+    const textPositionSlider = document.getElementById('guideScreen-worldTextPosition');
+    textPosition = textPositionSlider?.value || screen.worldTracking?.textPosition || defaultSettings.guideScreen.worldTracking.textPosition;
   }
 
   previewScreen.innerHTML = `
@@ -387,7 +395,7 @@ function updateGuidePreview(previewScreen, settings) {
     ">
       <div class="guide-header" style="
         position: absolute;
-        top: 20px;
+        top: ${textPosition}%;
         left: 50%;
         transform: translateX(-50%);
         text-align: center;
@@ -635,6 +643,7 @@ export function getCurrentSettingsFromDOM() {
   const surfaceTitle = document.getElementById('guideScreen-surfaceTitle');
   const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
   const markerSizeSlider = document.getElementById('guideScreen-markerSize');
+  const surfaceTextPositionSlider = document.getElementById('guideScreen-surfaceTextPosition');
   if (surfaceTitle) {
     settings.guideScreen.surfaceDetection.title = surfaceTitle.value;
   }
@@ -644,15 +653,22 @@ export function getCurrentSettingsFromDOM() {
   if (markerSizeSlider) {
     settings.guideScreen.surfaceDetection.markerSize = parseFloat(markerSizeSlider.value);
   }
+  if (surfaceTextPositionSlider) {
+    settings.guideScreen.surfaceDetection.textPosition = parseFloat(surfaceTextPositionSlider.value);
+  }
   
   // 空間検出設定
   const worldTitle = document.getElementById('guideScreen-worldTitle');
   const worldDescription = document.getElementById('guideScreen-worldDescription');
+  const worldTextPositionSlider = document.getElementById('guideScreen-worldTextPosition');
   if (worldTitle) {
     settings.guideScreen.worldTracking.title = worldTitle.value;
   }
   if (worldDescription) {
     settings.guideScreen.worldTracking.description = worldDescription.value;
+  }
+  if (worldTextPositionSlider) {
+    settings.guideScreen.worldTracking.textPosition = parseFloat(worldTextPositionSlider.value);
   }
   
   // 画像データを取得

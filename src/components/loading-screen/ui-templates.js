@@ -299,6 +299,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         </div>
         
         <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキスト位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-surfaceTextPosition" min="5" max="50" step="1" value="${currentSettings.guideScreen.surfaceDetection?.textPosition || 20}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-surfaceTextPosition-value">${currentSettings.guideScreen.surfaceDetection?.textPosition || 20}%</span>
+          </div>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">マーカー画像</label>
           <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
             <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
@@ -335,6 +343,14 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">説明</label>
           <textarea class="loading-screen-editor__input" id="guideScreen-worldDescription" rows="3" placeholder="空間検出の説明を入力してください">${currentSettings.guideScreen.worldTracking?.description || '平らな面を見つけて画面をタップしてください'}</textarea>
+        </div>
+        
+        <div class="loading-screen-editor__form-group">
+          <label class="loading-screen-editor__label">テキスト位置（上から）</label>
+          <div class="loading-screen-editor__slider-with-value">
+            <input type="range" class="loading-screen-editor__slider" id="guideScreen-worldTextPosition" min="5" max="50" step="1" value="${currentSettings.guideScreen.worldTracking?.textPosition || 20}">
+            <span class="loading-screen-editor__value-display" id="guideScreen-worldTextPosition-value">${currentSettings.guideScreen.worldTracking?.textPosition || 20}%</span>
+          </div>
         </div>
         
         <div class="loading-screen-editor__form-group">
@@ -421,6 +437,12 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
           <div class="content-header-title">
             <h1 id="editor-title">ローディング画面エディタ</h1>
             <span class="template-name-badge" id="template-name-badge" style="display: none;"></span>
+            <div class="storage-usage-display" id="storage-usage-display">
+              <div class="storage-usage-bar">
+                <div class="storage-usage-fill" id="storage-usage-fill"></div>
+              </div>
+              <div class="storage-usage-text" id="storage-usage-text">読み込み中...</div>
+            </div>
           </div>
           <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
             ← プロジェクト一覧に戻る

@@ -681,8 +681,62 @@ aside[class*="side"],
   background-color: var(--success-color);
 }
 
+.loading-screen-editor__notification--warning {
+  background-color: #FF9800;
+  color: #000;
+}
+
 .loading-screen-editor__notification--error {
   background-color: var(--error-color);
+}
+
+/* ストレージ使用量表示 */
+.storage-usage-display {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.storage-usage-bar {
+  width: 120px;
+  height: 8px;
+  background-color: var(--color-surface);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.storage-usage-fill {
+  height: 100%;
+  background-color: var(--color-primary);
+  border-radius: 3px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  width: 0%;
+}
+
+.storage-usage-fill.warning {
+  background-color: #FF9800;
+}
+
+.storage-usage-fill.danger {
+  background-color: var(--error-color);
+}
+
+.storage-usage-text {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.storage-usage-text.warning {
+  color: #FF9800;
+}
+
+.storage-usage-text.danger {
+  color: var(--error-color);
 }
 
 /* セクション */
