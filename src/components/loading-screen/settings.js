@@ -110,66 +110,120 @@ export const settingsAPI = {
   getSettings() {
     try {
       const stored = localStorage.getItem('loadingScreenSettings');
-      if (!stored) return this.mergeWithDefaults({});
+      console.log('🔍 設定読み込み試行:', {
+        hasData: !!stored,
+        dataSize: stored ? (stored.length / 1024).toFixed(2) + 'KB' : '0KB',
+        timestamp: new Date().toISOString()
+      });
+      
+      if (!stored) {
+        console.log('📝 保存された設定が見つかりません。バックアップから復旧を試行します');
+        const recoveredSettings = this.recoverFromBackup();
+        if (recoveredSettings) {
+          return recoveredSettings;
+        }
+        console.log('📝 バックアップも見つかりません。デフォルト設定を使用します');
+        return this.mergeWithDefaults({});
+      }
       
       const parsed = JSON.parse(stored);
+      console.log('✅ 設定を正常に読み込みました:', {
+        screens: Object.keys(parsed),
+        hasImages: this.calculateImageDataSize(parsed) > 0
+      });
+      
       return this.mergeWithDefaults(parsed);
     } catch (error) {
-      console.warn('Failed to load settings from storage:', error);
+      console.warn('❌ 設定読み込みエラー:', error);
+      console.log('🔄 デフォルト設定にフォールバックします');
       return this.mergeWithDefaults({});
     }
   },
   
-  saveSettings(settings) {
+  async saveSettings(settings) {
     try {
       const merged = this.mergeWithDefaults(settings);
       
+      // 保存前のバックアップを作成
+      const backupKey = `loadingScreenSettings_backup_${Date.now()}`;
+      const currentSettings = localStorage.getItem('loadingScreenSettings');
+      if (currentSettings) {
+        localStorage.setItem(backupKey, currentSettings);
+        console.log('🔄 保存前バックアップを作成:', backupKey);
+      }
+      
       // まず画像圧縮を試行
-      const optimizedSettings = this.optimizeImageData(merged);
+      const optimizedSettings = await this.optimizeImageData(merged);
       const settingsJson = JSON.stringify(optimizedSettings);
       
-      // localStorageの容量制限をチェック（画像データのみ2MB制限）
-      const maxImageSize = 2 * 1024 * 1024; // 2MB
+      // localStorageの容量制限をチェック（個別画像2MB制限、全体で3MB制限）
+      const maxTotalImageSize = 3 * 1024 * 1024; // 3MB（複数画像の合計）
       
       // 画像データのみのサイズを計算
       const imageDataSize = this.calculateImageDataSize(optimizedSettings);
       
       console.log('画像データ容量チェック:', {
         imageSize: (imageDataSize / 1024).toFixed(2) + 'KB',
-        maxSize: (maxImageSize / 1024 / 1024).toFixed(2) + 'MB',
-        usagePercentage: ((imageDataSize / maxImageSize) * 100).toFixed(1) + '%'
+        maxSize: (maxTotalImageSize / 1024 / 1024).toFixed(2) + 'MB',
+        usagePercentage: ((imageDataSize / maxTotalImageSize) * 100).toFixed(1) + '%'
       });
       
-      if (imageDataSize > maxImageSize) {
+      if (imageDataSize > maxTotalImageSize) {
         console.warn('画像データが大きすぎます:', {
           size: imageDataSize,
-          maxSize: maxImageSize,
+          maxSize: maxTotalImageSize,
           sizeInMB: (imageDataSize / 1024 / 1024).toFixed(2)
         });
         
         // 画像データを削除して再試行
-        const settingsWithoutImages = this.removeImageData(merged);
-        const imageDataSizeWithoutImages = this.calculateImageDataSize(settingsWithoutImages);
+        // 段階的に容量を削減して保存を試行
+        console.log('⚠️ 容量制限を超過。段階的に対処します...');
         
-        if (imageDataSizeWithoutImages > 0) {
-          throw new Error(`画像データの容量が制限を超えています（${(imageDataSize / 1024 / 1024).toFixed(2)}MB）。\n\n画像データの制限: 2MB\n\n💡 解決方法:\n• 画像サイズを小さくする（推奨: 1MB以下）\n• 解像度を下げる（推奨: 1920x1080以下）\n• 不要な画像を削除する`);
-        } else {
-          console.log('⚠️ 画像データが大きすぎるため、画像なしで保存します');
-          localStorage.setItem('loadingScreenSettings', JSON.stringify(settingsWithoutImages));
+        // 1. より強い圧縮を試行
+        console.log('🔄 より強い圧縮を試行...');
+        const moreCompressedSettings = await this.optimizeImageData(merged, 0.6, 1024, 576); // より強い圧縮
+        const moreCompressedSize = this.calculateImageDataSize(moreCompressedSettings);
+        
+        if (moreCompressedSize <= maxTotalImageSize) {
+          console.log('✅ 強い圧縮で容量制限内に収まりました');
+          localStorage.setItem('loadingScreenSettings', JSON.stringify(moreCompressedSettings));
           
-          // ユーザーに通知するためのカスタムエラーを投げる
-          const warningError = new Error(`⚠️ 画像が大きすぎるため、画像なしで保存されました。\n\n📊 画像データの容量制限: 2MB\n💡 画像を圧縮してから再保存してください。`);
+          const warningError = new Error(`✅ 画像を圧縮して保存しました\n\n📊 圧縮前: ${(imageDataSize / 1024 / 1024).toFixed(2)}MB\n📊 圧縮後: ${(moreCompressedSize / 1024 / 1024).toFixed(2)}MB\n💡 画質が少し低下した可能性があります`);
           warningError.type = 'warning';
           throw warningError;
         }
+        
+        // 2. 画像なしで保存
+        console.log('⚠️ 圧縮でも容量制限を超過。画像なしで保存します');
+        const settingsWithoutImages = this.removeImageData(merged);
+        localStorage.setItem('loadingScreenSettings', JSON.stringify(settingsWithoutImages));
+        
+        const errorMessage = new Error(`❌ 画像データが大きすぎます（${(imageDataSize / 1024 / 1024).toFixed(2)}MB）\n\n画像なしで保存されました。\n\n📊 制限: ${(maxTotalImageSize / 1024 / 1024).toFixed(0)}MB（全画像合計）\n\n💡 解決方法:\n• 画像を個別にアップロードし直す\n• より小さい画像を使用する（推奨: 各500KB以下）\n• 解像度を下げる（推奨: 1280x720以下）`);
+        errorMessage.type = 'error';
+        throw errorMessage;
       }
       
       // 正常な保存処理
       try {
         localStorage.setItem('loadingScreenSettings', settingsJson);
         console.log('✅ 設定を正常に保存しました:', {
-          size: (settingsJson.length / 1024).toFixed(2) + 'KB'
+          size: (settingsJson.length / 1024).toFixed(2) + 'KB',
+          timestamp: new Date().toISOString(),
+          imageDataSize: (imageDataSize / 1024).toFixed(2) + 'KB',
+          screens: Object.keys(optimizedSettings),
+          compressionApplied: true
         });
+        
+        // 保存直後の確認
+        const verification = localStorage.getItem('loadingScreenSettings');
+        if (verification) {
+          console.log('✅ 保存確認OK: データが正常に保存されています');
+        } else {
+          console.error('❌ 保存確認NG: データが保存されていません');
+        }
+        
+        // 成功したのでバックアップをクリーンアップ（最新5個を保持）
+        this.cleanupBackups();
       } catch (storageError) {
         // localStorageの容量不足の場合
         if (storageError.name === 'QuotaExceededError') {
@@ -273,7 +327,7 @@ export const settingsAPI = {
   getLoadingScreenStorageUsage() {
     let loadingScreenTotal = 0;
     const loadingScreenKeys = [];
-    const maxSize = 2 * 1024 * 1024; // 2MB制限
+    const maxSize = 3 * 1024 * 1024; // 3MB制限（複数画像の合計）
     
     // ローディング画面関連のキーのみを対象
     const relevantKeys = [
@@ -311,6 +365,74 @@ export const settingsAPI = {
       isOverLimit: loadingScreenTotal > maxSize
     };
   },
+
+  // バックアップをクリーンアップ（最新5個を保持）
+  cleanupBackups() {
+    try {
+      const backupKeys = [];
+      for (let key in localStorage) {
+        if (key.startsWith('loadingScreenSettings_backup_')) {
+          backupKeys.push({
+            key: key,
+            timestamp: parseInt(key.split('_').pop())
+          });
+        }
+      }
+      
+      // タイムスタンプでソート（新しい順）
+      backupKeys.sort((a, b) => b.timestamp - a.timestamp);
+      
+      // 5個を超える古いバックアップを削除
+      if (backupKeys.length > 5) {
+        const toDelete = backupKeys.slice(5);
+        toDelete.forEach(backup => {
+          localStorage.removeItem(backup.key);
+          console.log('🧹 古いバックアップを削除:', backup.key);
+        });
+      }
+    } catch (error) {
+      console.warn('バックアップクリーンアップ中にエラー:', error);
+    }
+  },
+
+  // バックアップから復旧
+  recoverFromBackup() {
+    try {
+      const backupKeys = [];
+      for (let key in localStorage) {
+        if (key.startsWith('loadingScreenSettings_backup_')) {
+          backupKeys.push({
+            key: key,
+            timestamp: parseInt(key.split('_').pop())
+          });
+        }
+      }
+      
+      if (backupKeys.length === 0) {
+        return null;
+      }
+      
+      // 最新のバックアップを使用
+      backupKeys.sort((a, b) => b.timestamp - a.timestamp);
+      const latestBackup = backupKeys[0];
+      const backupData = localStorage.getItem(latestBackup.key);
+      
+      if (backupData) {
+        console.log('🔄 バックアップから設定を復旧しました:', latestBackup.key);
+        const recovered = JSON.parse(backupData);
+        
+        // 復旧した設定をメインに保存
+        localStorage.setItem('loadingScreenSettings', backupData);
+        console.log('✅ 復旧した設定をメインストレージに保存しました');
+        
+        return this.mergeWithDefaults(recovered);
+      }
+    } catch (error) {
+      console.warn('バックアップからの復旧中にエラー:', error);
+    }
+    
+    return null;
+  },
   
   // 古いデータをクリーンアップ
   cleanupOldData() {
@@ -335,9 +457,10 @@ export const settingsAPI = {
     }
   },
   
-  // 画像データを最適化（圧縮）
-  optimizeImageData(settings) {
+  // 画像データを最適化（圧縮）- 非同期版
+  async optimizeImageData(settings, quality = 0.8, maxWidth = 1280, maxHeight = 720) {
     const optimized = JSON.parse(JSON.stringify(settings));
+    const compressionPromises = [];
     
     // 各画面の画像データを最適化
     ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
@@ -346,11 +469,13 @@ export const settingsAPI = {
           const value = optimized[screenType][key];
           if (typeof value === 'string' && value.startsWith('data:image/')) {
             // Base64画像データの場合、品質を調整して圧縮
-            const compressedImage = this.compressBase64Image(value);
-            if (compressedImage && compressedImage.length < value.length) {
-              optimized[screenType][key] = compressedImage;
-              console.log(`📦 ${screenType}.${key} を圧縮: ${(value.length / 1024).toFixed(2)}KB → ${(compressedImage.length / 1024).toFixed(2)}KB`);
-            }
+            const promise = this.compressBase64Image(value, quality, maxWidth, maxHeight).then(compressedImage => {
+              if (compressedImage && compressedImage.length < value.length) {
+                optimized[screenType][key] = compressedImage;
+                console.log(`📦 ${screenType}.${key} を圧縮: ${(value.length / 1024).toFixed(2)}KB → ${(compressedImage.length / 1024).toFixed(2)}KB`);
+              }
+            });
+            compressionPromises.push(promise);
           }
         });
         
@@ -360,11 +485,13 @@ export const settingsAPI = {
             if (optimized[screenType][subType] && optimized[screenType][subType].guideImage) {
               const value = optimized[screenType][subType].guideImage;
               if (typeof value === 'string' && value.startsWith('data:image/')) {
-                const compressedImage = this.compressBase64Image(value);
-                if (compressedImage && compressedImage.length < value.length) {
-                  optimized[screenType][subType].guideImage = compressedImage;
-                  console.log(`📦 ${screenType}.${subType}.guideImage を圧縮`);
-                }
+                const promise = this.compressBase64Image(value, quality, maxWidth, maxHeight).then(compressedImage => {
+                  if (compressedImage && compressedImage.length < value.length) {
+                    optimized[screenType][subType].guideImage = compressedImage;
+                    console.log(`📦 ${screenType}.${subType}.guideImage を圧縮`);
+                  }
+                });
+                compressionPromises.push(promise);
               }
             }
           });
@@ -372,18 +499,126 @@ export const settingsAPI = {
       }
     });
     
+    // すべての圧縮処理を待機
+    await Promise.all(compressionPromises);
+    
     return optimized;
   },
   
   // Base64画像を圧縮
-  compressBase64Image(base64String) {
+  compressBase64Image(base64String, quality = 0.8, maxWidth = 1280, maxHeight = 720) {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.onload = () => {
+          // キャンバスを作成
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // リサイズ計算
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const aspectRatio = width / height;
+            if (width > height) {
+              width = maxWidth;
+              height = maxWidth / aspectRatio;
+            } else {
+              height = maxHeight;
+              width = maxHeight * aspectRatio;
+            }
+          }
+          
+          // キャンバスサイズを設定
+          canvas.width = width;
+          canvas.height = height;
+          
+          // 透過PNG対応：背景をクリア（デフォルトで透明）
+          ctx.clearRect(0, 0, width, height);
+          
+          // 画像を描画
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // 画像形式の判定と保存処理
+          let compressedBase64;
+          const isPNG = base64String.startsWith('data:image/png');
+          const isWebP = base64String.startsWith('data:image/webp');
+          const supportsTransparency = isPNG || isWebP;
+          const hasTransparency = this.checkImageTransparency(ctx, width, height);
+          
+          if (supportsTransparency || hasTransparency) {
+            // PNG/WebP形式または透過ありの場合はPNGで保存
+            compressedBase64 = canvas.toDataURL('image/png');
+            console.log('🎨 透過対応PNG画像として保存', {
+              元形式: supportsTransparency ? (isPNG ? 'PNG' : 'WebP') : '不明',
+              透明度: hasTransparency ? 'あり' : 'なし'
+            });
+          } else {
+            // 透過なしの場合のみJPEGで圧縮
+            compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+            console.log('📦 JPEG画像として圧縮');
+          }
+          
+          console.log(`📦 画像圧縮結果:`, {
+            元サイズ: `${img.width}x${img.height}`,
+            新サイズ: `${width}x${height}`,
+            元データ: `${(base64String.length / 1024).toFixed(2)}KB`,
+            圧縮後: `${(compressedBase64.length / 1024).toFixed(2)}KB`,
+            圧縮率: `${(((base64String.length - compressedBase64.length) / base64String.length) * 100).toFixed(1)}%`
+          });
+          
+          resolve(compressedBase64);
+        };
+        
+        img.onerror = () => {
+          console.warn('画像圧縮中にエラー: 画像の読み込みに失敗');
+          resolve(base64String);
+        };
+        
+        img.src = base64String;
+      } catch (error) {
+        console.warn('画像圧縮中にエラー:', error);
+        resolve(base64String);
+      }
+    });
+  },
+
+  // 画像に透明度があるかチェック
+  checkImageTransparency(ctx, width, height) {
     try {
-      // この関数は簡易版 - 実際の圧縮は別途実装が必要
-      // 現在は元のデータをそのまま返す
-      return base64String;
+      // キャンバスの画像データを取得
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const data = imageData.data;
+      
+      let transparentPixels = 0;
+      const totalPixels = width * height;
+      
+      // アルファチャンネル（4番目の値）をチェック
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] < 255) {
+          transparentPixels++;
+          // 少しでも透明度があればtrueを返す（早期終了）
+          if (transparentPixels > 0) {
+            console.log('🔍 透明度検出:', {
+              透明ピクセル数: transparentPixels,
+              全ピクセル数: totalPixels,
+              透明度: '検出'
+            });
+            return true;
+          }
+        }
+      }
+      
+      console.log('🔍 透明度チェック結果:', {
+        透明ピクセル数: transparentPixels,
+        全ピクセル数: totalPixels,
+        透明度: 'なし'
+      });
+      
+      return false; // 透明度なし
     } catch (error) {
-      console.warn('画像圧縮中にエラー:', error);
-      return base64String;
+      console.warn('❌ 透明度チェック中にエラー:', error);
+      // エラー時はPNG形式であれば透明度ありとして扱う
+      return true;
     }
   },
   
@@ -431,12 +666,19 @@ export const settingsAPI = {
           settingsObject.guideScreen?.worldTracking?.guideImage
         ];
         
-        imagePaths.forEach(imageSrc => {
+        imagePaths.forEach((imageSrc, index) => {
           if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
             const base64Data = imageSrc.split(',')[1];
-            if (base64Data) {
-              // Base64は元データの約1.33倍なので、元のサイズに近似
-              totalImageSize += (base64Data.length * 0.75);
+            if (base64Data && base64Data.length > 0) {
+              // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
+              const originalSize = (base64Data.length * 3) / 4;
+              totalImageSize += originalSize;
+              console.log(`📊 設定画像データサイズ (${index}):`, {
+                base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
+                originalSizeKB: (originalSize / 1024).toFixed(2) + 'KB',
+                originalSizeMB: (originalSize / 1024 / 1024).toFixed(2) + 'MB',
+                preview: imageSrc.substring(0, 50) + '...'
+              });
             }
           }
         });
@@ -444,6 +686,11 @@ export const settingsAPI = {
     } catch (error) {
       console.warn('画像データサイズ計算中にエラー:', error);
     }
+    
+    console.log('📊 合計画像データサイズ:', {
+      totalKB: (totalImageSize / 1024).toFixed(2) + 'KB',
+      totalMB: (totalImageSize / 1024 / 1024).toFixed(2) + 'MB'
+    });
     
     return Math.round(totalImageSize);
   }

@@ -4,7 +4,7 @@
 
 import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
 import { createMainEditorTemplate } from './ui-templates.js';
-import { settingsAPI, defaultSettings } from './settings.js';
+import { settingsAPI, defaultSettings, validateAndFixColor } from './settings.js';
 import { 
   getTemplate,
   saveTemplate,
@@ -392,20 +392,50 @@ function handleFileSelection(file, dropzone, removeButton) {
     return;
   }
 
-  // ファイルサイズの検証
-  const maxSize = 2 * 1024 * 1024; // 2MB
-  if (file.size > maxSize) {
+  // 個別ファイルサイズの検証
+  const maxIndividualSize = 2 * 1024 * 1024; // 2MB（個別ファイル制限）
+  if (file.size > maxIndividualSize) {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
     showLogoError(
-      `❌ ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n最大許可サイズ: 2MB`,
-      '2MB以下のファイルを選択してください'
+      `❌ 個別ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n個別ファイル制限: 2MB`,
+      '各画像ファイルは2MB以下にしてください'
+    );
+    return;
+  }
+
+  // 既存画像との合計容量チェック
+  const currentTotalSize = calculateImageDataSize();
+  const newFileSize = file.size;
+  const maxTotalSize = 3 * 1024 * 1024; // 3MB（全画像合計制限）
+  
+  if (currentTotalSize + newFileSize > maxTotalSize) {
+    const currentSizeMB = (currentTotalSize / (1024 * 1024)).toFixed(2);
+    const newFileSizeMB = (newFileSize / (1024 * 1024)).toFixed(2);
+    const totalSizeMB = ((currentTotalSize + newFileSize) / (1024 * 1024)).toFixed(2);
+    
+    showLogoError(
+      `❌ 全画像合計容量が制限を超えます\n\n現在の画像合計: ${currentSizeMB}MB\n追加予定の画像: ${newFileSizeMB}MB\n合計予想サイズ: ${totalSizeMB}MB\n\n制限: 3MB（全画像合計）`,
+      '他の画像を削除してから追加してください'
     );
     return;
   }
 
   // プレビュー表示
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
+    let imageSrc = e.target.result;
+    
+    // 画像をアップロード時に圧縮
+    try {
+      const compressedImage = await settingsAPI.compressBase64Image(imageSrc, 0.8, 1280, 720);
+      if (compressedImage && compressedImage.length < imageSrc.length) {
+        imageSrc = compressedImage;
+        console.log('📦 アップロード時に画像を圧縮しました');
+      }
+    } catch (error) {
+      console.warn('アップロード時の画像圧縮に失敗:', error);
+    }
+    
     const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
     
     // dropZoneが存在しない場合のエラーハンドリング
@@ -416,7 +446,7 @@ function handleFileSelection(file, dropzone, removeButton) {
     }
     
     const imgElement = document.createElement('img');
-    imgElement.src = e.target.result;
+    imgElement.src = imageSrc; // 圧縮済みの画像を使用
     imgElement.alt = 'プレビュー';
     imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
     
@@ -873,62 +903,51 @@ function loadTemplateSettings(settings) {
     // 画像データの読み込み
     console.log('🖼️ 画像データ読み込み処理開始');
     
-    // サムネイル画像
-    if (settings.startScreen?.thumbnail) {
-      const thumbnailDropzone = document.getElementById('thumbnailDropzone');
-      if (thumbnailDropzone) {
-        thumbnailDropzone.innerHTML = `
-          <img src="${settings.startScreen.thumbnail}" alt="サムネイル" style="max-width: 100%; max-height: 100px;">
-          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
-        `;
+    // 画像復元用のヘルパー関数
+    const restoreImage = (dropzoneId, imageSrc, altText) => {
+      const dropzone = document.getElementById(dropzoneId);
+      if (dropzone && imageSrc) {
+        const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
+        if (dropZone) {
+          const imgElement = document.createElement('img');
+          imgElement.src = imageSrc;
+          imgElement.alt = altText;
+          imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+          
+          const fileName = `復元された${altText}`;
+          dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+          dropZone.insertBefore(imgElement, dropZone.firstChild);
+          
+          const removeButton = dropzone.querySelector('.loading-screen-editor__remove-button');
+          if (removeButton) {
+            removeButton.style.display = 'block';
+          }
+        }
       }
-    }
+    };
+
+    // サムネイル画像
+    restoreImage('thumbnailDropzone', settings.startScreen?.thumbnail, 'サムネイル');
     
     // スタート画面ロゴ
-    if (settings.startScreen?.logo) {
-      const startLogoDropzone = document.getElementById('startLogoDropzone');
-      if (startLogoDropzone) {
-        startLogoDropzone.innerHTML = `
-          <img src="${settings.startScreen.logo}" alt="スタート画面ロゴ" style="max-width: 100%; max-height: 100px;">
-          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
-        `;
-      }
-    }
+    restoreImage('startLogoDropzone', settings.startScreen?.logo, 'スタート画面ロゴ');
     
     // ローディング画面カスタムロゴ
-    if (settings.loadingScreen?.logo) {
-      const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
-      if (loadingLogoDropzone) {
-        loadingLogoDropzone.innerHTML = `
-          <img src="${settings.loadingScreen.logo}" alt="ローディング画面ロゴ" style="max-width: 100%; max-height: 100px;">
-          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
-        `;
-      }
-    }
+    restoreImage('loadingLogoDropzone', settings.loadingScreen?.logo, 'ローディング画面ロゴ');
     
     // ガイド画面画像（平面検出用）
-    if (settings.guideScreen?.surfaceDetection?.guideImage) {
-      const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
-      if (surfaceGuideDropzone) {
-        surfaceGuideDropzone.innerHTML = `
-          <img src="${settings.guideScreen.surfaceDetection.guideImage}" alt="平面検出ガイド画像" style="max-width: 100%; max-height: 100px;">
-          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
-        `;
-      }
-    }
+    restoreImage('surfaceGuideImageDropzone', settings.guideScreen?.surfaceDetection?.guideImage, '平面検出ガイド画像');
     
     // ガイド画面画像（空間検出用）
-    if (settings.guideScreen?.worldTracking?.guideImage) {
-      const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
-      if (worldGuideDropzone) {
-        worldGuideDropzone.innerHTML = `
-          <img src="${settings.guideScreen.worldTracking.guideImage}" alt="空間検出ガイド画像" style="max-width: 100%; max-height: 100px;">
-          <button class="loading-screen-editor__remove-button" onclick="removeFile(this.parentElement, this)">×</button>
-        `;
-      }
-    }
+    restoreImage('worldGuideImageDropzone', settings.guideScreen?.worldTracking?.guideImage, '空間検出ガイド画像');
     
     console.log('🖼️ 画像データ読み込み処理完了');
+    
+    // 画像復元後にイベントリスナーを再設定
+    setTimeout(() => {
+      setupFileDropzones();
+      console.log('🔄 画像復元後のイベントリスナーを再設定');
+    }, 50);
     
     // 画像復元後にプレビューを更新
     setTimeout(() => {
@@ -985,34 +1004,7 @@ function getCurrentActiveTemplateId() {
   }
 }
 
-// 新しいテンプレートを作成
-function createNewTemplate(templateName) {
-  try {
-    // 現在の設定を取得
-    const currentSettings = getCurrentSettings();
-    
-    // 新しいテンプレートデータを作成
-    const templateData = {
-      name: templateName,
-      settings: currentSettings
-    };
-    
-    // テンプレートを保存
-    const savedTemplate = saveLoadingScreenTemplate(templateData);
-    
-    // テンプレート一覧を更新
-    loadTemplateList();
-    
-    // 作成したテンプレートを選択
-    selectTemplate(savedTemplate.id);
-    
-    console.log('新しいテンプレートを作成しました:', savedTemplate.name);
-    showNotification(`テンプレート「${savedTemplate.name}」を作成しました`, 'success');
-  } catch (error) {
-    console.error('テンプレート作成に失敗しました:', error);
-    showNotification('テンプレートの作成に失敗しました', 'error');
-  }
-}
+// 注意: createNewTemplate関数は現在使用されていません
 
 // ボタンの設定
 export function setupButtons() {
@@ -1091,12 +1083,6 @@ export function setupButtons() {
             // テンプレート編集モード：既存テンプレートを更新
             const template = getLoadingScreenTemplate(templateId);
             if (template) {
-              const updatedTemplate = {
-                ...template,
-                settings: settings,
-                updatedAt: new Date().toLocaleDateString('ja-JP')
-              };
-              
               // 既存のテンプレートを削除して新しいものを保存
               deleteLoadingScreenTemplate(templateId);
               const savedTemplate = saveLoadingScreenTemplate({
@@ -1547,33 +1533,37 @@ function calculateImageDataSize(settingsObject = null) {
         if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
           const base64Data = imageSrc.split(',')[1];
           if (base64Data) {
-            // Base64は元データの約1.33倍なので、元のサイズに近似
-            totalImageSize += (base64Data.length * 0.75);
+            // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
+            const originalSize = (base64Data.length * 3) / 4;
+            totalImageSize += originalSize;
           }
         }
       });
     } else {
       // DOMから画像データサイズを計算（従来の方法）
       const imageElements = [
-        { id: 'thumbnailDropzone', property: 'thumbnail' },
-        { id: 'startLogoDropzone', property: 'logo' },
-        { id: 'loadingLogoDropzone', property: 'logo' },
-        { id: 'surfaceGuideImageDropzone', property: 'guideImage' },
-        { id: 'worldGuideImageDropzone', property: 'guideImage' }
+        { id: 'thumbnailDropzone' },
+        { id: 'startLogoDropzone' },
+        { id: 'loadingLogoDropzone' },
+        { id: 'surfaceGuideImageDropzone' },
+        { id: 'worldGuideImageDropzone' }
       ];
       
       imageElements.forEach(({ id }) => {
         const dropzone = document.getElementById(id);
         const img = dropzone?.querySelector('img');
-        if (img && img.src && (img.src.startsWith('data:') || img.src.startsWith('blob:'))) {
-          // Base64データのサイズを計算
-          if (img.src.startsWith('data:')) {
-            // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
-            const base64Data = img.src.split(',')[1];
-            if (base64Data) {
-              // Base64は元データの約1.33倍なので、元のサイズに近似
-              totalImageSize += (base64Data.length * 0.75);
-            }
+        if (img && img.src && img.src.startsWith('data:')) {
+          // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
+          const base64Data = img.src.split(',')[1];
+          if (base64Data && base64Data.length > 0) {
+            // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
+            const originalSize = (base64Data.length * 3) / 4;
+            totalImageSize += originalSize;
+            console.log(`📊 画像データサイズ (${id}):`, {
+              base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
+              originalSizeKB: (originalSize / 1024).toFixed(2) + 'KB',
+              originalSizeMB: (originalSize / 1024 / 1024).toFixed(2) + 'MB'
+            });
           }
         }
       });
@@ -1583,6 +1573,11 @@ function calculateImageDataSize(settingsObject = null) {
     console.warn('画像データサイズ計算中にエラー:', error);
   }
   
+  console.log('📊 DOM合計画像データサイズ:', {
+    totalKB: (totalImageSize / 1024).toFixed(2) + 'KB',
+    totalMB: (totalImageSize / 1024 / 1024).toFixed(2) + 'MB'
+  });
+  
   return Math.round(totalImageSize);
 }
 
@@ -1591,7 +1586,7 @@ export function updateStorageUsageDisplay() {
   try {
     // DOMから画像データのみの容量を計算
     const imageDataSize = calculateImageDataSize();
-    const maxSize = 2 * 1024 * 1024; // 2MB制限
+    const maxSize = 3 * 1024 * 1024; // 3MB制限（複数画像の合計）
     
     const usageInfo = {
       total: imageDataSize,
@@ -1629,12 +1624,12 @@ export function updateStorageUsageDisplay() {
     
     // テキストを更新（1MB超えたらMB表記）
     if (usageInfo.total === 0) {
-      textElement.textContent = `画像: 未使用 / ${usageInfo.maxSizeMB}MB`;
+      textElement.textContent = `画像: 未使用 / ${usageInfo.maxSizeMB}MB（全画像合計）`;
     } else {
       const usageSizeKB = parseFloat(usageInfo.totalKB);
       const usageDisplay = usageSizeKB >= 1024 ? 
         `${usageInfo.totalMB}MB` : `${usageInfo.totalKB}KB`;
-      textElement.textContent = `画像: ${usageDisplay} / ${usageInfo.maxSizeMB}MB (${usageInfo.usagePercentage}%)`;
+      textElement.textContent = `画像: ${usageDisplay} / ${usageInfo.maxSizeMB}MB（全画像合計） (${usageInfo.usagePercentage}%)`;
     }
     
     console.log('📊 画像データ使用量を更新:', {

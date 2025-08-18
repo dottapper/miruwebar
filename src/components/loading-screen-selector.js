@@ -467,8 +467,8 @@ export function saveLoadingScreenTemplate(templateData) {
     const settings = templateData.settings;
     const templates = getStoredTemplates();
     
-    // 容量制限をチェック（約4MB）
-    const maxSize = 4 * 1024 * 1024;
+    // 容量制限をチェック（3MB）
+    const maxSize = 3 * 1024 * 1024;
     const newTemplate = {
       id: `template_${Date.now()}`,
       name: templateData.name || `テンプレート ${templates.length + 1}`,
