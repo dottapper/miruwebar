@@ -58,9 +58,15 @@ function updateStartPreview(previewScreen, settings) {
   const logoSrc = logoImg?.src || '';
   
   // ロゴの表示条件をより厳密にチェック
-  const shouldShowLogo = logoSrc && (logoSrc.startsWith('data:') || logoSrc.startsWith('blob:')) && logoSrc.length > 50;
+  const shouldShowLogo = isValidImageSrc(logoSrc);
   
   previewScreen.innerHTML = `
+    <style>
+      .preview-start-button:hover {
+        opacity: 0.9 !important;
+        transform: translateY(-1px) !important;
+      }
+    </style>
     <div class="start-screen-preview" style="
       background-color: ${screen.backgroundColor || defaultSettings.startScreen.backgroundColor};
       color: ${screen.textColor || defaultSettings.startScreen.textColor};
@@ -92,7 +98,7 @@ function updateStartPreview(previewScreen, settings) {
             max-height: 100%;
             object-fit: contain;
             filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
-          " alt="ロゴ" onload="console.log('🖼️ ロゴ画像読み込み完了:', this.src.substring(0, 50) + '...')" onerror="console.error('❌ ロゴ画像読み込みエラー:', this.src)">
+          " alt="ロゴ">
         </div>
       ` : ''}
       
@@ -153,7 +159,7 @@ function updateStartPreview(previewScreen, settings) {
           cursor: pointer;
           transition: all 0.2s ease;
           box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        " onmouseover="this.style.opacity='0.9'; this.style.transform='translateY(-1px)'" onmouseout="this.style.opacity='1'; this.style.transform='translateY(0)'">
+        " class="preview-start-button"">
           ${screen.buttonText !== undefined ? screen.buttonText : defaultSettings.startScreen.buttonText}
         </button>
       </div>
@@ -642,8 +648,7 @@ export function getCurrentSettingsFromDOM() {
         value = parseFloat(value);
       }
       
-      // 空文字列もユーザーの意図として尊重（デフォルト値は使用しない）
-      // NOTE: 空文字列の場合、プレビューでは `!== undefined` チェックで処理
+      // 空文字列もユーザーの意図として尊重
       
       settings[screenType][property] = value;
     }
@@ -656,92 +661,72 @@ export function getCurrentSettingsFromDOM() {
   }
   
   // 平面検出設定
-  const surfaceTitle = document.getElementById('guideScreen-surfaceTitle');
-  const surfaceDescription = document.getElementById('guideScreen-surfaceDescription');
-  const markerSizeSlider = document.getElementById('guideScreen-markerSize');
-  const surfaceTextPositionSlider = document.getElementById('guideScreen-surfaceTextPosition');
-  const surfaceTextSizeSlider = document.getElementById('guideScreen-surfaceTextSize');
-  if (surfaceTitle) {
-    settings.guideScreen.surfaceDetection.title = surfaceTitle.value;
-  }
-  if (surfaceDescription) {
-    settings.guideScreen.surfaceDetection.description = surfaceDescription.value;
-  }
-  if (markerSizeSlider) {
-    settings.guideScreen.surfaceDetection.markerSize = parseFloat(markerSizeSlider.value);
-  }
-  if (surfaceTextPositionSlider) {
-    settings.guideScreen.surfaceDetection.textPosition = parseFloat(surfaceTextPositionSlider.value);
-  }
-  if (surfaceTextSizeSlider) {
-    settings.guideScreen.surfaceDetection.textSize = parseFloat(surfaceTextSizeSlider.value);
-  }
+  const surfaceSettings = [
+    { id: 'guideScreen-surfaceTitle', property: 'title', transform: null },
+    { id: 'guideScreen-surfaceDescription', property: 'description', transform: null },
+    { id: 'guideScreen-markerSize', property: 'markerSize', transform: parseFloat },
+    { id: 'guideScreen-surfaceTextPosition', property: 'textPosition', transform: parseFloat },
+    { id: 'guideScreen-surfaceTextSize', property: 'textSize', transform: parseFloat }
+  ];
+  
+  surfaceSettings.forEach(({ id, property, transform }) => {
+    const element = document.getElementById(id);
+    if (element) {
+      settings.guideScreen.surfaceDetection[property] = transform ? transform(element.value) : element.value;
+    }
+  });
   
   // 空間検出設定
-  const worldTitle = document.getElementById('guideScreen-worldTitle');
-  const worldDescription = document.getElementById('guideScreen-worldDescription');
-  const worldTextPositionSlider = document.getElementById('guideScreen-worldTextPosition');
-  const worldTextSizeSlider = document.getElementById('guideScreen-worldTextSize');
-  if (worldTitle) {
-    settings.guideScreen.worldTracking.title = worldTitle.value;
-  }
-  if (worldDescription) {
-    settings.guideScreen.worldTracking.description = worldDescription.value;
-  }
-  if (worldTextPositionSlider) {
-    settings.guideScreen.worldTracking.textPosition = parseFloat(worldTextPositionSlider.value);
-  }
-  if (worldTextSizeSlider) {
-    settings.guideScreen.worldTracking.textSize = parseFloat(worldTextSizeSlider.value);
-  }
+  const worldSettings = [
+    { id: 'guideScreen-worldTitle', property: 'title', transform: null },
+    { id: 'guideScreen-worldDescription', property: 'description', transform: null },
+    { id: 'guideScreen-worldTextPosition', property: 'textPosition', transform: parseFloat },
+    { id: 'guideScreen-worldTextSize', property: 'textSize', transform: parseFloat }
+  ];
+  
+  worldSettings.forEach(({ id, property, transform }) => {
+    const element = document.getElementById(id);
+    if (element) {
+      settings.guideScreen.worldTracking[property] = transform ? transform(element.value) : element.value;
+    }
+  });
   
   // フッター位置の設定を取得
-  const surfaceFooterPositionSlider = document.getElementById('guideScreen-surfaceFooterPosition');
-  const worldFooterPositionSlider = document.getElementById('guideScreen-worldFooterPosition');
-  if (surfaceFooterPositionSlider) {
-    settings.guideScreen.surfaceDetection.footerPosition = parseFloat(surfaceFooterPositionSlider.value);
-  }
-  if (worldFooterPositionSlider) {
-    settings.guideScreen.worldTracking.footerPosition = parseFloat(worldFooterPositionSlider.value);
-  }
+  const footerSettings = [
+    { id: 'guideScreen-surfaceFooterPosition', target: settings.guideScreen.surfaceDetection },
+    { id: 'guideScreen-worldFooterPosition', target: settings.guideScreen.worldTracking }
+  ];
+  
+  footerSettings.forEach(({ id, target }) => {
+    const element = document.getElementById(id);
+    if (element) {
+      target.footerPosition = parseFloat(element.value);
+    }
+  });
   
   // 画像データを取得
-  // サムネイル画像
-  const thumbnailDropzone = document.getElementById('thumbnailDropzone');
-  const thumbnailImg = thumbnailDropzone?.querySelector('img');
-  if (thumbnailImg && thumbnailImg.src) {
-    settings.startScreen.thumbnail = thumbnailImg.src;
-  }
+  const imageSettings = [
+    { dropzoneId: 'thumbnailDropzone', target: settings.startScreen, property: 'thumbnail' },
+    { dropzoneId: 'startLogoDropzone', target: settings.startScreen, property: 'logo' },
+    { dropzoneId: 'loadingLogoDropzone', target: settings.loadingScreen, property: 'logo' },
+    { dropzoneId: 'surfaceGuideImageDropzone', target: settings.guideScreen.surfaceDetection, property: 'guideImage' },
+    { dropzoneId: 'worldGuideImageDropzone', target: settings.guideScreen.worldTracking, property: 'guideImage' }
+  ];
   
-  // スタート画面ロゴ
-  const startLogoDropzone = document.getElementById('startLogoDropzone');
-  const startLogoImg = startLogoDropzone?.querySelector('img');
-  if (startLogoImg && startLogoImg.src) {
-    settings.startScreen.logo = startLogoImg.src;
-  }
-  
-  // ローディング画面カスタムロゴ
-  const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
-  const loadingLogoImg = loadingLogoDropzone?.querySelector('img');
-  if (loadingLogoImg && loadingLogoImg.src) {
-    settings.loadingScreen.logo = loadingLogoImg.src;
-  }
-  
-  // ガイド画面画像（平面検出用）
-  const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
-  const surfaceGuideImg = surfaceGuideDropzone?.querySelector('img');
-  if (surfaceGuideImg && surfaceGuideImg.src) {
-    settings.guideScreen.surfaceDetection.guideImage = surfaceGuideImg.src;
-  }
-  
-  // ガイド画面画像（空間検出用）
-  const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
-  const worldGuideImg = worldGuideDropzone?.querySelector('img');
-  if (worldGuideImg && worldGuideImg.src) {
-    settings.guideScreen.worldTracking.guideImage = worldGuideImg.src;
-  }
+  imageSettings.forEach(({ dropzoneId, target, property }) => {
+    const dropzone = document.getElementById(dropzoneId);
+    const img = dropzone?.querySelector('img');
+    if (img && img.src) {
+      target[property] = img.src;
+    }
+  });
 
   return settings;
+}
+
+// ヘルパー関数：有効な画像ソースかチェック
+function isValidImageSrc(src) {
+  return src && (src.startsWith('data:') || src.startsWith('blob:')) && src.length > 50;
 }
 
 // プレビューのスクロール調整

@@ -68,32 +68,9 @@ function generateTemplatesList() {
   }
   
   // リスト形式でプロジェクト一覧を表示
-  const projectList = templates.map(template => {
-    const previewColors = template.settings?.startScreen || {};
-    const backgroundColor = previewColors.backgroundColor || '#121212';
-    const accentColor = previewColors.accentColor || '#6c5ce7';
-    const title = template.settings?.startScreen?.title || 'AR体験を開始';
-    
-    return `
-      <div class="project-item" data-template-id="${template.id}">
-        <div class="project-icon">🏢</div>
-        <div class="project-info">
-          <div class="project-name">${template.name}</div>
-          <div class="project-details">
-            <span class="project-date">${template.createdAt}</span>
-          </div>
-        </div>
-        <div class="project-actions">
-          <button class="project-action-btn project-edit-btn" data-template-id="${template.id}">
-            編集
-          </button>
-          <button class="project-action-btn project-delete-btn" data-template-id="${template.id}">
-            削除
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
+  const projectList = templates.map(template => 
+    createProjectItemHTML(template)
+  ).join('');
   
   return projectList;
 }
@@ -309,41 +286,59 @@ function showTemplateNameDialog() {
 }
 
 /**
+ * プロジェクトアイテムのHTMLを作成
+ */
+function createProjectItemHTML(template) {
+  return `
+    <div class="project-item" data-template-id="${template.id}">
+      <div class="project-icon">🏢</div>
+      <div class="project-info">
+        <div class="project-name">${template.name}</div>
+        <div class="project-details">
+          <span class="project-date">${template.createdAt}</span>
+        </div>
+      </div>
+      <div class="project-actions">
+        <button class="project-action-btn project-edit-btn" data-template-id="${template.id}">
+          編集
+        </button>
+        <button class="project-action-btn project-delete-btn" data-template-id="${template.id}">
+          削除
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/**
  * 名前入力ダイアログのイベントリスナーを設定
  */
 function setupNameDialogEventListeners() {
-  const dialog = document.getElementById('template-name-dialog');
-  const closeButton = document.getElementById('close-name-dialog');
-  const cancelButton = document.getElementById('cancel-name-dialog');
-  const confirmButton = document.getElementById('confirm-name-dialog');
-  const nameInput = document.getElementById('template-name-input');
-  const charCounter = document.getElementById('char-counter');
+  const elements = {
+    dialog: document.getElementById('template-name-dialog'),
+    closeButton: document.getElementById('close-name-dialog'),
+    cancelButton: document.getElementById('cancel-name-dialog'),
+    confirmButton: document.getElementById('confirm-name-dialog'),
+    nameInput: document.getElementById('template-name-input'),
+    charCounter: document.getElementById('char-counter')
+  };
   
-  // 閉じるボタン
+  setupDialogEventListeners(elements);
+}
+
+/**
+ * ダイアログのイベントリスナーを設定
+ */
+function setupDialogEventListeners(elements) {
+  const { dialog, closeButton, cancelButton, confirmButton, nameInput, charCounter } = elements;
+  
+  // ボタンイベント
   closeButton?.addEventListener('click', hideTemplateNameDialog);
-  
-  // キャンセルボタン
   cancelButton?.addEventListener('click', hideTemplateNameDialog);
-  
-  // 作成ボタン
   confirmButton?.addEventListener('click', handleNameConfirm);
   
-  // 文字数カウンター
-  nameInput?.addEventListener('input', (e) => {
-    const length = e.target.value.length;
-    charCounter.textContent = length;
-    
-    // 文字数制限の視覚的フィードバック
-    if (length > 45) {
-      charCounter.style.color = '#ff6b6b';
-    } else if (length > 35) {
-      charCounter.style.color = '#ffa500';
-    } else {
-      charCounter.style.color = '#666';
-    }
-  });
-  
-  // Enterキーで作成
+  // 入力イベント
+  nameInput?.addEventListener('input', (e) => updateCharacterCounter(e, charCounter));
   nameInput?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -351,6 +346,28 @@ function setupNameDialogEventListeners() {
     }
   });
   
+  // ダイアログ閉じるイベント
+  setupDialogCloseEvents(dialog);
+}
+
+/**
+ * 文字数カウンターを更新
+ */
+function updateCharacterCounter(event, charCounter) {
+  const length = event.target.value.length;
+  charCounter.textContent = length;
+  
+  // 文字数制限の視覚的フィードバック
+  const colors = { danger: '#ff6b6b', warning: '#ffa500', normal: '#666' };
+  charCounter.style.color = length > 45 ? colors.danger : 
+                           length > 35 ? colors.warning : 
+                           colors.normal;
+}
+
+/**
+ * ダイアログを閉じるイベントを設定
+ */
+function setupDialogCloseEvents(dialog) {
   // オーバーレイクリックで閉じる
   dialog?.addEventListener('click', (e) => {
     if (e.target === dialog) {

@@ -91,7 +91,7 @@ export function setupTabHandlers() {
   const mainContents = document.querySelectorAll('.loading-screen-editor__tab-content');
 
   if (mainTabs.length === 0 || mainContents.length === 0) {
-    console.warn('タブ要素が見つかりません');
+    console.error('タブ要素が見つかりません');
     return;
   }
 
@@ -718,8 +718,8 @@ export function setupSidebarMenuHandlers() {
     const mediaMenu = document.getElementById('media-menu-item');
     if (mediaMenu) {
       mediaMenu.addEventListener('click', () => {
-        // TODO: メディア一覧画面への遷移
-        console.log('メディア一覧クリック（未実装）');
+        console.log('メディア一覧機能は現在開発中です');
+        showNotification('メディア一覧機能は近日公開予定です', 'info');
       });
     }
     
@@ -727,8 +727,8 @@ export function setupSidebarMenuHandlers() {
     const analyticsMenu = document.getElementById('analytics-menu-item');
     if (analyticsMenu) {
       analyticsMenu.addEventListener('click', () => {
-        // TODO: 分析画面への遷移
-        console.log('分析クリック（未実装）');
+        console.log('分析機能は現在開発中です');
+        showNotification('分析機能は近日公開予定です', 'info');
       });
     }
     
@@ -760,7 +760,7 @@ export function setupSidebarMenuHandlers() {
 function loadTemplateList() {
   const templateListContainer = document.getElementById('saved-templates-list');
   if (!templateListContainer) {
-    console.warn('テンプレート一覧コンテナが見つかりません');
+    console.error('テンプレート一覧コンテナが見つかりません');
     return;
   }
   
@@ -807,8 +807,8 @@ function setupTemplateItemHandlers() {
     // 右クリックでコンテキストメニュー（将来的に実装）
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      // TODO: コンテキストメニュー（複製、削除など）を表示
-      console.log('テンプレート右クリック:', templateId);
+      // 右クリックメニューは現在無効
+      console.log('テンプレート右クリック（メニュー無効）:', templateId);
     });
   });
 }
@@ -1004,7 +1004,6 @@ function getCurrentActiveTemplateId() {
   }
 }
 
-// 注意: createNewTemplate関数は現在使用されていません
 
 // ボタンの設定
 export function setupButtons() {
@@ -1593,7 +1592,7 @@ export function updateStorageUsageDisplay() {
       totalKB: (imageDataSize / 1024).toFixed(2),
       totalMB: (imageDataSize / 1024 / 1024).toFixed(2),
       maxSize,
-      maxSizeMB: (maxSize / 1024 / 1024).toFixed(1),
+      maxSizeMB: (maxSize / 1024 / 1024).toFixed(2), // 小数点2桁で統一
       usagePercentage: ((imageDataSize / maxSize) * 100).toFixed(1),
       isNearLimit: (imageDataSize / maxSize) > 0.8,
       isOverLimit: imageDataSize > maxSize
@@ -1622,14 +1621,11 @@ export function updateStorageUsageDisplay() {
       textElement.classList.add('warning');
     }
     
-    // テキストを更新（1MB超えたらMB表記）
+    // テキストを更新（MB表記で統一）
     if (usageInfo.total === 0) {
-      textElement.textContent = `画像: 未使用 / ${usageInfo.maxSizeMB}MB（全画像合計）`;
+      textElement.textContent = `画像: 0.00MB / ${usageInfo.maxSizeMB}MB（全画像合計）`;
     } else {
-      const usageSizeKB = parseFloat(usageInfo.totalKB);
-      const usageDisplay = usageSizeKB >= 1024 ? 
-        `${usageInfo.totalMB}MB` : `${usageInfo.totalKB}KB`;
-      textElement.textContent = `画像: ${usageDisplay} / ${usageInfo.maxSizeMB}MB（全画像合計） (${usageInfo.usagePercentage}%)`;
+      textElement.textContent = `画像: ${usageInfo.totalMB}MB / ${usageInfo.maxSizeMB}MB（全画像合計） (${usageInfo.usagePercentage}%)`;
     }
     
     console.log('📊 画像データ使用量を更新:', {

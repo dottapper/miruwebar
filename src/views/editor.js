@@ -999,7 +999,7 @@ export function showEditor(container) {
         console.log('新規ローディング画面作成ボタンがクリックされました');
         
         // 直接ローディング画面エディターを開く（新規作成モード）
-        window.location.hash = '#/loading-screen-editor?mode=new';
+        window.location.hash = '#/loading-screen?mode=new';
       });
     }
     
@@ -1013,7 +1013,9 @@ export function showEditor(container) {
           console.log('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
           
           // 直接ローディング画面エディターを開く（編集モード）
-          window.location.hash = `#/loading-screen-editor?template=${selectedTemplateId}`;
+          window.location.hash = `#/loading-screen?template=${selectedTemplateId}`;
+        } else {
+          alert('編集するローディング画面を選択してください。');
         }
       });
     }

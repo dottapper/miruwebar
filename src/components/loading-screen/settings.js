@@ -169,7 +169,7 @@ export const settingsAPI = {
       });
       
       if (imageDataSize > maxTotalImageSize) {
-        console.warn('画像データが大きすぎます:', {
+        console.error('画像データが大きすぎます:', {
           size: imageDataSize,
           maxSize: maxTotalImageSize,
           sizeInMB: (imageDataSize / 1024 / 1024).toFixed(2)
@@ -262,35 +262,32 @@ export const settingsAPI = {
     ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
       if (settings[screenType]) {
         // 各プロパティを個別に確認してマージ
-        Object.keys(settings[screenType]).forEach(key => {
+        Object.entries(settings[screenType]).forEach(([key, value]) => {
           // 空文字列も有効な値として扱う（ユーザーの意図を尊重）
-          if (settings[screenType][key] !== undefined) {
-            merged[screenType][key] = settings[screenType][key];
+          if (value !== undefined) {
+            merged[screenType][key] = value;
           }
         });
         
         // ガイド画面の特別処理（ネストしたオブジェクト）
         if (screenType === 'guideScreen') {
-          if (settings[screenType].surfaceDetection) {
-            Object.keys(settings[screenType].surfaceDetection).forEach(key => {
-              if (settings[screenType].surfaceDetection[key] !== undefined) {
-                merged[screenType].surfaceDetection[key] = settings[screenType].surfaceDetection[key];
-              }
-            });
-          }
-          if (settings[screenType].worldTracking) {
-            Object.keys(settings[screenType].worldTracking).forEach(key => {
-              if (settings[screenType].worldTracking[key] !== undefined) {
-                merged[screenType].worldTracking[key] = settings[screenType].worldTracking[key];
-              }
-            });
-          }
+          ['surfaceDetection', 'worldTracking'].forEach(subType => {
+            if (settings[screenType][subType]) {
+              Object.entries(settings[screenType][subType]).forEach(([key, value]) => {
+                if (value !== undefined) {
+                  merged[screenType][subType][key] = value;
+                }
+              });
+            }
+          });
         }
         
         // カラー値の検証と修正
-        ['backgroundColor', 'textColor', 'accentColor', 'buttonColor', 'buttonTextColor'].forEach(colorProp => {
-          if (settings[screenType]?.[colorProp]) {
-            merged[screenType][colorProp] = validateAndFixColor(settings[screenType][colorProp]);
+        const colorProps = ['backgroundColor', 'textColor', 'accentColor', 'buttonColor', 'buttonTextColor'];
+        colorProps.forEach(colorProp => {
+          const colorValue = settings[screenType]?.[colorProp];
+          if (colorValue) {
+            merged[screenType][colorProp] = validateAndFixColor(colorValue);
           }
         });
       }
@@ -336,7 +333,7 @@ export const settingsAPI = {
       'lastUsedTemplateId'
     ];
     
-    for (const key of relevantKeys) {
+    relevantKeys.forEach(key => {
       if (localStorage.hasOwnProperty(key)) {
         const value = localStorage[key];
         const size = value.length + key.length;
@@ -348,7 +345,7 @@ export const settingsAPI = {
           sizeMB: (size / 1024 / 1024).toFixed(2)
         });
       }
-    }
+    });
     
     // 使用率を計算
     const usagePercentage = (loadingScreenTotal / maxSize) * 100;
@@ -358,7 +355,7 @@ export const settingsAPI = {
       totalKB: (loadingScreenTotal / 1024).toFixed(2),
       totalMB: (loadingScreenTotal / 1024 / 1024).toFixed(2),
       maxSize,
-      maxSizeMB: (maxSize / 1024 / 1024).toFixed(1),
+      maxSizeMB: (maxSize / 1024 / 1024).toFixed(2), // 小数点2桁で統一
       usagePercentage: usagePercentage.toFixed(1),
       keys: loadingScreenKeys,
       isNearLimit: usagePercentage > 80,
@@ -693,6 +690,26 @@ export const settingsAPI = {
     });
     
     return Math.round(totalImageSize);
+  },
+  
+  // ヘルパー関数: Base64画像かどうかチェック
+  isBase64Image(value) {
+    return typeof value === 'string' && value.startsWith('data:image/');
+  },
+  
+  // ヘルパー関数: Base64データのサイズを計算
+  calculateBase64Size(imageSrc) {
+    if (!imageSrc || typeof imageSrc !== 'string' || !imageSrc.startsWith('data:')) {
+      return 0;
+    }
+    
+    const base64Data = imageSrc.split(',')[1];
+    if (!base64Data || base64Data.length === 0) {
+      return 0;
+    }
+    
+    // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
+    return (base64Data.length * 3) / 4;
   }
 };
 
