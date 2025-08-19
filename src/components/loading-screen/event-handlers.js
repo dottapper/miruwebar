@@ -3,6 +3,16 @@
  */
 
 import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
+import {
+  INDIVIDUAL_IMAGE_MAX_BYTES,
+  TOTAL_IMAGES_MAX_BYTES,
+  TOTAL_IMAGES_MAX_MB,
+  ALLOWED_MIME_TYPES,
+  COMPRESSION_SETTINGS,
+  ERROR_MESSAGES,
+  IMAGE_FORMAT_LABELS,
+  ERROR_TYPES
+} from './constants.js';
 import { createMainEditorTemplate } from './ui-templates.js';
 import { settingsAPI, defaultSettings, validateAndFixColor } from './settings.js';
 import { 
@@ -383,8 +393,7 @@ export function setupFileDropzones() {
 // ファイル選択処理
 function handleFileSelection(file, dropzone, removeButton) {
   // ファイルタイプの検証
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (!allowedTypes.includes(file.type)) {
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
     showLogoError(
       `❌ サポートされていないファイル形式です\n\nファイル名: ${file.name}\n検出された形式: ${file.type}\n対応形式: JPG, PNG, GIF, WebP`,
       'JPG, PNG, GIF, WebP形式のファイルを選択してください'
@@ -393,8 +402,7 @@ function handleFileSelection(file, dropzone, removeButton) {
   }
 
   // 個別ファイルサイズの検証
-  const maxIndividualSize = 2 * 1024 * 1024; // 2MB（個別ファイル制限）
-  if (file.size > maxIndividualSize) {
+  if (file.size > INDIVIDUAL_IMAGE_MAX_BYTES) {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
     showLogoError(
       `❌ 個別ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n個別ファイル制限: 2MB`,
@@ -404,17 +412,16 @@ function handleFileSelection(file, dropzone, removeButton) {
   }
 
   // 既存画像との合計容量チェック
-  const currentTotalSize = calculateImageDataSize();
+  const currentSettings = getCurrentSettingsFromDOM();
+  const currentTotalSize = calculateImageDataSize(currentSettings);
   const newFileSize = file.size;
-  const maxTotalSize = 3 * 1024 * 1024; // 3MB（全画像合計制限）
-  
-  if (currentTotalSize + newFileSize > maxTotalSize) {
+  if (currentTotalSize + newFileSize > TOTAL_IMAGES_MAX_BYTES) {
     const currentSizeMB = (currentTotalSize / (1024 * 1024)).toFixed(2);
     const newFileSizeMB = (newFileSize / (1024 * 1024)).toFixed(2);
     const totalSizeMB = ((currentTotalSize + newFileSize) / (1024 * 1024)).toFixed(2);
     
     showLogoError(
-      `❌ 全画像合計容量が制限を超えます\n\n現在の画像合計: ${currentSizeMB}MB\n追加予定の画像: ${newFileSizeMB}MB\n合計予想サイズ: ${totalSizeMB}MB\n\n制限: 3MB（全画像合計）`,
+      ERROR_MESSAGES.totalSizeExceeded(currentSizeMB, newFileSizeMB, totalSizeMB),
       '他の画像を削除してから追加してください'
     );
     return;
@@ -426,11 +433,31 @@ function handleFileSelection(file, dropzone, removeButton) {
     let imageSrc = e.target.result;
     
     // 画像をアップロード時に圧縮
+    const originalSize = imageSrc.length;
+    const originalSizeMB = (originalSize / 1024 / 1024).toFixed(2);
+    
     try {
-      const compressedImage = await settingsAPI.compressBase64Image(imageSrc, 0.8, 1280, 720);
+      const { quality, maxWidth, maxHeight } = COMPRESSION_SETTINGS.default;
+      const compressedImage = await settingsAPI.compressBase64Image(imageSrc, quality, maxWidth, maxHeight);
       if (compressedImage && compressedImage.length < imageSrc.length) {
+        const compressedSize = compressedImage.length;
+        const compressedSizeMB = (compressedSize / 1024 / 1024).toFixed(2);
+        const compressionRatio = (((originalSize - compressedSize) / originalSize) * 100).toFixed(1);
+        
+        console.log('📦 アップロード時画像圧縮詳細:', {
+          元サイズ: `${originalSizeMB}MB (${originalSize} bytes)`,
+          圧縮後: `${compressedSizeMB}MB (${compressedSize} bytes)`,
+          圧縮率: `${compressionRatio}%`,
+          ファイル: file.name,
+          圧縮設定: `quality: ${quality}, maxSize: ${maxWidth}x${maxHeight}`
+        });
+        
         imageSrc = compressedImage;
-        console.log('📦 アップロード時に画像を圧縮しました');
+      } else {
+        console.log('📦 圧縮不要または失敗:', {
+          元サイズ: `${originalSizeMB}MB`,
+          理由: compressedImage ? '圧縮効果なし' : '圧縮失敗'
+        });
       }
     } catch (error) {
       console.warn('アップロード時の画像圧縮に失敗:', error);
@@ -513,25 +540,28 @@ function removeFile(dropzone, removeButton) {
   
   let defaultText = 'ファイルをドロップ';
   let icon = '📁';
-  let formats = 'JPG, PNG, WebP (最大2MB)';
+  let formats = IMAGE_FORMAT_LABELS.default;
   let acceptTypes = 'image/*';
   
   if (id === 'thumbnailDropzone') {
     defaultText = 'サムネイル画像をドロップ';
     icon = '🖼️';
+    formats = IMAGE_FORMAT_LABELS.thumbnail;
   } else if (id === 'startLogoDropzone') {
     defaultText = 'ロゴ画像をドロップ';
     icon = '🖼️';
-    formats = 'PNG, JPG, GIF, WebP (最大2MB)';
+    formats = IMAGE_FORMAT_LABELS.default;
     acceptTypes = 'image/*,.gif';
   } else if (id === 'loadingLogoDropzone') {
     defaultText = 'ロゴをドロップ';
     icon = '🖼️';
-    formats = 'PNG, JPG, WebP (最大2MB、透過PNG推奨)';
+    formats = IMAGE_FORMAT_LABELS.logo;
   } else if (id === 'surfaceGuideImageDropzone') {
     defaultText = 'マーカー画像をドロップ';
+    formats = IMAGE_FORMAT_LABELS.default;
   } else if (id === 'worldGuideImageDropzone') {
     defaultText = 'ガイド画像をドロップ';
+    formats = IMAGE_FORMAT_LABELS.default;
   }
   
   // 完全なドロップゾーン構造を再作成
@@ -1113,18 +1143,21 @@ export function setupButtons() {
       } catch (error) {
         console.error('設定の保存に失敗しました:', error);
         
-        // エラータイプに応じた処理
-        if (error.type === 'warning') {
-          // 警告レベル（画像なしで保存成功）
+        // エラータイプに応じた処理（優先度順：画像容量系 → ストレージクォータ系 → その他）
+        if (error.type === ERROR_TYPES.IMAGE_CAPACITY) {
+          // 画像容量制限エラー（個別ファイルサイズ、合計サイズ超過）
           showNotification(error.message, 'warning');
-        } else if (error.message.includes('quota') || error.message.includes('容量') || error.message.includes('QuotaExceededError')) {
-          // 容量制限エラー
+        } else if (error.type === ERROR_TYPES.WARNING) {
+          // 警告レベル（画像圧縮など、処理は成功したが注意が必要）
+          showNotification(error.message, 'warning');
+        } else if (error.type === ERROR_TYPES.STORAGE_QUOTA || error.message.includes('QuotaExceededError') || error.name === 'QuotaExceededError') {
+          // ブラウザストレージクォータ制限エラー
           showNotification('💾 ストレージ容量が不足しています。\n\n📁 ブラウザの設定からサイトデータを削除するか、\n🗂️ 不要なテンプレートを削除してください。', 'error');
         } else if (error.message.includes('画像')) {
-          // 画像関連エラー
+          // 画像関連エラー（レガシー対応）
           showNotification(error.message, 'warning');
         } else {
-          // その他のエラー
+          // その他の一般的なエラー
           showNotification(`❌ 設定の保存に失敗しました\n\n${error.message}`, 'error');
         }
       }
@@ -1472,9 +1505,9 @@ function showSaveConfirmDialog(onNavigate) {
     } catch (error) {
       console.error('❌ 保存処理中にエラー:', error);
       
-      // エラーの種類に応じて処理
-      if (error.type === 'warning') {
-        // 警告レベル（画像なしで保存成功）
+      // エラーの種類に応じて処理（優先度順：画像容量系 → ストレージクォータ系 → その他）
+      if (error.type === ERROR_TYPES.WARNING || error.type === ERROR_TYPES.IMAGE_CAPACITY) {
+        // 警告レベル（画像圧縮や画像なしで保存成功）
         console.log('⚠️ 警告付きで保存完了 - プロジェクト一覧に遷移');
         hideDialog();
         onNavigate();
@@ -1583,8 +1616,23 @@ function calculateImageDataSize(settingsObject = null) {
 // ストレージ使用量表示を更新する関数
 export function updateStorageUsageDisplay() {
   try {
-    // DOMから画像データのみの容量を計算
-    const imageDataSize = calculateImageDataSize();
+    // DOMから現在の設定を取得して画像データサイズを正確に計算
+    const currentSettings = getCurrentSettingsFromDOM();
+    console.log('📊 ストレージ使用量計算用の設定データ:', {
+      startScreen: {
+        thumbnail: currentSettings.startScreen?.thumbnail ? 'あり' : 'なし',
+        logo: currentSettings.startScreen?.logo ? 'あり' : 'なし'
+      },
+      loadingScreen: {
+        logo: currentSettings.loadingScreen?.logo ? 'あり' : 'なし'
+      },
+      guideScreen: {
+        surfaceGuideImage: currentSettings.guideScreen?.surfaceDetection?.guideImage ? 'あり' : 'なし',
+        worldGuideImage: currentSettings.guideScreen?.worldTracking?.guideImage ? 'あり' : 'なし'
+      }
+    });
+    
+    const imageDataSize = calculateImageDataSize(currentSettings);
     const maxSize = 3 * 1024 * 1024; // 3MB制限（複数画像の合計）
     
     const usageInfo = {
@@ -1623,9 +1671,9 @@ export function updateStorageUsageDisplay() {
     
     // テキストを更新（MB表記で統一）
     if (usageInfo.total === 0) {
-      textElement.textContent = `画像: 0.00MB / ${usageInfo.maxSizeMB}MB（全画像合計）`;
+      textElement.textContent = `画像: 0.00MB / ${usageInfo.maxSizeMB}MB（全画像合計・圧縮済み）`;
     } else {
-      textElement.textContent = `画像: ${usageInfo.totalMB}MB / ${usageInfo.maxSizeMB}MB（全画像合計） (${usageInfo.usagePercentage}%)`;
+      textElement.textContent = `画像: ${usageInfo.totalMB}MB / ${usageInfo.maxSizeMB}MB（全画像合計・圧縮済み） (${usageInfo.usagePercentage}%)`;
     }
     
     console.log('📊 画像データ使用量を更新:', {
@@ -1737,7 +1785,7 @@ function resetDOMElements() {
               <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                PNG, JPG, GIF, WebP (最大2MB)
+${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -1750,7 +1798,7 @@ function resetDOMElements() {
               <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                PNG, JPG, WebP (最大2MB、透過PNG推奨)
+${IMAGE_FORMAT_LABELS.logo}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -1763,7 +1811,7 @@ function resetDOMElements() {
               <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                JPG, PNG, WebP (最大2MB)
+${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -1776,7 +1824,7 @@ function resetDOMElements() {
               <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                JPG, PNG, WebP (最大2MB)
+${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -1995,7 +2043,7 @@ function resetLoadingGeneralSettings() {
           <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
           <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
           <div class="loading-screen-editor__supported-formats">
-            PNG, JPG, WebP (最大2MB、透過PNG推奨)
+${IMAGE_FORMAT_LABELS.logo}
           </div>
         </div>
         <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>

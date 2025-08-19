@@ -203,7 +203,23 @@ export default function showLoadingScreenEditor(container) {
       if (settings.startScreen.thumbnail) {
         const thumbnailDropzone = document.getElementById('thumbnailDropzone');
         if (thumbnailDropzone) {
-          thumbnailDropzone.innerHTML = `<img src="${settings.startScreen.thumbnail}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="サムネイル">`;
+          const dropZone = thumbnailDropzone.querySelector('.loading-screen-editor__drop-zone');
+          const removeButton = thumbnailDropzone.querySelector('.loading-screen-editor__remove-button');
+          
+          if (dropZone) {
+            const imgElement = document.createElement('img');
+            imgElement.src = settings.startScreen.thumbnail;
+            imgElement.alt = 'サムネイル';
+            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+            
+            const fileName = 'サムネイル画像';
+            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+            dropZone.insertBefore(imgElement, dropZone.firstChild);
+            
+            if (removeButton) {
+              removeButton.style.display = 'block';
+            }
+          }
           console.log('🖼️ サムネイル画像を復元');
         } else {
           console.warn('🖼️ サムネイルDropzoneが見つかりません');
@@ -214,7 +230,23 @@ export default function showLoadingScreenEditor(container) {
       if (settings.startScreen.logo) {
         const startLogoDropzone = document.getElementById('startLogoDropzone');
         if (startLogoDropzone) {
-          startLogoDropzone.innerHTML = `<img src="${settings.startScreen.logo}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="ロゴ">`;
+          const dropZone = startLogoDropzone.querySelector('.loading-screen-editor__drop-zone');
+          const removeButton = startLogoDropzone.querySelector('.loading-screen-editor__remove-button');
+          
+          if (dropZone) {
+            const imgElement = document.createElement('img');
+            imgElement.src = settings.startScreen.logo;
+            imgElement.alt = 'スタート画面ロゴ';
+            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+            
+            const fileName = 'スタート画面ロゴ';
+            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+            dropZone.insertBefore(imgElement, dropZone.firstChild);
+            
+            if (removeButton) {
+              removeButton.style.display = 'block';
+            }
+          }
           console.log('🖼️ スタート画面ロゴを復元');
         } else {
           console.warn('🖼️ スタート画面ロゴDropzoneが見つかりません');
@@ -225,7 +257,23 @@ export default function showLoadingScreenEditor(container) {
       if (settings.loadingScreen.logo) {
         const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
         if (loadingLogoDropzone) {
-          loadingLogoDropzone.innerHTML = `<img src="${settings.loadingScreen.logo}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="ローディング画面ロゴ">`;
+          const dropZone = loadingLogoDropzone.querySelector('.loading-screen-editor__drop-zone');
+          const removeButton = loadingLogoDropzone.querySelector('.loading-screen-editor__remove-button');
+          
+          if (dropZone) {
+            const imgElement = document.createElement('img');
+            imgElement.src = settings.loadingScreen.logo;
+            imgElement.alt = 'ローディング画面ロゴ';
+            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+            
+            const fileName = 'ローディング画面ロゴ';
+            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+            dropZone.insertBefore(imgElement, dropZone.firstChild);
+            
+            if (removeButton) {
+              removeButton.style.display = 'block';
+            }
+          }
           console.log('🖼️ ローディング画面ロゴを復元');
         } else {
           console.warn('🖼️ ローディング画面ロゴDropzoneが見つかりません');
@@ -256,11 +304,17 @@ export default function showLoadingScreenEditor(container) {
       
       console.log('🖼️ 画像データ復元完了');
       
+      // 画像復元後にファイルドロップゾーンのイベントリスナーを再設定
+      setTimeout(() => {
+        setupFileDropzones();
+        console.log('🔄 画像復元後のイベントリスナーを再設定');
+      }, 50);
+      
       // 画像復元後にプレビューを更新
       setTimeout(() => {
         console.log('🔄 画像復元後にプレビューを更新');
         updatePreview('startScreen'); // デフォルトでスタート画面を表示
-      }, 50);
+      }, 100);
     }, 200); // DOM準備のために200ms遅延
   }
 

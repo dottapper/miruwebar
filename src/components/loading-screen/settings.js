@@ -2,6 +2,16 @@
  * ローディング画面エディタの設定管理
  */
 
+import {
+  INDIVIDUAL_IMAGE_MAX_BYTES,
+  TOTAL_IMAGES_MAX_BYTES,
+  TOTAL_IMAGES_MAX_MB,
+  ALLOWED_MIME_TYPES,
+  COMPRESSION_SETTINGS,
+  ERROR_MESSAGES,
+  ERROR_TYPES
+} from './constants.js';
+
 // デフォルト設定の定義
 export const defaultSettings = {
   startScreen: {
@@ -66,8 +76,8 @@ export const defaultSettings = {
 
 // サムネイル制限
 export const thumbnailLimits = {
-  maxSize: 2 * 1024 * 1024, // 2MB
-  allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  maxSize: INDIVIDUAL_IMAGE_MAX_BYTES,
+  allowedTypes: ALLOWED_MIME_TYPES,
   maxWidth: 1920,
   maxHeight: 1080
 };
@@ -157,7 +167,7 @@ export const settingsAPI = {
       const settingsJson = JSON.stringify(optimizedSettings);
       
       // localStorageの容量制限をチェック（個別画像2MB制限、全体で3MB制限）
-      const maxTotalImageSize = 3 * 1024 * 1024; // 3MB（複数画像の合計）
+      const maxTotalImageSize = TOTAL_IMAGES_MAX_BYTES;
       
       // 画像データのみのサイズを計算
       const imageDataSize = this.calculateImageDataSize(optimizedSettings);
@@ -181,15 +191,18 @@ export const settingsAPI = {
         
         // 1. より強い圧縮を試行
         console.log('🔄 より強い圧縮を試行...');
-        const moreCompressedSettings = await this.optimizeImageData(merged, 0.6, 1024, 576); // より強い圧縮
+        const { quality, maxWidth, maxHeight } = COMPRESSION_SETTINGS.aggressive;
+        const moreCompressedSettings = await this.optimizeImageData(merged, quality, maxWidth, maxHeight);
         const moreCompressedSize = this.calculateImageDataSize(moreCompressedSettings);
         
         if (moreCompressedSize <= maxTotalImageSize) {
           console.log('✅ 強い圧縮で容量制限内に収まりました');
           localStorage.setItem('loadingScreenSettings', JSON.stringify(moreCompressedSettings));
           
-          const warningError = new Error(`✅ 画像を圧縮して保存しました\n\n📊 圧縮前: ${(imageDataSize / 1024 / 1024).toFixed(2)}MB\n📊 圧縮後: ${(moreCompressedSize / 1024 / 1024).toFixed(2)}MB\n💡 画質が少し低下した可能性があります`);
-          warningError.type = 'warning';
+          const beforeMB = (imageDataSize / 1024 / 1024).toFixed(2);
+          const afterMB = (moreCompressedSize / 1024 / 1024).toFixed(2);
+          const warningError = new Error(ERROR_MESSAGES.compressionWarning(beforeMB, afterMB));
+          warningError.type = ERROR_TYPES.WARNING;
           throw warningError;
         }
         
@@ -198,8 +211,9 @@ export const settingsAPI = {
         const settingsWithoutImages = this.removeImageData(merged);
         localStorage.setItem('loadingScreenSettings', JSON.stringify(settingsWithoutImages));
         
-        const errorMessage = new Error(`❌ 画像データが大きすぎます（${(imageDataSize / 1024 / 1024).toFixed(2)}MB）\n\n画像なしで保存されました。\n\n📊 制限: ${(maxTotalImageSize / 1024 / 1024).toFixed(0)}MB（全画像合計）\n\n💡 解決方法:\n• 画像を個別にアップロードし直す\n• より小さい画像を使用する（推奨: 各500KB以下）\n• 解像度を下げる（推奨: 1280x720以下）`);
-        errorMessage.type = 'error';
+        const sizeMB = (imageDataSize / 1024 / 1024).toFixed(2);
+        const errorMessage = new Error(ERROR_MESSAGES.saveCapacityExceeded(sizeMB));
+        errorMessage.type = ERROR_TYPES.IMAGE_CAPACITY;
         throw errorMessage;
       }
       
@@ -233,7 +247,9 @@ export const settingsAPI = {
             localStorage.setItem('loadingScreenSettings', settingsJson);
             console.log('✅ データクリーンアップ後に保存成功');
           } catch (secondError) {
-            throw new Error('ローカルストレージの容量が不足しています。\n\n他のサイトのデータを削除するか、ブラウザのキャッシュをクリアしてください。');
+            const storageError = new Error('ローカルストレージの容量が不足しています。\n\n他のサイトのデータを削除するか、ブラウザのキャッシュをクリアしてください。');
+            storageError.type = ERROR_TYPES.STORAGE_QUOTA;
+            throw storageError;
           }
         } else {
           throw storageError;
@@ -244,8 +260,8 @@ export const settingsAPI = {
     } catch (error) {
       console.error('設定保存エラー:', error);
       
-      if (error.type === 'warning') {
-        // 警告レベルのエラー（画像なしで保存成功）
+      if (error.type === ERROR_TYPES.WARNING || error.type === ERROR_TYPES.IMAGE_CAPACITY) {
+        // 警告レベルのエラー（画像なしで保存成功）または画像容量エラー
         throw error;
       } else {
         // 完全な失敗
@@ -324,7 +340,7 @@ export const settingsAPI = {
   getLoadingScreenStorageUsage() {
     let loadingScreenTotal = 0;
     const loadingScreenKeys = [];
-    const maxSize = 3 * 1024 * 1024; // 3MB制限（複数画像の合計）
+    const maxSize = TOTAL_IMAGES_MAX_BYTES;
     
     // ローディング画面関連のキーのみを対象
     const relevantKeys = [
@@ -355,7 +371,7 @@ export const settingsAPI = {
       totalKB: (loadingScreenTotal / 1024).toFixed(2),
       totalMB: (loadingScreenTotal / 1024 / 1024).toFixed(2),
       maxSize,
-      maxSizeMB: (maxSize / 1024 / 1024).toFixed(2), // 小数点2桁で統一
+      maxSizeMB: TOTAL_IMAGES_MAX_MB.toFixed(2), // 小数点2桁で統一
       usagePercentage: usagePercentage.toFixed(1),
       keys: loadingScreenKeys,
       isNearLimit: usagePercentage > 80,
@@ -455,7 +471,7 @@ export const settingsAPI = {
   },
   
   // 画像データを最適化（圧縮）- 非同期版
-  async optimizeImageData(settings, quality = 0.8, maxWidth = 1280, maxHeight = 720) {
+  async optimizeImageData(settings, quality = COMPRESSION_SETTINGS.default.quality, maxWidth = COMPRESSION_SETTINGS.default.maxWidth, maxHeight = COMPRESSION_SETTINGS.default.maxHeight) {
     const optimized = JSON.parse(JSON.stringify(settings));
     const compressionPromises = [];
     
@@ -503,7 +519,7 @@ export const settingsAPI = {
   },
   
   // Base64画像を圧縮
-  compressBase64Image(base64String, quality = 0.8, maxWidth = 1280, maxHeight = 720) {
+  compressBase64Image(base64String, quality = COMPRESSION_SETTINGS.default.quality, maxWidth = COMPRESSION_SETTINGS.default.maxWidth, maxHeight = COMPRESSION_SETTINGS.default.maxHeight) {
     return new Promise((resolve) => {
       try {
         const img = new Image();

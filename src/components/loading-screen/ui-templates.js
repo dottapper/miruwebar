@@ -3,6 +3,7 @@
  */
 
 import { defaultSettings } from './settings.js';
+import { IMAGE_FORMAT_LABELS } from './constants.js';
 
 // テンプレート定義
 export function createStartTabContent(currentSettings = defaultSettings) {
@@ -27,7 +28,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
               <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                PNG, JPG, GIF, WebP (最大2MB)
+                ${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -204,7 +205,7 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
             <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
             <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
             <div class="loading-screen-editor__supported-formats">
-              PNG, JPG, WebP (最大2MB、透過PNG推奨)
+              ${IMAGE_FORMAT_LABELS.logo}
             </div>
           </div>
           <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -359,7 +360,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
               <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                JPG, PNG, WebP (最大2MB)
+                ${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
@@ -422,7 +423,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
               <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
-                JPG, PNG, WebP (最大2MB)
+                ${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>

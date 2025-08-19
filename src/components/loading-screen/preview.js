@@ -704,6 +704,12 @@ export function getCurrentSettingsFromDOM() {
     }
   });
   
+  // ロゴタイプラジオボタンの値を取得
+  const logoTypeRadio = document.querySelector('input[name="loadingLogoType"]:checked');
+  if (logoTypeRadio) {
+    settings.loadingScreen.logoType = logoTypeRadio.value;
+  }
+
   // 画像データを取得
   const imageSettings = [
     { dropzoneId: 'thumbnailDropzone', target: settings.startScreen, property: 'thumbnail' },

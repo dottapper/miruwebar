@@ -3,6 +3,7 @@
  */
 
 // import { settingsAPI } from './loading-screen/settings.js'; // 現在未使用
+import { TOTAL_IMAGES_MAX_BYTES } from './loading-screen/constants.js';
 
 let modalOverlay = null;
 let isModalOpen = false;
@@ -485,7 +486,7 @@ export function saveLoadingScreenTemplate(templateData) {
     const templates = getStoredTemplates();
     
     // 容量制限をチェック（3MB）
-    const maxSize = 3 * 1024 * 1024;
+    const maxSize = TOTAL_IMAGES_MAX_BYTES;
     const newTemplate = {
       id: `template_${Date.now()}`,
       name: templateData.name || `テンプレート ${templates.length + 1}`,
