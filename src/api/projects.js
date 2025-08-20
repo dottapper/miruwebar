@@ -6,7 +6,6 @@ import {
   loadModelBlob, 
   loadModelMeta, 
   removeModel as removeModelFromIDB,
-  getAllModelIds,
   getStorageInfo,
   clearAllModels
 } from '../storage/indexeddb-storage.js';
@@ -21,10 +20,10 @@ const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
  * @param {Object} viewerInstance - ARビューアインスタンス
  * @returns {Object} - 構造化されたプロジェクトデータ
  */
-async function createProjectData(data, viewerInstance) {
+async function createProjectData(data, viewerInstance, existingProject = null) {
     try {
         // 新規プロジェクト用のIDを生成
-        const projectId = data.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const projectId = data.id || `project_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         
         // モデル設定を保存（実際のファイルはIndexedDBに）
         let modelSettings = [];
@@ -32,7 +31,23 @@ async function createProjectData(data, viewerInstance) {
         
         if (viewerInstance && viewerInstance.controls && viewerInstance.controls.getAllModels) {
             try {
+                console.log('🔄 ARViewerからモデル取得開始:', {
+                    hasViewerInstance: !!viewerInstance,
+                    hasControls: !!viewerInstance.controls,
+                    hasGetAllModels: !!viewerInstance.controls.getAllModels
+                });
+                
                 const allModels = viewerInstance.controls.getAllModels();
+                console.log('📊 取得したモデル一覧:', {
+                    modelsType: typeof allModels,
+                    isArray: Array.isArray(allModels),
+                    modelsLength: allModels?.length,
+                    firstModelInfo: allModels?.[0] ? {
+                        fileName: allModels[0].fileName,
+                        fileSize: allModels[0].fileSize,
+                        hasModelData: !!allModels[0].modelData
+                    } : null
+                });
                 
                 if (!Array.isArray(allModels)) {
                     throw new Error('モデルデータの取得に失敗しました');
@@ -42,11 +57,32 @@ async function createProjectData(data, viewerInstance) {
                 for (let index = 0; index < allModels.length; index++) {
                     const model = allModels[index];
                     
-                    // モデルIDを生成
-                    const modelId = `${projectId}_model_${index}_${Date.now()}`;
+                    // 既存プロジェクトの場合、同じファイル名のモデルIDを再利用
+                    let modelId;
+                    if (existingProject && existingProject.modelSettings && existingProject.modelSettings[index]) {
+                        const existingModel = existingProject.modelSettings[index];
+                        if (existingModel.fileName === model.fileName && existingModel.fileSize === model.fileSize) {
+                            // 同じファイル名・サイズの場合は既存IDを再利用
+                            modelId = existingModel.modelId;
+                            console.log(`🔄 既存モデルID再利用: ${modelId} (${model.fileName})`);
+                        } else {
+                            // ファイルが変更された場合のみ新しいID生成
+                            modelId = `${projectId}_model_${index}_${Date.now()}`;
+                            console.log(`🆕 新しいモデルID生成: ${modelId} (${model.fileName})`);
+                        }
+                    } else {
+                        // 新規プロジェクトまたは新規モデルの場合
+                        modelId = `${projectId}_model_${index}_${Date.now()}`;
+                        console.log(`🆕 新規モデルID生成: ${modelId} (${model.fileName})`);
+                    }
                     
-                    // モデルデータをIndexedDBに保存
-                    if (model.modelData) {
+                    // モデルデータをIndexedDBに保存（既存モデル再利用の場合はスキップ）
+                    const isExistingModel = existingProject && existingProject.modelSettings && 
+                                          existingProject.modelSettings[index] && 
+                                          existingProject.modelSettings[index].fileName === model.fileName &&
+                                          existingProject.modelSettings[index].fileSize === model.fileSize;
+                    
+                    if (model.modelData && !isExistingModel) {
                         try {
                             // データ形式を判定してBlobに変換
                             let modelBlob;
@@ -73,13 +109,17 @@ async function createProjectData(data, viewerInstance) {
                                 createdAt: Date.now()
                             });
                             
-                            savedModelIds.push(modelId);
+                            console.log(`💾 新しいモデルをIndexedDBに保存: ${modelId}`);
                             
                         } catch (saveError) {
                             console.error(`❌ モデル${index} IndexedDB保存エラー:`, saveError);
                             // エラーでも処理を継続
                         }
+                    } else if (isExistingModel) {
+                        console.log(`⏭️ 既存モデルのため保存スキップ: ${modelId}`);
                     }
+                    
+                    savedModelIds.push(modelId);
                     
                     // 設定データのみを保存（軽量化）
                     const modelSetting = {
@@ -130,7 +170,8 @@ async function createProjectData(data, viewerInstance) {
             logoImage: null, // Base64画像データまたはnull
             message: 'ARコンテンツを準備中...',
             showProgress: true,
-            customCSS: null
+            customCSS: null,
+            selectedScreenId: 'none' // ローディング画面選択のデフォルト値
         };
 
         // 軽量プロジェクトデータ（設定のみ、ファイルはIndexedDB）
@@ -152,10 +193,10 @@ async function createProjectData(data, viewerInstance) {
             },
             
             // ローディング画面設定（新規追加）
-            loadingScreen: {
+            loadingScreen: data.loadingScreen ? {
                 ...defaultLoadingScreen,
                 ...data.loadingScreen // 既存データがあれば上書き
-            },
+            } : { ...defaultLoadingScreen },
             
             // マーカー画像（Base64で保存、容量小）
             markerImage: data.markerImage || null,
@@ -191,13 +232,15 @@ export function getProjects() {
             logoImage: null,
             message: 'ARコンテンツを準備中...',
             showProgress: true,
-            customCSS: null
+            customCSS: null,
+            selectedScreenId: 'none' // ローディング画面選択のデフォルト値
         };
         
         return projects.map(project => {
             if (!project.loadingScreen) {
                 project.loadingScreen = { ...defaultLoadingScreen };
             }
+            // selectedScreenIdの強制リセットを削除（ユーザーの設定を保持）
             return project;
         });
     } catch (error) {
@@ -214,23 +257,56 @@ export function getProjects() {
  */
 export async function saveProject(data, viewerInstance) {
     try {
+        console.log('🔄 saveProject開始:', {
+          id: data.id,
+          name: data.name,
+          hasLoadingScreen: !!data.loadingScreen,
+          loadingScreenDetails: data.loadingScreen ? {
+            selectedScreenId: data.loadingScreen.selectedScreenId,
+            enabled: data.loadingScreen.enabled,
+            backgroundColor: data.loadingScreen.backgroundColor,
+            message: data.loadingScreen.message
+          } : null
+        });
+        
         const projects = getProjects();
         
-        // 非同期でプロジェクトデータを作成
-        const projectData = await createProjectData(data, viewerInstance);
-        
         // 既存プロジェクトの更新または新規追加
-        const existingIndex = projects.findIndex(p => p.id === projectData.id);
+        const existingIndex = projects.findIndex(p => p.id === data.id);
+        const existingProject = existingIndex >= 0 ? projects[existingIndex] : null;
+        
+        // 非同期でプロジェクトデータを作成（既存プロジェクト情報を渡す）
+        const projectData = await createProjectData(data, viewerInstance, existingProject);
+        
+        console.log('🔄 createProjectData完了:', {
+          id: projectData.id,
+          name: projectData.name,
+          hasLoadingScreen: !!projectData.loadingScreen,
+          loadingScreenDetails: projectData.loadingScreen ? {
+            selectedScreenId: projectData.loadingScreen.selectedScreenId,
+            enabled: projectData.loadingScreen.enabled,
+            backgroundColor: projectData.loadingScreen.backgroundColor,
+            message: projectData.loadingScreen.message
+          } : null,
+          hasModels: projectData.savedModelIds && projectData.savedModelIds.length > 0,
+          modelCount: projectData.savedModelIds ? projectData.savedModelIds.length : 0
+        });
         
         if (existingIndex >= 0) {
-            // 既存プロジェクトの古いモデルファイルをクリーンアップ
+            // 既存プロジェクトの古いモデルファイルをクリーンアップ（再利用されないモデルのみ）
             const oldProject = projects[existingIndex];
             if (oldProject.savedModelIds && Array.isArray(oldProject.savedModelIds)) {
                 for (const oldModelId of oldProject.savedModelIds) {
-                    try {
-                        await removeModelFromIDB(oldModelId);
-                    } catch (cleanupError) {
-                        console.warn('⚠️ 古いモデル削除失敗:', oldModelId);
+                    // 新しいプロジェクトで再利用されていないモデルのみ削除
+                    if (!projectData.savedModelIds.includes(oldModelId)) {
+                        try {
+                            await removeModelFromIDB(oldModelId);
+                            console.log(`🗑️ 未使用の古いモデル削除: ${oldModelId}`);
+                        } catch (cleanupError) {
+                            console.warn('⚠️ 古いモデル削除失敗:', oldModelId);
+                        }
+                    } else {
+                        console.log(`♻️ モデル再利用により削除スキップ: ${oldModelId}`);
                     }
                 }
             }
@@ -244,22 +320,150 @@ export async function saveProject(data, viewerInstance) {
         
         // プロジェクト設定のみlocalStorageに保存（軽量）
         try {
+            // ハイブリッド保存を適用してデータを最適化
+            console.log('🔄 ハイブリッド保存前:', {
+              hasLoadingScreen: !!projectData.loadingScreen,
+              selectedScreenId: projectData.loadingScreen?.selectedScreenId
+            });
+            const optimizedProjectData = await saveProjectHybrid(projectData);
+            console.log('🔄 ハイブリッド保存後:', {
+              hasLoadingScreen: !!optimizedProjectData.loadingScreen,
+              selectedScreenId: optimizedProjectData.loadingScreen?.selectedScreenId
+            });
+            
+            // 最適化後のデータでプロジェクト一覧を更新
+            if (existingIndex >= 0) {
+                projects[existingIndex] = optimizedProjectData;
+            } else {
+                projects[projects.length - 1] = optimizedProjectData; // 最後に追加されたプロジェクトを置換
+            }
+            
             const dataToSave = JSON.stringify(projects);
             localStorage.setItem(PROJECTS_STORAGE_KEY, dataToSave);
             
+            console.log('✅ localStorage保存完了:', {
+              projectId: optimizedProjectData.id,
+              hasLoadingScreen: !!optimizedProjectData.loadingScreen,
+              selectedScreenId: optimizedProjectData.loadingScreen?.selectedScreenId,
+              totalProjectsCount: projects.length,
+              savedDataSize: (dataToSave.length / 1024).toFixed(2) + 'KB'
+            });
+            
+            // サーバーサイドにproject.jsonファイルを保存
+            try {
+                console.log('🔄 プロジェクト保存API呼び出し:', {
+                    projectId: projectData.id,
+                    projectName: projectData.name,
+                    modelSettingsCount: projectData.modelSettings?.length || 0,
+                    hasLoadingScreen: !!projectData.loadingScreen,
+                    projectDataType: typeof projectData,
+                    projectDataKeys: Object.keys(projectData || {}),
+                    projectDataFull: projectData
+                });
+                
+                const requestBody = { projectData: projectData };
+                console.log('📤 送信するボディ:', {
+                    requestBodyType: typeof requestBody,
+                    requestBodyKeys: Object.keys(requestBody),
+                    projectDataInBody: requestBody.projectData,
+                    jsonStringified: JSON.stringify(requestBody)
+                });
+                
+                const response = await fetch(`/api/projects/${projectData.id}/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ projectData: projectData })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ project.jsonファイル保存成功:', result.url);
+                } else {
+                    console.warn('⚠️ project.jsonファイル保存失敗:', response.statusText);
+                }
+            } catch (apiError) {
+                console.warn('⚠️ project.json API呼び出し失敗:', apiError.message);
+                // APIエラーでも全体処理は継続
+            }
+            
         } catch (storageError) {
             console.error('❌ localStorage保存エラー:', storageError);
-            // IndexedDBに保存済みのモデルをクリーンアップ
-            if (projectData.savedModelIds) {
-                for (const modelId of projectData.savedModelIds) {
+            
+            // 容量制限エラーの場合は自動的に古いデータを削除して再試行
+            if (storageError.name === 'QuotaExceededError') {
+                console.log('🧹 容量制限エラーのため古いデータを削除中...');
+                
+                // プロジェクトは削除せず、データを最適化
+                console.log('📦 プロジェクトデータを圧縮・最適化中...');
+                await optimizeAllProjects();
+                
+                // 不要なlocalStorageデータのみ削除（プロジェクト以外）
+                cleanupNonEssentialData();
+                
+                // 重複データの統合
+                await deduplicateProjects();
+                
+                try {
+                    // 再度保存を試行（ハイブリッド保存を再適用）
+                    const reOptimizedProjectData = await saveProjectHybrid(projectData);
+                    if (existingIndex >= 0) {
+                        projects[existingIndex] = reOptimizedProjectData;
+                    } else {
+                        projects[projects.length - 1] = reOptimizedProjectData;
+                    }
+                    
+                    const retryData = JSON.stringify(projects);
+                    localStorage.setItem(PROJECTS_STORAGE_KEY, retryData);
+                    console.log('✅ クリーンアップ後の保存に成功しました');
+                    
+                    // サーバーAPIも再試行
                     try {
-                        await removeModelFromIDB(modelId);
-                    } catch (cleanupError) {
-                        console.warn('⚠️ クリーンアップ失敗:', modelId);
+                        const response = await fetch(`/api/projects/${projectData.id}/save`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ projectData })
+                        });
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('✅ project.jsonファイル保存成功（再試行）:', result.url);
+                        }
+                    } catch (apiError) {
+                        console.warn('⚠️ project.json API呼び出し失敗（再試行）:', apiError.message);
+                    }
+                    
+                } catch (retryError) {
+                    console.error('❌ 再試行も失敗:', retryError);
+                    // IndexedDBに保存済みのモデルをクリーンアップ
+                    if (projectData.savedModelIds) {
+                        for (const modelId of projectData.savedModelIds) {
+                            try {
+                                await removeModelFromIDB(modelId);
+                            } catch (cleanupError) {
+                                console.warn('⚠️ クリーンアップ失敗:', modelId);
+                            }
+                        }
+                    }
+                    throw new Error(`容量制限により保存できません。ブラウザの保存データを手動でクリアしてください。`);
+                }
+            } else {
+                // その他のエラーの場合
+                // IndexedDBに保存済みのモデルをクリーンアップ
+                if (projectData.savedModelIds) {
+                    for (const modelId of projectData.savedModelIds) {
+                        try {
+                            await removeModelFromIDB(modelId);
+                        } catch (cleanupError) {
+                            console.warn('⚠️ クリーンアップ失敗:', modelId);
+                        }
                     }
                 }
+                throw new Error(`プロジェクト設定の保存に失敗しました: ${storageError.message}`);
             }
-            throw new Error(`プロジェクト設定の保存に失敗しました: ${storageError.message}`);
         }
         
         return projectData;
@@ -273,16 +477,29 @@ export async function saveProject(data, viewerInstance) {
 /**
  * プロジェクトを取得
  * @param {string} id - プロジェクトID
- * @returns {Object|null} - プロジェクトデータ
+ * @returns {Promise<Object|null>} - プロジェクトデータ
  */
-export function getProject(id) {
+export async function getProject(id) {
     try {
         const projects = getProjects();
         const project = projects.find(p => p.id === id) || null;
         
-        // 既存プロジェクトでローディング設定がない場合はデフォルト値を追加
-        if (project && !project.loadingScreen) {
-            project.loadingScreen = {
+        if (!project) {
+            return null;
+        }
+        
+        // ハイブリッド保存されたデータの復元を試行
+        let restoredProject;
+        try {
+            restoredProject = await loadProjectHybrid(project);
+        } catch (hybridError) {
+            console.warn('⚠️ ハイブリッドデータ復元失敗、元データを使用:', hybridError);
+            restoredProject = project;
+        }
+        
+        // 既存プロジェクトでローディング設定がない場合のみデフォルト値を追加
+        if (!restoredProject.loadingScreen) {
+            restoredProject.loadingScreen = {
                 enabled: true,
                 template: 'default',
                 backgroundColor: '#1a1a1a',
@@ -291,11 +508,13 @@ export function getProject(id) {
                 logoImage: null,
                 message: 'ARコンテンツを準備中...',
                 showProgress: true,
-                customCSS: null
+                customCSS: null,
+                selectedScreenId: 'none' // ローディング画面選択のデフォルト値
             };
         }
+        // selectedScreenIdの強制リセットを削除（ユーザーの設定を保持）
         
-        return project;
+        return restoredProject;
     } catch (error) {
         console.error('❌ プロジェクト取得エラー:', error);
         return null;
@@ -450,6 +669,182 @@ export function updateLoadingScreenSettings(projectId, loadingSettings) {
 }
 
 /**
+ * 全プロジェクトのデータを最適化してサイズを削減
+ */
+async function optimizeAllProjects() {
+    try {
+        const projects = getProjects();
+        let totalSizeBefore = JSON.stringify(projects).length;
+        
+        console.log(`📊 最適化前: ${projects.length}プロジェクト、${(totalSizeBefore / 1024).toFixed(2)}KB`);
+        
+        const optimizedProjects = [];
+        
+        for (const project of projects) {
+            const optimized = await optimizeProjectData(project);
+            optimizedProjects.push(optimized);
+        }
+        
+        // 最適化後のデータを保存
+        localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(optimizedProjects));
+        
+        let totalSizeAfter = JSON.stringify(optimizedProjects).length;
+        let savedSize = totalSizeBefore - totalSizeAfter;
+        
+        console.log(`✅ 最適化完了: ${(savedSize / 1024).toFixed(2)}KB削減 (${((savedSize / totalSizeBefore) * 100).toFixed(1)}%)`);
+        
+    } catch (error) {
+        console.error('❌ プロジェクト最適化エラー:', error);
+    }
+}
+
+/**
+ * 単一プロジェクトのデータを最適化
+ */
+async function optimizeProjectData(project) {
+    const optimized = { ...project };
+    
+    // 1. 文字列データの最適化
+    if (optimized.name) optimized.name = optimized.name.trim();
+    if (optimized.description) optimized.description = optimized.description.trim();
+    
+    // 2. 不要なプロパティを削除
+    delete optimized.tempData;
+    delete optimized.cache;
+    delete optimized.debug;
+    
+    // 3. ローディング設定の最適化
+    if (optimized.loadingScreen) {
+        // デフォルト値と同じ場合は削除
+        const defaults = {
+            enabled: true,
+            backgroundColor: '#1a1a1a',
+            textColor: '#ffffff',
+            progressColor: '#4CAF50',
+            showProgress: true
+        };
+        
+        Object.keys(defaults).forEach(key => {
+            if (optimized.loadingScreen[key] === defaults[key]) {
+                delete optimized.loadingScreen[key];
+            }
+        });
+    }
+    
+    // 4. モデル設定の最適化
+    if (optimized.modelSettings && Array.isArray(optimized.modelSettings)) {
+        optimized.modelSettings = optimized.modelSettings.map(model => {
+            const optimizedModel = { ...model };
+            
+            // デフォルト値の削除
+            if (optimizedModel.visible === true) delete optimizedModel.visible;
+            if (optimizedModel.hasAnimations === false) delete optimizedModel.hasAnimations;
+            
+            // 変換データの最適化（小数点以下2桁に丸める）
+            if (optimizedModel.transform) {
+                ['position', 'rotation', 'scale'].forEach(transformType => {
+                    if (optimizedModel.transform[transformType]) {
+                        Object.keys(optimizedModel.transform[transformType]).forEach(axis => {
+                            const value = optimizedModel.transform[transformType][axis];
+                            optimizedModel.transform[transformType][axis] = Math.round(value * 100) / 100;
+                        });
+                    }
+                });
+            }
+            
+            return optimizedModel;
+        });
+    }
+    
+    return optimized;
+}
+
+/**
+ * 重複プロジェクトの統合
+ */
+async function deduplicateProjects() {
+    try {
+        const projects = getProjects();
+        const seen = new Map();
+        const uniqueProjects = [];
+        
+        for (const project of projects) {
+            // 名前とタイプが同じで、作成時刻が近い場合は重複とみなす
+            const key = `${project.name}_${project.type}`;
+            const existing = seen.get(key);
+            
+            if (existing && Math.abs(project.created - existing.created) < 60000) { // 1分以内
+                // より新しい方を保持
+                if (project.updated > existing.updated) {
+                    // 既存のものを新しいもので置換
+                    const index = uniqueProjects.findIndex(p => p.id === existing.id);
+                    if (index >= 0) {
+                        uniqueProjects[index] = project;
+                        seen.set(key, project);
+                    }
+                }
+                // 古い方は追加しない
+            } else {
+                uniqueProjects.push(project);
+                seen.set(key, project);
+            }
+        }
+        
+        if (uniqueProjects.length < projects.length) {
+            localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(uniqueProjects));
+            console.log(`🔄 重複統合: ${projects.length - uniqueProjects.length}個の重複プロジェクトを統合`);
+        }
+        
+    } catch (error) {
+        console.error('❌ 重複統合エラー:', error);
+    }
+}
+
+/**
+ * 不要なlocalStorageデータを削除
+ */
+function cleanupNonEssentialData() {
+    try {
+        const keysToRemove = [];
+        
+        // 一時データやバックアップデータを削除
+        for (let key in localStorage) {
+            if (key.startsWith('temp_') || 
+                key.startsWith('cache_') ||
+                key.startsWith('backup_') ||
+                key.includes('_old') ||
+                key.includes('debug_')) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        // ローディング画面の古いバックアップも削除
+        for (let key in localStorage) {
+            if (key.startsWith('loadingScreenSettings_backup_')) {
+                const timestamp = parseInt(key.split('_').pop());
+                const daysSinceBackup = (Date.now() - timestamp) / (1000 * 60 * 60 * 24);
+                if (daysSinceBackup > 7) { // 7日以上古いバックアップは削除
+                    keysToRemove.push(key);
+                }
+            }
+        }
+        
+        // 削除実行
+        let totalSizeFreed = 0;
+        keysToRemove.forEach(key => {
+            const size = localStorage[key]?.length || 0;
+            totalSizeFreed += size;
+            localStorage.removeItem(key);
+        });
+        
+        console.log(`🧹 不要データ削除完了: ${keysToRemove.length}個のアイテム、${(totalSizeFreed / 1024).toFixed(2)}KB解放`);
+        
+    } catch (error) {
+        console.error('❌ 不要データクリーンアップエラー:', error);
+    }
+}
+
+/**
  * ストレージ使用状況を取得
  * @returns {Promise<Object>} - ストレージ情報
  */
@@ -477,6 +872,179 @@ export async function getProjectStorageInfo() {
     } catch (error) {
         console.error('❌ ストレージ情報取得エラー:', error);
         throw new Error(`ストレージ情報の取得に失敗しました: ${error.message}`);
+    }
+}
+
+/**
+ * プロジェクトデータをより効率的に保存（ハイブリッド方式）
+ * 大きなデータはIndexedDB、軽量データはlocalStorageに保存
+ */
+async function saveProjectHybrid(projectData) {
+    try {
+        console.log('💾 ハイブリッド保存開始:', projectData.id);
+        
+        // 大きなデータ（マーカー画像、ローディング画像など）をIndexedDBに保存
+        const largeDataKeys = [];
+        const lightweightProject = { ...projectData };
+        
+        // マーカー画像をIndexedDBに移動
+        if (projectData.markerImage && projectData.markerImage.length > 50000) { // 50KB以上
+            const markerKey = `marker_${projectData.id}`;
+            await saveToIndexedDB(markerKey, projectData.markerImage);
+            lightweightProject.markerImageRef = markerKey;
+            delete lightweightProject.markerImage;
+            largeDataKeys.push('markerImage');
+        }
+        
+        // ローディング画面の大きな画像データをIndexedDBに移動
+        if (projectData.loadingScreen) {
+            const loadingScreen = { ...projectData.loadingScreen };
+            if (loadingScreen.logoImage && loadingScreen.logoImage.length > 50000) {
+                const logoKey = `loading_logo_${projectData.id}`;
+                await saveToIndexedDB(logoKey, loadingScreen.logoImage);
+                loadingScreen.logoImageRef = logoKey;
+                delete loadingScreen.logoImage;
+                largeDataKeys.push('loadingLogo');
+            }
+            lightweightProject.loadingScreen = loadingScreen;
+        }
+        
+        // 軽量化されたプロジェクトデータのサイズをチェック
+        const lightweightSize = JSON.stringify(lightweightProject).length;
+        console.log(`📦 軽量化後サイズ: ${(lightweightSize / 1024).toFixed(2)}KB (大きなデータ: ${largeDataKeys.join(', ')})`);
+        
+        return lightweightProject;
+        
+    } catch (error) {
+        console.error('❌ ハイブリッド保存エラー:', error);
+        return projectData; // フォールバック
+    }
+}
+
+/**
+ * IndexedDBにデータを保存する汎用関数
+ */
+async function saveToIndexedDB(key, data) {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('MiruWebAR_LargeData', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const db = request.result;
+            const transaction = db.transaction(['largeData'], 'readwrite');
+            const store = transaction.objectStore('largeData');
+            
+            const putRequest = store.put({ key, data, timestamp: Date.now() });
+            putRequest.onsuccess = () => resolve();
+            putRequest.onerror = () => reject(putRequest.error);
+        };
+        
+        request.onupgradeneeded = (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains('largeData')) {
+                const store = db.createObjectStore('largeData', { keyPath: 'key' });
+                store.createIndex('timestamp', 'timestamp');
+            }
+        };
+    });
+}
+
+/**
+ * IndexedDBからデータを取得する汎用関数
+ */
+async function loadFromIndexedDB(key) {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('MiruWebAR_LargeData', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const db = request.result;
+            const transaction = db.transaction(['largeData'], 'readonly');
+            const store = transaction.objectStore('largeData');
+            
+            const getRequest = store.get(key);
+            getRequest.onsuccess = () => {
+                const result = getRequest.result;
+                resolve(result ? result.data : null);
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        };
+    });
+}
+
+/**
+ * ハイブリッド保存されたプロジェクトデータを復元
+ */
+async function loadProjectHybrid(projectData) {
+    try {
+        const restored = { ...projectData };
+        
+        // マーカー画像の復元
+        if (projectData.markerImageRef) {
+            const markerImage = await loadFromIndexedDB(projectData.markerImageRef);
+            if (markerImage) {
+                restored.markerImage = markerImage;
+                delete restored.markerImageRef;
+            }
+        }
+        
+        // ローディング画面ロゴの復元
+        if (projectData.loadingScreen && projectData.loadingScreen.logoImageRef) {
+            const logoImage = await loadFromIndexedDB(projectData.loadingScreen.logoImageRef);
+            if (logoImage) {
+                restored.loadingScreen.logoImage = logoImage;
+                delete restored.loadingScreen.logoImageRef;
+            }
+        }
+        
+        return restored;
+        
+    } catch (error) {
+        console.error('❌ ハイブリッドデータ復元エラー:', error);
+        return projectData; // エラー時は元データを返す
+    }
+}
+
+/**
+ * 緊急時のlocalStorage手動クリーンアップ（開発者用）
+ * @param {boolean} confirmDelete - 削除確認をスキップするかどうか
+ */
+export function emergencyCleanup(confirmDelete = false) {
+    if (!confirmDelete && !confirm('⚠️ 全てのプロジェクトデータが削除されます。\n本当に実行しますか？')) {
+        return;
+    }
+    
+    try {
+        const beforeSize = JSON.stringify(localStorage).length;
+        
+        // 重要でないデータを削除
+        const keysToRemove = [];
+        for (let key in localStorage) {
+            // プロジェクトデータ以外を削除対象にする
+            if (!key.startsWith('miruwebAR_projects') || 
+                key.includes('backup_') || 
+                key.includes('temp_') ||
+                key.includes('cache_')) {
+                keysToRemove.push(key);
+            }
+        }
+        
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        const afterSize = JSON.stringify(localStorage).length;
+        const freedSize = beforeSize - afterSize;
+        
+        console.log('🧹 緊急クリーンアップ完了:', {
+            削除項目数: keysToRemove.length,
+            解放容量: (freedSize / 1024).toFixed(2) + 'KB',
+            残り容量: (afterSize / 1024).toFixed(2) + 'KB'
+        });
+        
+        alert(`クリーンアップ完了！\n${keysToRemove.length}個のアイテムを削除\n${(freedSize / 1024).toFixed(2)}KB の容量を解放しました`);
+        
+    } catch (error) {
+        console.error('❌ 緊急クリーンアップエラー:', error);
+        alert('クリーンアップに失敗しました。ブラウザの設定から手動でlocalStorageをクリアしてください。');
     }
 }
 

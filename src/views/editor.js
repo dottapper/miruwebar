@@ -2,7 +2,9 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, loadProjectModels, exportProjectBundleById } from '../api/projects.js'; // IndexedDB 対応 API をインポート
+import { saveProject, getProject, loadProjectWithModels } from '../api/projects-new.js'; // 新しいIndexedDB 対応 API をインポート
+import { exportProjectBundleById } from '../api/projects.js'; // エクスポート機能は従来版を使用
+import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -408,6 +410,7 @@ export function showEditor(container) {
 
   // --- ARビューアー初期化 ---
   let viewerInstance = null;
+  let savedSelectedScreenId = 'none'; // ローディング画面選択の保持用（デフォルト値を設定）
   
   async function initialize() {
     try {
@@ -523,7 +526,8 @@ export function showEditor(container) {
       // IndexedDB からモデルデータを読み込み
       let modelData = [];
       try {
-        modelData = await loadProjectModels(projectId);
+        const projectWithModels = await loadProjectWithModels(basicProject);
+        modelData = projectWithModels.modelData;
       } catch (loadError) {
         console.error('❌ IndexedDB モデル読み込みエラー:', loadError);
       }
@@ -595,20 +599,22 @@ export function showEditor(container) {
           try {
             let modelIndex = null;
             
-            if (modelData.objectUrl && modelData.modelBlob) {
+            // loadProjectWithModels() は { objectUrl, blob, meta } を返す
+            // 旧名 modelBlob ではなく blob を参照する
+            if (modelData.objectUrl && modelData.blob) {
               try {
                 // ARビューアにモデルを読み込み
                 modelIndex = await viewerInstance.controls.loadNewModel(
                   modelData.objectUrl,
                   modelData.fileName,
-                  modelData.fileSize
+                  modelData.blob.size
                 );
                 
                 // ファイルリストにアイテムを追加
                 const fileItem = createFileListItem(
                   {
                     name: modelData.fileName,
-                    size: modelData.modelBlob.size
+                    size: modelData.blob.size
                   }, 
                   modelData.objectUrl, 
                   modelIndex
@@ -635,7 +641,7 @@ export function showEditor(container) {
                 }
                 
                 // 合計ファイルサイズを更新
-                totalFileSize += modelData.modelBlob.size;
+                totalFileSize += modelData.blob.size;
                 
                 successCount++;
                 
@@ -685,7 +691,40 @@ export function showEditor(container) {
       // ローディング設定をUIに反映
       if (project.loadingScreen) {
         loadLoadingSettingsToUI(project.loadingScreen);
+        
+        // セレクトボックスの復元が確実に行われるよう、少し遅延を入れて再度チェック
+        setTimeout(() => {
+          const loadingScreenSelect = document.getElementById('loading-screen-select');
+          if (loadingScreenSelect && project.loadingScreen.selectedScreenId) {
+            const currentValue = loadingScreenSelect.value;
+            const expectedValue = project.loadingScreen.selectedScreenId;
+            
+            if (currentValue !== expectedValue) {
+              console.log('🔄 ローディング画面選択の再復元:', {
+                current: currentValue,
+                expected: expectedValue
+              });
+              
+              loadingScreenSelect.value = expectedValue;
+              savedSelectedScreenId = expectedValue;
+              updateEditButtonState();
+            }
+          }
+        }, 100);
       }
+      
+      // ローディング画面設定の復元（シンプル版）
+      if (project.loadingScreen && project.loadingScreen.selectedScreenId) {
+        setTimeout(() => {
+          const loadingScreenSelect = document.getElementById('loading-screen-select');
+          if (loadingScreenSelect) {
+            loadingScreenSelect.value = project.loadingScreen.selectedScreenId;
+            savedSelectedScreenId = project.loadingScreen.selectedScreenId;
+            console.log('✅ ローディング画面設定を復元:', project.loadingScreen.selectedScreenId);
+          }
+        }, 200);
+      }
+      
     } catch (error) {
       console.error('プロジェクト読み込みエラー:', error);
     }
@@ -704,6 +743,26 @@ export function showEditor(container) {
       if (loadingProgressColor) loadingProgressColor.value = settings.progressColor ?? '#4CAF50';
       if (loadingProgressColorText) loadingProgressColorText.value = settings.progressColor ?? '#4CAF50';
       if (loadingShowProgress) loadingShowProgress.checked = settings.showProgress ?? true;
+      
+      // ローディング画面選択ドロップダウンの復元
+      const loadingScreenSelect = document.getElementById('loading-screen-select');
+      console.log('🔍 ローディング画面選択復元処理:', {
+        selectElement: !!loadingScreenSelect,
+        selectedScreenId: settings.selectedScreenId,
+        selectCurrentValue: loadingScreenSelect?.value,
+        settingsKeys: Object.keys(settings),
+        allSettings: settings
+      });
+      
+      if (loadingScreenSelect) {
+        const screenIdToSet = settings.selectedScreenId || 'none';
+        loadingScreenSelect.value = screenIdToSet;
+        savedSelectedScreenId = screenIdToSet; // グローバル変数に保存
+        console.log('🔄 ローディング画面選択を復元:', screenIdToSet, '→', loadingScreenSelect.value);
+        console.log('💾 savedSelectedScreenId に保存:', savedSelectedScreenId);
+        // 編集ボタンの状態も更新
+        updateEditButtonState();
+      }
       
       // ロゴ画像の復元
       if (settings.logoImage && loadingLogoImg && loadingLogoPreview) {
@@ -988,7 +1047,11 @@ export function showEditor(container) {
     // ローディング画面選択のイベントリスナー
     const loadingScreenSelect = document.getElementById('loading-screen-select');
     if (loadingScreenSelect) {
-      loadingScreenSelect.addEventListener('change', updateEditButtonState);
+      loadingScreenSelect.addEventListener('change', (event) => {
+        savedSelectedScreenId = event.target.value; // グローバル変数を更新
+        console.log('🔄 ローディング画面選択変更:', event.target.value);
+        updateEditButtonState();
+      });
     }
     
     // 新規作成ボタン
@@ -1060,6 +1123,10 @@ export function showEditor(container) {
       // ドロップダウンを更新
       const selectElement = document.getElementById('loading-screen-select');
       if (selectElement) {
+        // 現在の選択値を保持
+        const currentValue = selectElement.value;
+        console.log('🔍 現在の選択値を保持:', currentValue);
+        
         // 既存のオプションをクリア（「なし」は残す）
         const noneOption = selectElement.querySelector('option[value="none"]');
         selectElement.innerHTML = '';
@@ -1076,6 +1143,17 @@ export function showEditor(container) {
           option.textContent = `${template.name} (${template.createdAt})`;
           selectElement.appendChild(option);
         });
+        
+        // 保存されていた選択値を復元（優先順位: グローバル変数 → 現在の選択値）
+        const valueToRestore = savedSelectedScreenId || currentValue;
+        
+        if (valueToRestore && selectElement.querySelector(`option[value="${valueToRestore}"]`)) {
+          selectElement.value = valueToRestore;
+          console.log('🔄 選択値を復元:', valueToRestore, '(ソース:', savedSelectedScreenId ? 'プロジェクト' : 'UI', ')');
+        } else if (valueToRestore) {
+          console.warn('⚠️ 保存されていた選択値が見つかりません:', valueToRestore);
+          selectElement.value = 'none'; // フォールバック
+        }
         
         console.log(`✅ ローディング画面ドロップダウンを更新: ${templates.length}個`);
       }
@@ -2163,8 +2241,40 @@ export function showEditor(container) {
 
   // 現在のローディング設定を取得
   const getCurrentLoadingSettings = () => {
+    // ローディング画面選択ドロップダウンの値を取得
+    const loadingScreenSelect = document.getElementById('loading-screen-select');
+    
+    // ローディング画面選択の優先順位: DOM要素 > savedSelectedScreenId > 'none'
+    let selectedScreenId = 'none'; // デフォルト値
+    
+    if (loadingScreenSelect && loadingScreenSelect.value !== undefined && loadingScreenSelect.value !== '') {
+      // DOM要素がある場合はその値を最優先
+      selectedScreenId = loadingScreenSelect.value;
+    } else if (savedSelectedScreenId && savedSelectedScreenId !== 'none') {
+      // DOM要素が無効でも既存設定があれば使用
+      selectedScreenId = savedSelectedScreenId;
+    }
+    
+    // グローバル変数を同期更新
+    if (savedSelectedScreenId !== selectedScreenId) {
+      console.log('🔄 selectedScreenId同期更新:', savedSelectedScreenId, '->', selectedScreenId);
+      savedSelectedScreenId = selectedScreenId;
+    }
+    
+    console.log('🔄 現在のローディング設定を取得:', {
+      selectedScreenId,
+      selectElementExists: !!loadingScreenSelect,
+      selectValue: loadingScreenSelect?.value,
+      savedSelectedScreenId,
+      finalSelectedScreenId: selectedScreenId,
+      enabled: loadingEnabled?.checked,
+      template: loadingTemplate?.value,
+      syncDirection: 'DOM -> savedSelectedScreenId'
+    });
+    
     return {
       enabled: loadingEnabled?.checked ?? true,
+      selectedScreenId: selectedScreenId, // ローディング画面選択を追加
       template: loadingTemplate?.value ?? 'default',
       backgroundColor: loadingBgColor?.value ?? '#1a1a1a',
       textColor: loadingTextColor?.value ?? '#ffffff',
@@ -2175,15 +2285,73 @@ export function showEditor(container) {
     };
   };
 
-  const handleQRCodeButtonClick = () => {
-    showQRCodeModal({
-      modelName: 'current-project'
-    });
+  const handleQRCodeButtonClick = async () => {
+    // URLパラメータから現在のプロジェクトIDを取得
+    const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    const currentProjectId = urlParams.get('id');
+    
+    console.log('🔄 QRコード発行:', { currentProjectId });
+    
+    if (!currentProjectId) {
+      alert('プロジェクトを先に保存してください。\n保存後にQRコードを生成できます。');
+      return;
+    }
+    
+    // プロジェクトにモデルが含まれているかチェック
+    try {
+      const project = await getProject(currentProjectId);
+      const hasModels = project?.modelSettings && project.modelSettings.length > 0;
+      
+      if (!hasModels) {
+        const proceed = confirm('⚠️ このプロジェクトには3Dモデルが設定されていません。\n\nARコンテンツが表示されないQRコードが生成されますが、続行しますか？\n\n（推奨：先にモデルをアップロードしてから保存してください）');
+        if (!proceed) {
+          return;
+        }
+      }
+      
+      console.log('📊 プロジェクト情報:', {
+        id: currentProjectId,
+        name: project?.name,
+        modelCount: project?.modelSettings?.length || 0,
+        hasModels
+      });
+      
+    } catch (error) {
+      console.warn('⚠️ プロジェクト情報の取得に失敗:', error);
+    }
+    
+    // QRコードモーダルをasyncで呼び出し
+    (async () => {
+      try {
+        await showQRCodeModal({
+          modelName: currentProjectId
+        });
+      } catch (error) {
+        console.error('❌ QRコードモーダル表示エラー:', error);
+        alert('QRコードの生成に失敗しました。');
+      }
+    })();
   };
 
   // IndexedDB対応プロジェクト保存処理
   const handleSaveProject = () => {
     return new Promise(async (resolve, reject) => {
+      // ================== [デバッグコード開始] ==================
+      try {
+        const modelsForSaving = viewerInstance.controls.getAllModels();
+        const loadingScreenValue = document.getElementById('loading-screen-select')?.value;
+        console.log('【保存直前デバッグ】', {
+          models: modelsForSaving,
+          modelCount: modelsForSaving.length,
+          firstModelDataExists: modelsForSaving.length > 0 ? !!modelsForSaving[0].modelData : 'N/A',
+          loadingScreenSelectedId: loadingScreenValue,
+          savedSelectedScreenId_before: savedSelectedScreenId
+        });
+      } catch (e) {
+        console.error('デバッグコードでエラー', e);
+      }
+      // ================== [デバッグコード終了] ==================
+
       // URLパラメータから現在のプロジェクトIDを取得
       const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
       const currentProjectId = urlParams.get('id');
@@ -2192,16 +2360,37 @@ export function showEditor(container) {
       // 既存プロジェクトの場合は現在の情報を取得
       let currentProject = null;
       if (isEdit) {
-        currentProject = getProject(currentProjectId);
+        console.log('🔄 プロジェクト取得開始:', currentProjectId);
+        
+        // まず全プロジェクト一覧を確認
+        const allProjects = JSON.parse(localStorage.getItem('miruwebAR_projects') || '[]');
+        console.log('📊 全プロジェクト一覧:', allProjects.map(p => ({ id: p.id, name: p.name })));
+        
+        try {
+          currentProject = await getProject(currentProjectId);
+          console.log('🔍 既存プロジェクト情報を取得:', {
+            id: currentProject?.id,
+            name: currentProject?.name,
+            description: currentProject?.description,
+            type: typeof currentProject,
+            isObject: !!currentProject && typeof currentProject === 'object'
+          });
+        } catch (error) {
+          console.error('❌ プロジェクト取得エラー:', error);
+        }
       }
 
       // 保存確認モーダルを表示
-      showSaveProjectModal({
+      const modalData = {
         isEdit: isEdit,
         projectId: currentProjectId,
         currentName: currentProject?.name || '',
         currentDescription: currentProject?.description || ''
-      }, async (projectData) => {
+      };
+      
+      console.log('📝 保存モーダルに渡すデータ:', modalData);
+      
+      showSaveProjectModal(modalData, async (projectData) => {
       try {
         console.log('保存処理開始:', projectData);
         console.log('arType:', arType);
@@ -2217,6 +2406,16 @@ export function showEditor(container) {
           preview: markerImageData?.substring(0, 50) || 'なし'
         });
         
+        // プロジェクト保存前に最新のUI状態を同期
+        const loadingScreenSelect = document.getElementById('loading-screen-select');
+        if (loadingScreenSelect && loadingScreenSelect.value !== savedSelectedScreenId) {
+          console.log('🔧 保存前にローディング画面選択を同期:', {
+            oldValue: savedSelectedScreenId,
+            newValue: loadingScreenSelect.value
+          });
+          savedSelectedScreenId = loadingScreenSelect.value;
+        }
+        
         // プロジェクトデータを構築
         const saveData = {
           id: projectData.id,
@@ -2227,6 +2426,41 @@ export function showEditor(container) {
           // ローディング設定を保存（現在のUI設定を反映）
           loadingScreen: getCurrentLoadingSettings()
         };
+
+        // ローディング画面の選択テンプレートを反映
+        try {
+          const selectedId = saveData.loadingScreen?.selectedScreenId;
+          if (selectedId && selectedId !== 'none') {
+            const template = getLoadingScreenTemplate(selectedId);
+            if (template?.settings?.loadingScreen) {
+              const t = template.settings.loadingScreen;
+              // テンプレートの主要プロパティを保存データに反映
+              saveData.loadingScreen.backgroundColor = t.backgroundColor ?? saveData.loadingScreen.backgroundColor;
+              saveData.loadingScreen.textColor = t.textColor ?? saveData.loadingScreen.textColor;
+              // テンプレートでは loadingMessage を使う場合があるため、message にマップ
+              if (t.loadingMessage && typeof t.loadingMessage === 'string') {
+                saveData.loadingScreen.message = t.loadingMessage;
+              }
+              // アクセントカラー相当（存在すれば反映）
+              if (t.accentColor) {
+                saveData.loadingScreen.accentColor = t.accentColor;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ ローディングテンプレート適用に失敗しました（保存は継続）:', e);
+        }
+        
+        console.log('💾 保存するローディング画面設定:', saveData.loadingScreen);
+        console.log('🔍 保存データ詳細（保存前の完全なデータ）:', {
+          id: saveData.id,
+          name: saveData.name,
+          description: saveData.description,
+          type: saveData.type,
+          loadingScreen: saveData.loadingScreen,
+          hasMarkerImage: !!saveData.markerImage,
+          markerImageSize: saveData.markerImage ? (saveData.markerImage.length / 1024).toFixed(2) + 'KB' : '0KB'
+        });
         console.log('🔍 保存データ詳細:', {
           id: saveData.id,
           name: saveData.name,
@@ -2236,12 +2470,55 @@ export function showEditor(container) {
         });
 
         // プロジェクトを保存
+        console.log('🚀 プロジェクト保存開始:', {
+          dataKeys: Object.keys(saveData),
+          nameLength: saveData.name?.length || 0,
+          descriptionLength: saveData.description?.length || 0,
+          hasMarkerImage: !!saveData.markerImage,
+          markerImageSize: saveData.markerImage ? (saveData.markerImage.length / 1024).toFixed(2) + 'KB' : '0KB',
+          loadingScreenKeys: saveData.loadingScreen ? Object.keys(saveData.loadingScreen) : []
+        });
         
         let savedProject;
         try {
           savedProject = await saveProject(saveData, viewerInstance);
+          console.log('✅ プロジェクト保存成功:', {
+            id: savedProject.id,
+            name: savedProject.name,
+            selectedScreenId: savedProject.loadingScreen?.selectedScreenId,
+            loadingScreenKeys: Object.keys(savedProject.loadingScreen || {})
+          });
+
+          // QRコード用のproject.jsonファイルをサーバーに生成
+          try {
+            console.log('🔄 QRコード用project.json生成開始:', savedProject.id);
+            const serverResponse = await fetch(`/api/projects/${savedProject.id}/save`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                projectData: savedProject
+              })
+            });
+
+            if (serverResponse.ok) {
+              const serverResult = await serverResponse.json();
+              console.log('✅ QRコード用project.json生成成功:', serverResult.url);
+            } else {
+              console.warn('⚠️ QRコード用project.json生成失敗:', serverResponse.statusText);
+            }
+          } catch (apiError) {
+            console.warn('⚠️ QRコード用project.json API呼び出し失敗:', apiError.message);
+            // QRコード用ファイル生成失敗は致命的ではないため、保存処理は継続
+          }
         } catch (saveError) {
           console.error('❌ プロジェクト保存エラー:', saveError);
+          console.error('❌ エラー詳細:', {
+            message: saveError.message,
+            name: saveError.name,
+            stack: saveError.stack?.substring(0, 500)
+          });
           throw saveError;
         }
         
@@ -2262,6 +2539,13 @@ export function showEditor(container) {
         `;
         notification.textContent = `プロジェクト「${savedProject.name}」を保存しました`;
         document.body.appendChild(notification);
+
+        // URLを更新してプロジェクトIDを含める（新規保存の場合のみ）
+        const currentUrlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+        if (!currentUrlParams.get('id') && savedProject.id) {
+          console.log('📝 URLを更新:', savedProject.id);
+          window.location.hash = `#/editor?id=${savedProject.id}`;
+        }
 
         // 3秒後に通知を削除
         setTimeout(() => {
@@ -2294,8 +2578,18 @@ export function showEditor(container) {
         let errorMessage = 'プロジェクトの保存に失敗しました';
         if (error.message.includes('QuotaExceededError') || error.message.includes('容量制限')) {
           errorMessage = '容量制限エラー：古いプロジェクトを自動削除して再保存します';
+        } else if (error.message.includes('IndexedDB')) {
+          errorMessage = 'データベース保存エラー：ブラウザの設定を確認してください';
+        } else if (error.message.includes('localStorage')) {
+          errorMessage = 'ローカルストレージエラー：ブラウザの容量制限に達しています';
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'ネットワークエラー：サーバーとの通信に失敗しました';
+        } else {
+          errorMessage = `保存エラー：${error.message.substring(0, 100)}`;
+        }
           
-          // 容量制限エラーの場合、ユーザーに容量クリア機能を提供
+        // 容量制限エラーの場合、ユーザーに容量クリア機能を提供
+        if (error.message.includes('QuotaExceededError') || error.message.includes('容量制限')) {
           setTimeout(() => {
             if (confirm('ブラウザの保存容量が不足しています。\n\n古いプロジェクトを削除して再保存しますか？\n\n※「キャンセル」を選ぶと手動でlocalStorageをクリアできます。')) {
               // 再保存を試行
@@ -2310,12 +2604,6 @@ export function showEditor(container) {
               }
             }
           }, 100);
-        } else if (error.message.includes('プロジェクトデータの作成に失敗')) {
-          errorMessage = '3Dモデルデータの処理に失敗しました';
-        } else if (error.message.includes('localStorage')) {
-          errorMessage = 'ブラウザの保存領域に問題があります';
-        } else if (error.message) {
-          errorMessage = `エラー: ${error.message}`;
         }
         
         // エラー通知

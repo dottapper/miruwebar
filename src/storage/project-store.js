@@ -238,6 +238,11 @@ function createLightweightProject(projectData) {
       showGrid: Boolean(projectData.settings?.showGrid),
       backgroundColor: projectData.settings?.backgroundColor || 0x222222
     },
+
+    // ローディング画面（選択のみを軽量保存）
+    loadingScreen: projectData.loadingScreen
+      ? { selectedScreenId: projectData.loadingScreen.selectedScreenId || 'none' }
+      : { selectedScreenId: 'none' },
     
     // マーカー画像データ（小さい場合のみ保存）
     markerImage: projectData.markerImage && projectData.markerImage.length < 100000 ? projectData.markerImage : null,

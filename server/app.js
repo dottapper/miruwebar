@@ -27,11 +27,21 @@ fs.ensureDirSync(path.join(uploadsDir, 'models'));
 fs.ensureDirSync(path.join(uploadsDir, 'markers'));
 fs.ensureDirSync(path.join(uploadsDir, 'logos'));
 
+// プロジェクトディレクトリの作成
+const projectsDir = path.join(__dirname, '../public/projects');
+fs.ensureDirSync(projectsDir);
+
 // アップロードファイルの配信
 app.use('/uploads', express.static(uploadsDir));
 
+// プロジェクトファイルの配信（QRコード用）
+app.use('/projects', express.static(projectsDir));
+
 // 静的ファイルの配信（フロントエンド）
 app.use(express.static(path.join(__dirname, '../dist')));
+
+// publicディレクトリの配信（アセット用）
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
 
 // 基本的なAPIルート
 app.get('/api/health', (req, res) => {
@@ -53,6 +63,58 @@ app.get('/api/projects', (req, res) => {
       updated: new Date().toISOString()
     }
   ]);
+});
+
+// プロジェクトのproject.jsonファイル保存API
+app.post('/api/projects/:projectId/save', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { projectData } = req.body;
+    
+    if (!projectData) {
+      return res.status(400).json({ error: 'プロジェクトデータが必要です' });
+    }
+    
+    // プロジェクト用ディレクトリを作成
+    const projectDir = path.join(projectsDir, projectId);
+    await fs.ensureDir(projectDir);
+    
+    // viewer用の簡易project.jsonを生成
+    const viewerProject = {
+      name: projectData.name,
+      description: projectData.description,
+      type: projectData.type,
+      loadingScreen: projectData.loadingScreen,
+      // 実際のモデルファイルは別途管理されるため、参照のみ
+      models: (projectData.modelSettings || []).map((m) => ({
+        url: `/assets/${m.fileName}`,
+        fileName: m.fileName,
+        fileSize: m.fileSize
+      }))
+    };
+    
+    // project.jsonファイルを保存
+    const projectFilePath = path.join(projectDir, 'project.json');
+    await fs.writeJson(projectFilePath, viewerProject, { spaces: 2 });
+    
+    console.log(`✅ プロジェクトファイル保存完了: ${projectFilePath}`);
+    console.log(`📁 プロジェクトディレクトリ: ${projectDir}`);
+    console.log(`🔗 アクセスURL: http://localhost:3000/public/projects/${projectId}/project.json`);
+    
+    res.json({ 
+      success: true, 
+      projectId,
+      filePath: projectFilePath,
+      url: `/projects/${projectId}/project.json`
+    });
+    
+  } catch (error) {
+    console.error('❌ プロジェクト保存エラー:', error);
+    res.status(500).json({ 
+      error: 'プロジェクト保存に失敗しました',
+      message: error.message 
+    });
+  }
 });
 
 // AR表示用エンドポイント

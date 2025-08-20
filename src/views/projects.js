@@ -387,26 +387,31 @@ export default function showProjects(container) {
               console.log('削除処理を開始します:', project.name);
               showConfirmDialog(
                 `「${project.name}」を削除してもよろしいですか？`,
-                () => {
+                async () => {
                   console.log('削除が確認されました。deleteProject関数を呼び出します:', project.id);
-                  const success = deleteProject(project.id);
-                  console.log('削除結果:', success);
-                  
-                  if (success) {
-                    console.log('削除成功 - プロジェクトリストを更新します');
-                    renderProjectList(currentPage);
-                    const notification = document.createElement('div');
-                    notification.className = 'notification success';
-                    notification.textContent = `「${project.name}」を削除しました`;
-                    document.body.appendChild(notification);
-                    setTimeout(() => {
-                      if (document.body.contains(notification)) {
-                        document.body.removeChild(notification);
-                      }
-                    }, 3000);
-                  } else {
-                    console.error('削除に失敗しました');
-                    alert('削除に失敗しました。もう一度お試しください。');
+                  try {
+                    const success = await deleteProject(project.id);
+                    console.log('削除結果:', success);
+                    
+                    if (success) {
+                      console.log('削除成功 - プロジェクトリストを更新します');
+                      renderProjectList(currentPage);
+                      const notification = document.createElement('div');
+                      notification.className = 'notification success';
+                      notification.textContent = `「${project.name}」を削除しました`;
+                      document.body.appendChild(notification);
+                      setTimeout(() => {
+                        if (document.body.contains(notification)) {
+                          document.body.removeChild(notification);
+                        }
+                      }, 3000);
+                    } else {
+                      console.error('削除に失敗しました');
+                      alert('削除に失敗しました。もう一度お試しください。');
+                    }
+                  } catch (error) {
+                    console.error('削除処理でエラーが発生しました:', error);
+                    alert('削除処理でエラーが発生しました: ' + error.message);
                   }
                 }
               );

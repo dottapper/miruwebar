@@ -5,22 +5,18 @@
 import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
 import {
   INDIVIDUAL_IMAGE_MAX_BYTES,
+  INDIVIDUAL_IMAGE_MAX_MB,
   TOTAL_IMAGES_MAX_BYTES,
   TOTAL_IMAGES_MAX_MB,
   ALLOWED_MIME_TYPES,
   COMPRESSION_SETTINGS,
   ERROR_MESSAGES,
   IMAGE_FORMAT_LABELS,
-  ERROR_TYPES
+  ERROR_TYPES,
+  CAPACITY_UTILS,
+  ACCEPT_ATTRIBUTES
 } from './constants.js';
-import { createMainEditorTemplate } from './ui-templates.js';
 import { settingsAPI, defaultSettings, validateAndFixColor } from './settings.js';
-import { 
-  getTemplate,
-  saveTemplate,
-  deleteTemplate,
-  getAllTemplates
-} from './template-manager.js';
 import { 
   saveLoadingScreenTemplate, 
   getLoadingScreenTemplate, 
@@ -392,6 +388,28 @@ export function setupFileDropzones() {
 
 // ファイル選択処理
 function handleFileSelection(file, dropzone, removeButton) {
+  // 基本的な入力検証
+  if (!file) {
+    console.warn('ファイルが選択されていません');
+    return;
+  }
+  
+  if (!dropzone) {
+    console.error('ドロップゾーンが見つかりません');
+    return;
+  }
+  
+  // ファイルサイズの事前チェック（空ファイルや異常に大きなファイルを除外）
+  if (file.size === 0) {
+    showLogoError('❌ 空のファイルです', 'サイズが0バイトのファイルは選択できません');
+    return;
+  }
+  
+  if (file.size > 50 * 1024 * 1024) { // 50MB制限
+    showLogoError('❌ ファイルが大きすぎます', '50MB以下のファイルを選択してください');
+    return;
+  }
+  
   // ファイルタイプの検証
   if (!ALLOWED_MIME_TYPES.includes(file.type)) {
     showLogoError(
@@ -405,8 +423,8 @@ function handleFileSelection(file, dropzone, removeButton) {
   if (file.size > INDIVIDUAL_IMAGE_MAX_BYTES) {
     const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
     showLogoError(
-      `❌ 個別ファイルサイズが大きすぎます\n\nファイル名: ${file.name}\n現在のサイズ: ${fileSizeMB}MB\n個別ファイル制限: 2MB`,
-      '各画像ファイルは2MB以下にしてください'
+      ERROR_MESSAGES.individualSizeExceeded(fileSizeMB),
+      `各画像ファイルは${INDIVIDUAL_IMAGE_MAX_MB}MB以下にしてください`
     );
     return;
   }
@@ -541,27 +559,31 @@ function removeFile(dropzone, removeButton) {
   let defaultText = 'ファイルをドロップ';
   let icon = '📁';
   let formats = IMAGE_FORMAT_LABELS.default;
-  let acceptTypes = 'image/*';
+  let acceptTypes = ACCEPT_ATTRIBUTES.default;
   
   if (id === 'thumbnailDropzone') {
     defaultText = 'サムネイル画像をドロップ';
     icon = '🖼️';
     formats = IMAGE_FORMAT_LABELS.thumbnail;
+    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
   } else if (id === 'startLogoDropzone') {
     defaultText = 'ロゴ画像をドロップ';
     icon = '🖼️';
     formats = IMAGE_FORMAT_LABELS.default;
-    acceptTypes = 'image/*,.gif';
+    acceptTypes = ACCEPT_ATTRIBUTES.startLogo;
   } else if (id === 'loadingLogoDropzone') {
     defaultText = 'ロゴをドロップ';
     icon = '🖼️';
     formats = IMAGE_FORMAT_LABELS.logo;
+    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
   } else if (id === 'surfaceGuideImageDropzone') {
     defaultText = 'マーカー画像をドロップ';
     formats = IMAGE_FORMAT_LABELS.default;
+    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
   } else if (id === 'worldGuideImageDropzone') {
     defaultText = 'ガイド画像をドロップ';
     formats = IMAGE_FORMAT_LABELS.default;
+    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
   }
   
   // 完全なドロップゾーン構造を再作成
@@ -786,41 +808,6 @@ export function setupSidebarMenuHandlers() {
   }
 }
 
-// テンプレート一覧を読み込み
-function loadTemplateList() {
-  const templateListContainer = document.getElementById('saved-templates-list');
-  if (!templateListContainer) {
-    console.error('テンプレート一覧コンテナが見つかりません');
-    return;
-  }
-  
-  try {
-    // 保存済みテンプレートを取得
-    const templates = getStoredTemplates();
-    const currentTemplateId = getCurrentActiveTemplateId();
-    
-    if (templates.length === 0) {
-      templateListContainer.innerHTML = '<div class="no-templates">保存済みテンプレートはありません</div>';
-      return;
-    }
-    
-    // テンプレート一覧のHTMLを生成
-    const templateListHTML = templates.map(template => `
-      <div class="loading-screen-editor__template-item ${template.id === currentTemplateId ? 'loading-screen-editor__template-item--active' : ''}" 
-           data-template-id="${template.id}">
-        <div class="loading-screen-editor__template-name">${template.name}</div>
-        <div class="loading-screen-editor__template-date">${template.createdAt}</div>
-      </div>
-    `).join('');
-    
-    templateListContainer.innerHTML = templateListHTML;
-    
-    // テンプレートアイテムのイベントリスナーを設定
-    setupTemplateItemHandlers();
-  } catch (error) {
-    console.error('テンプレート一覧の読み込みに失敗しました:', error);
-  }
-}
 
 // テンプレートアイテムのイベントハンドラー設定
 function setupTemplateItemHandlers() {
@@ -1293,42 +1280,6 @@ function showNotification(message, type = 'info') {
   }, displayTime);
 }
 
-// 現在の設定を取得
-function getCurrentSettings() {
-  const settings = {
-    startScreen: {},
-    loadingScreen: {},
-    guideScreen: {}
-  };
-
-  // すべての入力要素から値を取得
-  const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider, .loading-screen-editor__color-picker');
-  
-  inputs.forEach(input => {
-    const id = input.id;
-    if (!id) return;
-
-    const [screenType, property] = id.split('-');
-    if (settings[screenType] && property) {
-      let value = input.value;
-      
-      // 数値の場合は変換
-      if (input.type === 'range') {
-        value = parseFloat(value);
-      }
-      
-      settings[screenType][property] = value;
-    }
-  });
-
-  // ロゴタイプラジオボタンの値を取得
-  const logoTypeRadio = document.querySelector('input[name="loadingLogoType"]:checked');
-  if (logoTypeRadio) {
-    settings.loadingScreen.logoType = logoTypeRadio.value;
-  }
-
-  return settings;
-}
 
 // URLパラメータからタイトルを更新する関数
 function updateEditorTitleFromUrl() {
@@ -1565,8 +1516,8 @@ function calculateImageDataSize(settingsObject = null) {
         if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
           const base64Data = imageSrc.split(',')[1];
           if (base64Data) {
-            // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
-            const originalSize = (base64Data.length * 3) / 4;
+            // Base64から元のバイナリサイズに変換（パディング考慮）
+            const originalSize = CAPACITY_UTILS.calculateBinarySize(base64Data);
             totalImageSize += originalSize;
           }
         }
@@ -1588,8 +1539,8 @@ function calculateImageDataSize(settingsObject = null) {
           // data:image/jpeg;base64, の部分を除いてBase64データのサイズを計算
           const base64Data = img.src.split(',')[1];
           if (base64Data && base64Data.length > 0) {
-            // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
-            const originalSize = (base64Data.length * 3) / 4;
+            // Base64から元のバイナリサイズに変換（パディング考慮）
+            const originalSize = CAPACITY_UTILS.calculateBinarySize(base64Data);
             totalImageSize += originalSize;
             console.log(`📊 画像データサイズ (${id}):`, {
               base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
@@ -1633,14 +1584,14 @@ export function updateStorageUsageDisplay() {
     });
     
     const imageDataSize = calculateImageDataSize(currentSettings);
-    const maxSize = 3 * 1024 * 1024; // 3MB制限（複数画像の合計）
+    const maxSize = TOTAL_IMAGES_MAX_BYTES; // 全画像の合計制限
     
     const usageInfo = {
       total: imageDataSize,
       totalKB: (imageDataSize / 1024).toFixed(2),
       totalMB: (imageDataSize / 1024 / 1024).toFixed(2),
       maxSize,
-      maxSizeMB: (maxSize / 1024 / 1024).toFixed(2), // 小数点2桁で統一
+      maxSizeMB: TOTAL_IMAGES_MAX_MB.toFixed(2), // 小数点2桁で統一
       usagePercentage: ((imageDataSize / maxSize) * 100).toFixed(1),
       isNearLimit: (imageDataSize / maxSize) > 0.8,
       isOverLimit: imageDataSize > maxSize
@@ -1779,7 +1730,7 @@ function resetDOMElements() {
         
         if (dropzoneId === 'startLogoDropzone') {
           defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*,.gif" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.startLogo}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
               <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
@@ -1792,7 +1743,7 @@ ${IMAGE_FORMAT_LABELS.default}
           `;
         } else if (dropzoneId === 'loadingLogoDropzone') {
           defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
               <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
@@ -1805,7 +1756,7 @@ ${IMAGE_FORMAT_LABELS.logo}
           `;
         } else if (dropzoneId === 'surfaceGuideImageDropzone') {
           defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
               <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
@@ -1818,7 +1769,7 @@ ${IMAGE_FORMAT_LABELS.default}
           `;
         } else if (dropzoneId === 'worldGuideImageDropzone') {
           defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
               <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
@@ -1832,7 +1783,7 @@ ${IMAGE_FORMAT_LABELS.default}
         } else {
           // thumbnailDropzone やその他の場合のデフォルト
           defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
               <div class="loading-screen-editor__drop-zone-text">画像をドラッグ&ドロップ</div>
@@ -2037,7 +1988,7 @@ function resetLoadingGeneralSettings() {
     const loadingLogoDropzone = document.getElementById('loadingLogoDropzone');
     if (loadingLogoDropzone) {
       loadingLogoDropzone.innerHTML = `
-        <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+        <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
         <div class="loading-screen-editor__drop-zone">
           <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
           <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>

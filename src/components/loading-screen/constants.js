@@ -23,6 +23,18 @@ export const ALLOWED_MIME_TYPES = [
   'image/gif'
 ];
 
+// ===== 入力フィールドのaccept属性 =====
+export const ACCEPT_ATTRIBUTES = {
+  // デフォルト（GIFなし）
+  default: 'image/*',
+  
+  // スタート画面ロゴ（GIFサポート）
+  startLogo: 'image/*,.gif',
+  
+  // その他のロゴやガイド画像（GIFなし）
+  otherImages: 'image/*'
+};
+
 // ===== 画像形式表示テキスト =====
 export const IMAGE_FORMAT_LABELS = {
   // 一般的な画像形式
@@ -90,6 +102,28 @@ export const ERROR_TYPES = {
   
   // その他の一般的なエラー
   GENERAL: 'general'
+};
+
+// ===== 容量計算ユーティリティ =====
+export const CAPACITY_UTILS = {
+  /**
+   * Base64文字列から元のバイナリサイズを計算
+   * パディング処理も考慮した正確な計算
+   * @param {string} base64Data - Base64データ部分（data:image/...;base64, を除く）
+   * @returns {number} 元のバイナリサイズ（バイト）
+   */
+  calculateBinarySize(base64Data) {
+    if (!base64Data || typeof base64Data !== 'string') {
+      return 0;
+    }
+    
+    // パディング文字「=」の数を計算
+    const padding = (base64Data.match(/=/g) || []).length;
+    
+    // Base64から元のバイナリサイズに変換
+    // Base64は3バイトを4文字で表現するため、元サイズ = (文字数 * 3) / 4 - パディング
+    return (base64Data.length * 3) / 4 - padding;
+  }
 };
 
 // ===== デバッグフラグ =====

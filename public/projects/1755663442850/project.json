@@ -1,0 +1,12 @@
+{
+  "name": "テスト01",
+  "description": "",
+  "type": "marker",
+  "models": [
+    {
+      "url": "/assets/kuri_danceNLA.glb",
+      "fileName": "kuri_danceNLA.glb",
+      "fileSize": 14738660
+    }
+  ]
+}

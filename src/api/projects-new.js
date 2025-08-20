@@ -200,6 +200,9 @@ async function createProjectDataWithIDB(data, viewerInstance) {
       // マーカー画像データ（小さい場合のみ）
       markerImage: data.markerImage && data.markerImage.length < 100000 ? data.markerImage : null,
       
+      // ローディング画面設定
+      loadingScreen: data.loadingScreen || null,
+      
       created: data.created || Date.now(),
       updated: Date.now(),
       

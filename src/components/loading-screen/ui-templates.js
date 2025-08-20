@@ -3,7 +3,7 @@
  */
 
 import { defaultSettings } from './settings.js';
-import { IMAGE_FORMAT_LABELS } from './constants.js';
+import { IMAGE_FORMAT_LABELS, ACCEPT_ATTRIBUTES } from './constants.js';
 
 // テンプレート定義
 export function createStartTabContent(currentSettings = defaultSettings) {
@@ -22,7 +22,7 @@ export function createStartTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">ロゴ画像</label>
           <div class="loading-screen-editor__file-preview" id="startLogoDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*,.gif" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.startLogo}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
               <div class="loading-screen-editor__drop-zone-text">ロゴ画像をドロップ</div>
@@ -199,7 +199,7 @@ export function createGeneralTabContent(currentSettings = defaultSettings) {
       <div class="loading-screen-editor__form-group" id="loading-custom-logo-section" style="display: ${currentSettings.loadingScreen.logoType === 'custom' ? 'block' : 'none'};">
         <label class="loading-screen-editor__label">ローディング用ロゴ</label>
         <div class="loading-screen-editor__file-preview" id="loadingLogoDropzone">
-          <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+          <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
           <div class="loading-screen-editor__drop-zone">
             <div class="loading-screen-editor__drop-zone-icon">🖼️</div>
             <div class="loading-screen-editor__drop-zone-text">ロゴをドロップ</div>
@@ -354,7 +354,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">マーカー画像</label>
           <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
               <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
@@ -417,7 +417,7 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">ガイド画像</label>
           <div class="loading-screen-editor__file-preview" id="worldGuideImageDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="image/*" style="display: none;">
+            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
             <div class="loading-screen-editor__drop-zone">
               <div class="loading-screen-editor__drop-zone-icon">📁</div>
               <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
@@ -498,16 +498,20 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
           <div class="content-header-title">
             <h1 id="editor-title">ローディング画面エディタ</h1>
             <span class="template-name-badge" id="template-name-badge" style="display: none;"></span>
-            <div class="storage-usage-display" id="storage-usage-display">
-              <div class="storage-usage-bar">
-                <div class="storage-usage-fill" id="storage-usage-fill"></div>
-              </div>
-              <div class="storage-usage-text" id="storage-usage-text">読み込み中...</div>
-            </div>
           </div>
           <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
             ← プロジェクト一覧に戻る
           </button>
+        </div>
+        
+        <!-- 固定位置のストレージ使用量表示 -->
+        <div class="storage-usage-container">
+          <div class="storage-usage-display" id="storage-usage-display">
+            <div class="storage-usage-bar">
+              <div class="storage-usage-fill" id="storage-usage-fill"></div>
+            </div>
+            <div class="storage-usage-text" id="storage-usage-text">読み込み中...</div>
+          </div>
         </div>
         
         <div class="loading-screen-editor__editor-container">

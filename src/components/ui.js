@@ -1,8 +1,20 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
-// QRCodeライブラリを遅延読み込みに変更
-// import QRCode from 'qrcode';
+// QRCodeライブラリをトップレベルでインポート
+let QRCodeLib = null;
+async function loadQRCode() {
+  if (!QRCodeLib) {
+    try {
+      const module = await import('qrcode');
+      QRCodeLib = module.default || module;
+    } catch (error) {
+      console.error('QRCodeライブラリの読み込み失敗:', error);
+      throw error;
+    }
+  }
+  return QRCodeLib;
+}
 
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
@@ -186,6 +198,14 @@ export function showNewProjectModal() {
   export function showSaveProjectModal(options = {}, callback) {
     const { isEdit = false, projectId = null, currentName = '', currentDescription = '' } = options;
     
+    console.log('📝 showSaveProjectModal 呼び出し:', {
+      isEdit,
+      projectId,
+      currentName,
+      currentDescription,
+      optionsType: typeof options
+    });
+    
     // モーダルの背景（オーバーレイ）要素を作成
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'modal-overlay';
@@ -214,13 +234,24 @@ export function showNewProjectModal() {
         </div>
     `;
     
+    console.log('🔍 生成されたHTML input value:', {
+      nameInputHTML: `<input type="text" id="project-name" value="${currentName}" placeholder="プロジェクト名を入力" required>`,
+      descriptionHTML: `<textarea id="project-description" placeholder="プロジェクトの説明を入力">${currentDescription}</textarea>`
+    });
+    
     // モーダルをDOMに追加
     document.body.appendChild(modalOverlay);
     
-    // フォーム送信処理
-    const form = document.getElementById('save-project-form');
+    // DOM追加後の実際の値を確認
     const nameInput = document.getElementById('project-name');
     const descriptionInput = document.getElementById('project-description');
+    console.log('🔍 DOM追加後の実際の値:', {
+      nameValue: nameInput?.value,
+      descriptionValue: descriptionInput?.value
+    });
+    
+    // フォーム送信処理
+    const form = document.getElementById('save-project-form');
     
     form.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -268,58 +299,235 @@ export function showNewProjectModal() {
    * QRコード表示用のモーダルを表示する
    * @param {Object} options - モーダルのオプション
    */
-  export function showQRCodeModal(options = {}) {
+  /**
+   * ローカルネットワークIP取得用関数（動的IP検出）
+   */
+  async function getLocalNetworkIP() {
+    console.log('🔍 IP検出開始 - 動的ネットワークIP取得');
+    
+    // 現在のhostnameがlocalhostでない場合はそれを使用
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      console.log('🌐 現在のhostnameを使用:', window.location.hostname);
+      return window.location.hostname;
+    }
+    
+    // Method 1: WebRTCでIP検出を試行（改良版）
+    const webrtcIP = await getWebRTCIP();
+    if (webrtcIP) {
+      console.log('✅ WebRTC IP検出成功:', webrtcIP);
+      return webrtcIP;
+    }
+    
+    // Method 2: Viteサーバー情報APIを試行
+    const viteIP = await getViteNetworkIP();
+    if (viteIP) {
+      console.log('✅ Vite Network IP検出成功:', viteIP);
+      return viteIP;
+    }
+    
+    // Method 3: 一般的なネットワーク範囲をチェック
+    const commonIP = await detectCommonNetworkIP();
+    if (commonIP) {
+      console.log('✅ 一般的なネットワークIP検出成功:', commonIP);
+      return commonIP;
+    }
+    
+    // フォールバック: localhost
+    console.warn('⚠️ IP自動検出に失敗、localhostを使用');
+    return 'localhost';
+  }
+
+  /**
+   * WebRTCを使用したIP検出（改良版）
+   */
+  async function getWebRTCIP() {
+    return new Promise((resolve) => {
+      const rtc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
+      
+      let resolved = false;
+      let detectedIPs = [];
+      
+      rtc.createDataChannel('');
+      
+      rtc.onicecandidate = (e) => {
+        if (!e.candidate || resolved) return;
+        
+        const candidate = e.candidate.candidate;
+        const ipMatch = candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+        
+        if (ipMatch) {
+          const ip = ipMatch[1];
+          // ローカルネットワークIPを優先（192.168.x.x, 10.x.x.x, 172.16-31.x.x）
+          if (ip.startsWith('192.168.') || ip.startsWith('10.') || 
+              (ip.startsWith('172.') && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31)) {
+            if (!detectedIPs.includes(ip)) {
+              detectedIPs.push(ip);
+              console.log('🌐 WebRTC検出IP:', ip);
+              
+              // 最初のローカルIPで即座に解決
+              resolved = true;
+              rtc.close();
+              resolve(ip);
+            }
+          }
+        }
+      };
+      
+      rtc.createOffer().then(offer => rtc.setLocalDescription(offer)).catch(() => {});
+      
+      // タイムアウト（3秒に延長）
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          rtc.close();
+          resolve(null);
+        }
+      }, 3000);
+    });
+  }
+
+  /**
+   * Viteサーバーのネットワーク情報を取得
+   */
+  async function getViteNetworkIP() {
+    try {
+      // Viteの開発サーバー情報APIを試行
+      const response = await fetch('/api/network-info', {
+        method: 'GET',
+        cache: 'no-cache'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.networkIP) {
+          return data.networkIP;
+        }
+      }
+    } catch (error) {
+      console.log('📡 Vite Network API未対応 - スキップ');
+    }
+    
+    return null;
+  }
+
+  /**
+   * 一般的なネットワーク範囲でのIP検出
+   */
+  async function detectCommonNetworkIP() {
+    const commonRanges = [
+      '192.168.1.0/24',
+      '192.168.0.0/24',
+      '192.168.11.0/24',
+      '10.0.0.0/24',
+      '172.16.0.0/24'
+    ];
+    
+    // WebRTCで検出できなかった場合の簡易チェック
+    const userAgent = navigator.userAgent;
+    if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
+      // モバイルデバイスの場合はより保守的に
+      return null;
+    }
+    
+    // デスクトップの場合は一般的なIPを推測
+    const networkHints = [
+      '192.168.1.100',
+      '192.168.0.100',
+      '192.168.11.100',
+      '10.0.0.100'
+    ];
+    
+    // 実際にはこれは推測なので、WebRTCが失敗した場合のみ使用
+    return null;
+  }
+
+  export async function showQRCodeModal(options = {}) {
+    console.log('🚀 QRコードモーダル開始:', {
+      timestamp: new Date().toISOString(),
+      options,
+      existingModals: document.querySelectorAll('.modal-overlay').length,
+      currentURL: window.location.href
+    });
+    
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'modal-overlay';
     
-    // 選択中のモデル名をIDとして使用（本番環境では実際のIDを使用）
-    const modelId = options.modelName ? encodeURIComponent(options.modelName) : 'sample';
+    // プロジェクトIDを正確に使用（modelNameではなくプロジェクトIDを使用）
+    const projectId = options.modelName ? encodeURIComponent(options.modelName) : 'sample';
     
-    // 現在のホスト情報を取得
-    const currentHost = window.location.host;
-    const isLocalhost = currentHost.includes('localhost') || currentHost.includes('127.0.0.1');
+    // ローカルネットワークIPを取得
+    const localIP = await getLocalNetworkIP();
+    const currentPort = window.location.port || '3000';
+    const localHost = `${localIP}:${currentPort}`;
     
-    // URL生成
-    const localUrl = `http://${currentHost}/#/viewer?src=http://${currentHost}/public/projects/${modelId}/project.json`;
+    console.log('🌐 ネットワーク情報:', {
+      currentHost: window.location.host,
+      detectedLocalIP: localIP,
+      localHost: localHost,
+      port: currentPort
+    });
+    
+    // URL生成（実際のローカルIPを使用）
+    const localUrl = `http://${localHost}/#/viewer?src=http://${localHost}/projects/${projectId}/project.json`;
     const appOrigin = window.location.origin;
-    const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${modelId}/project.json`;
+    const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${projectId}/project.json`;
+    
+    console.log('🔗 QRコード用URL生成:', {
+      projectId,
+      localHost,
+      localUrl,
+      webUrl,
+      projectJsonUrl: `http://${localHost}/projects/${projectId}/project.json`
+    });
     
     modalOverlay.innerHTML = `
         <div class="modal-content">
             <h2>ARをスマホで見る</h2>
+            <p style="margin: 0 0 1.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.4;">
+                QRコードをスマホでスキャンしてAR体験を開始できます。まずは「📱 スマホでテスト」で同じWi-Fi内のスマホから確認し、
+                問題なければ「🌐 公開用」でインターネット公開用のQRコードを生成してください。
+            </p>
             
             <!-- 公開方法選択 -->
             <div class="publish-method" style="margin-bottom: 1.5rem;">
                 <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">公開方法を選択</h3>
                 <div class="method-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
                     <button id="local-tab" class="method-tab active" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-primary); color: white; border-radius: 6px; cursor: pointer;">
-                        Local (LAN)
+                        📱 スマホでテスト
                     </button>
                     <button id="web-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer;">
-                        Web (公開URL)
+                        🌐 公開用
                     </button>
                 </div>
                 
                 <!-- Local設定 -->
                 <div id="local-settings" class="method-settings">
                     <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        📱 同一Wi-Fi内のスマホからアクセス可能
+                        📱 同じWi-Fi内のスマホで即座にテスト可能（開発・確認用）
                     </p>
                     <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
                         <span id="local-url">${localUrl}</span>
                     </div>
                     <button id="copy-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
-                        ローカルURLをコピー
+                        URLをコピー
                     </button>
-                    <button id="test-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                        ブラウザで開く
+                    <button id="test-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
+                        📱 プレビュー
+                    </button>
+                    <button id="open-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
+                        🖥️ PC で開く
                     </button>
                 </div>
                 
                 <!-- Web設定 -->
                 <div id="web-settings" class="method-settings" style="display: none;">
                     <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        🌐 インターネット経由で誰でもアクセス可能
+                        🌐 インターネット経由で世界中の誰でもアクセス可能（本格公開用）
                     </p>
                     <div class="url-input-group" style="margin-bottom: 0.5rem;">
                         <label style="display: block; margin-bottom: 0.3rem; font-size: 0.9rem;">公開URL:</label>
@@ -349,6 +557,25 @@ export function showNewProjectModal() {
                 </div>
             </div>
             
+            <!-- 使用方法の説明 -->
+            <div class="usage-instructions" style="margin-bottom: 1.5rem; padding: 1rem; background-color: rgba(0,0,0,0.05); border-radius: var(--border-radius-medium); border-left: 4px solid var(--color-primary);">
+                <h4 style="margin: 0 0 0.5rem 0; color: var(--color-text-primary);">📱 スマホでの確認方法</h4>
+                <div style="font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.4;">
+                    <p style="margin: 0 0 0.5rem 0;"><strong>📱 スマホでテスト:</strong></p>
+                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
+                        <li>PCとスマホが同じWi-Fiに接続されていることを確認</li>
+                        <li>スマホのカメラアプリでQRコードをスキャン</li>
+                        <li>ブラウザが開いてAR体験が開始されます</li>
+                    </ul>
+                    <p style="margin: 0 0 0.5rem 0;"><strong>🌐 公開用:</strong></p>
+                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
+                        <li>公開URLを設定してQRコードを生成</li>
+                        <li>ZIPファイルをダウンロードしてホスティングサービスにアップロード</li>
+                        <li>世界中の誰でもアクセス可能になります</li>
+                    </ul>
+                </div>
+            </div>
+            
             <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button id="close-qrcode-modal" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
                     閉じる
@@ -356,6 +583,13 @@ export function showNewProjectModal() {
             </div>
         </div>
     `;
+    
+    console.log('📱 QRコードモーダルを表示:', {
+      projectId,
+      localUrl,
+      webUrl,
+      timestamp: new Date().toISOString()
+    });
     
     document.body.appendChild(modalOverlay);
 
@@ -365,7 +599,7 @@ export function showNewProjectModal() {
     const localSettings = modalOverlay.querySelector('#local-settings');
     const webSettings = modalOverlay.querySelector('#web-settings');
     
-    let currentMethod = 'local';
+    let currentMethod = options.defaultMethod || 'local';
     let currentUrl = localUrl;
 
     function switchTab(method) {
@@ -385,17 +619,28 @@ export function showNewProjectModal() {
         modalOverlay.querySelector('#local-url').textContent = localUrl;
       } else {
         const webUrlInput = modalOverlay.querySelector('#web-url-input').value;
-        const newWebUrl = `${webUrlInput}/viewer.html?src=${webUrlInput}/projects/${modelId}/project.json`;
+        const newWebUrl = `${webUrlInput}/#/viewer?src=${webUrlInput}/projects/${projectId}/project.json`;
         currentUrl = newWebUrl;
         modalOverlay.querySelector('#web-url').textContent = newWebUrl;
       }
       
-      // QRコードを再生成
-      generateQRCode();
+      // QRコードを再生成（DOM更新を待つ）
+      setTimeout(() => {
+        generateQRCode();
+      }, 100);
     }
 
     localTab.addEventListener('click', () => switchTab('local'));
     webTab.addEventListener('click', () => switchTab('web'));
+
+    // 初期状態を設定
+    setTimeout(() => {
+      if (currentMethod === 'web') {
+        switchTab('web');
+      } else {
+        switchTab('local');
+      }
+    }, 100);
 
     // URLコピー機能
     modalOverlay.querySelector('#copy-local-url').addEventListener('click', () => {
@@ -415,8 +660,13 @@ export function showNewProjectModal() {
       });
     });
 
-    // ブラウザで開く
+    // プレビュー機能（スマホ向けレスポンシブ表示）
     modalOverlay.querySelector('#test-local-url').addEventListener('click', () => {
+      showARPreview(localUrl, modelId);
+    });
+
+    // PCブラウザで開く
+    modalOverlay.querySelector('#open-local-url').addEventListener('click', () => {
       window.open(localUrl, '_blank');
     });
 
@@ -435,25 +685,23 @@ export function showNewProjectModal() {
     // QRコード生成
     const generateQRCode = async () => {
         try {
+            console.log('🔄 QRコード生成開始:', currentUrl);
             const canvas = document.getElementById('qrcode-canvas');
             if (!canvas) {
                 throw new Error('Canvas element not found');
             }
+            console.log('✅ Canvas要素を取得:', canvas);
 
-            // QRCodeライブラリを遅延読み込み
-            let QRCode = null;
-            if (window.loadQRCode) {
-                QRCode = await window.loadQRCode();
-            } else {
-                // フォールバック: 直接インポート
-                const qrcodeModule = await import('qrcode');
-                QRCode = qrcodeModule.default;
+            // QRCodeライブラリを取得
+            const QRCode = await loadQRCode();
+            console.log('✅ QRCodeライブラリを取得:', typeof QRCode, QRCode);
+
+            if (!QRCode || typeof QRCode.toCanvas !== 'function') {
+                console.error('❌ QRCodeライブラリが無効:', QRCode);
+                throw new Error('QRCode library not available or toCanvas method missing');
             }
 
-            if (!QRCode) {
-                throw new Error('QRCode library not available');
-            }
-
+            console.log('🎯 QRCode生成開始:', { currentUrl, canvas });
             await QRCode.toCanvas(canvas, currentUrl, {
                 width: 200,
                 margin: 1,
@@ -461,6 +709,13 @@ export function showNewProjectModal() {
                     dark: '#000000',
                     light: '#FFFFFF'
                 }
+            });
+            
+            console.log('✅ QRコード生成完了:', {
+                canvasWidth: canvas.width,
+                canvasHeight: canvas.height,
+                url: currentUrl,
+                timestamp: new Date().toISOString()
             });
 
             // QRコードのダウンロード処理
@@ -478,32 +733,191 @@ export function showNewProjectModal() {
             });
 
         } catch (error) {
-            console.error('QRコード生成エラー:', error);
+            console.error('❌ QRコード生成エラー:', error);
+            console.error('❌ エラー詳細:', {
+                message: error.message,
+                stack: error.stack,
+                currentUrl,
+                canvasExists: !!document.getElementById('qrcode-canvas')
+            });
+            
             const container = document.getElementById('qrcode-container');
             if (container) {
                 container.innerHTML = `
-                    <div style="color: red; text-align: center;">
-                        <p>QRコードの生成に失敗しました。</p>
-                        <p style="font-size: 0.9em;">URL: ${currentUrl}</p>
+                    <div style="color: red; text-align: center; padding: 1rem;">
+                        <h3>❌ QRコード生成に失敗しました</h3>
+                        <p><strong>エラー:</strong> ${error.message}</p>
+                        <p style="font-size: 0.9em; word-break: break-all;"><strong>URL:</strong> ${currentUrl}</p>
+                        <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px;">
+                            ページを再読み込み
+                        </button>
                     </div>
                 `;
             }
+            
+            // エラーが発生してもモーダルは閉じない
+            return;
         }
     };
 
-    // QRコードを生成
-    generateQRCode();
+    // QRコードを生成（DOM要素の準備を待つ）
+    setTimeout(() => {
+      generateQRCode();
+    }, 200);
+
+    // QRコードモーダルの強制クローズを検出するための監視
+    let modalClosedByScript = false;
+    const originalRemoveChild = document.body.removeChild.bind(document.body);
+    document.body.removeChild = function(child) {
+      if (child === modalOverlay && !modalClosedByScript) {
+        console.error('⚠️ QRコードモーダルが予期せず削除されました!', {
+          timestamp: new Date().toISOString(),
+          stackTrace: new Error().stack,
+          childElement: child,
+          parentElement: this
+        });
+      }
+      return originalRemoveChild(child);
+    };
 
     // 閉じるボタンイベント
     document.getElementById('close-qrcode-modal').addEventListener('click', () => {
+        console.log('🔄 QRコードモーダルを閉じる（閉じるボタン）');
+        modalClosedByScript = true;
+        document.body.removeChild = originalRemoveChild; // 元に戻す
         document.body.removeChild(modalOverlay);
     });
     
     // モーダル背景をクリックした時にも閉じる
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
+            console.log('🔄 QRコードモーダルを閉じる（背景クリック）');
+            modalClosedByScript = true;
+            document.body.removeChild = originalRemoveChild; // 元に戻す
             document.body.removeChild(modalOverlay);
         }
+    });
+  }
+
+  /**
+   * ARプレビュー機能 - スマホ向けレスポンシブ表示
+   */
+  function showARPreview(arUrl, modelId) {
+    console.log('📱 ARプレビュー開始:', { arUrl, modelId });
+    
+    // プレビューモーダルを作成
+    const previewOverlay = document.createElement('div');
+    previewOverlay.className = 'modal-overlay';
+    previewOverlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.9);
+      z-index: 10001;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    `;
+    
+    previewOverlay.innerHTML = `
+      <div class="preview-content" style="
+        width: 90%;
+        max-width: 400px;
+        height: 80%;
+        max-height: 600px;
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        display: flex;
+        flex-direction: column;
+      ">
+        <div class="preview-header" style="
+          padding: 1rem;
+          background: #f5f5f5;
+          border-bottom: 1px solid #ddd;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        ">
+          <h3 style="margin: 0; color: #333; font-size: 1.1rem;">📱 スマホプレビュー</h3>
+          <button id="close-preview" style="
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+          ">✕</button>
+        </div>
+        
+        <div class="preview-body" style="
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+        ">
+          <iframe 
+            id="preview-iframe" 
+            src="${arUrl}" 
+            style="
+              width: 100%;
+              height: 100%;
+              border: none;
+              background: white;
+            "
+            sandbox="allow-scripts allow-same-origin allow-downloads allow-forms"
+          ></iframe>
+        </div>
+        
+        <div class="preview-footer" style="
+          padding: 1rem;
+          background: #f5f5f5;
+          border-top: 1px solid #ddd;
+          text-align: center;
+        ">
+          <div style="margin-bottom: 0.5rem; font-size: 0.9rem; color: #666;">
+            📱 実際のスマホでテストするには、QRコードをスキャンしてください
+          </div>
+          <button id="open-in-new-tab" style="
+            padding: 0.5rem 1rem;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+          ">新しいタブで開く</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(previewOverlay);
+    
+    // イベントリスナー
+    previewOverlay.querySelector('#close-preview').addEventListener('click', () => {
+      document.body.removeChild(previewOverlay);
+    });
+    
+    previewOverlay.querySelector('#open-in-new-tab').addEventListener('click', () => {
+      window.open(arUrl, '_blank');
+    });
+    
+    // 背景クリックで閉じる
+    previewOverlay.addEventListener('click', (e) => {
+      if (e.target === previewOverlay) {
+        document.body.removeChild(previewOverlay);
+      }
+    });
+    
+    // iframe読み込み完了ログ
+    const iframe = previewOverlay.querySelector('#preview-iframe');
+    iframe.addEventListener('load', () => {
+      console.log('✅ ARプレビュー読み込み完了');
+    });
+    
+    iframe.addEventListener('error', (e) => {
+      console.error('❌ ARプレビュー読み込みエラー:', e);
     });
   }
 

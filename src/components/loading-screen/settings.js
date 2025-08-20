@@ -9,7 +9,9 @@ import {
   ALLOWED_MIME_TYPES,
   COMPRESSION_SETTINGS,
   ERROR_MESSAGES,
-  ERROR_TYPES
+  ERROR_TYPES,
+  CAPACITY_UTILS,
+  DEBUG
 } from './constants.js';
 
 // デフォルト設定の定義
@@ -523,7 +525,16 @@ export const settingsAPI = {
     return new Promise((resolve) => {
       try {
         const img = new Image();
+        
+        // 画像読み込みタイムアウトを設定（10秒）
+        const timeoutId = setTimeout(() => {
+          console.warn('画像圧縮タイムアウト: 10秒以内に読み込みが完了しませんでした');
+          resolve(base64String);
+        }, 10000);
+        
         img.onload = () => {
+          clearTimeout(timeoutId); // タイムアウトをクリア
+          
           // キャンバスを作成
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
@@ -545,8 +556,12 @@ export const settingsAPI = {
           canvas.width = width;
           canvas.height = height;
           
-          // 透過PNG対応：背景をクリア（デフォルトで透明）
+          // 透過PNG対応：背景をクリア（完全透明で初期化）
           ctx.clearRect(0, 0, width, height);
+          
+          // 高品質な画像補間を設定
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
           
           // 画像を描画
           ctx.drawImage(img, 0, 0, width, height);
@@ -558,11 +573,18 @@ export const settingsAPI = {
           const supportsTransparency = isPNG || isWebP;
           const hasTransparency = this.checkImageTransparency(ctx, width, height);
           
-          if (supportsTransparency || hasTransparency) {
-            // PNG/WebP形式または透過ありの場合はPNGで保存
+          // PNG入力の場合は必ずPNG保存（透過検知失敗を避けるため）
+          if (isPNG) {
+            compressedBase64 = canvas.toDataURL('image/png');
+            console.log('🎨 PNG入力→PNG固定保存', {
+              元形式: 'PNG',
+              透明度: hasTransparency ? 'あり' : 'なし'
+            });
+          } else if (supportsTransparency || hasTransparency) {
+            // WebP形式または透過ありの場合はPNGで保存
             compressedBase64 = canvas.toDataURL('image/png');
             console.log('🎨 透過対応PNG画像として保存', {
-              元形式: supportsTransparency ? (isPNG ? 'PNG' : 'WebP') : '不明',
+              元形式: isWebP ? 'WebP' : '不明',
               透明度: hasTransparency ? 'あり' : 'なし'
             });
           } else {
@@ -571,19 +593,22 @@ export const settingsAPI = {
             console.log('📦 JPEG画像として圧縮');
           }
           
-          console.log(`📦 画像圧縮結果:`, {
-            元サイズ: `${img.width}x${img.height}`,
-            新サイズ: `${width}x${height}`,
-            元データ: `${(base64String.length / 1024).toFixed(2)}KB`,
-            圧縮後: `${(compressedBase64.length / 1024).toFixed(2)}KB`,
-            圧縮率: `${(((base64String.length - compressedBase64.length) / base64String.length) * 100).toFixed(1)}%`
-          });
+          if (DEBUG.compressionLogs) {
+            console.log(`📦 画像圧縮結果:`, {
+              元サイズ: `${img.width}x${img.height}`,
+              新サイズ: `${width}x${height}`,
+              元データ: `${(base64String.length / 1024).toFixed(2)}KB`,
+              圧縮後: `${(compressedBase64.length / 1024).toFixed(2)}KB`,
+              圧縮率: `${(((base64String.length - compressedBase64.length) / base64String.length) * 100).toFixed(1)}%`
+            });
+          }
           
           resolve(compressedBase64);
         };
         
-        img.onerror = () => {
-          console.warn('画像圧縮中にエラー: 画像の読み込みに失敗');
+        img.onerror = (error) => {
+          clearTimeout(timeoutId); // タイムアウトをクリア
+          console.warn('画像圧縮中にエラー: 画像の読み込みに失敗', error);
           resolve(base64String);
         };
         
@@ -683,15 +708,17 @@ export const settingsAPI = {
           if (imageSrc && typeof imageSrc === 'string' && imageSrc.startsWith('data:')) {
             const base64Data = imageSrc.split(',')[1];
             if (base64Data && base64Data.length > 0) {
-              // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
-              const originalSize = (base64Data.length * 3) / 4;
+              // Base64から元のバイナリサイズに変換（パディング考慮）
+              const originalSize = CAPACITY_UTILS.calculateBinarySize(base64Data);
               totalImageSize += originalSize;
-              console.log(`📊 設定画像データサイズ (${index}):`, {
-                base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
-                originalSizeKB: (originalSize / 1024).toFixed(2) + 'KB',
-                originalSizeMB: (originalSize / 1024 / 1024).toFixed(2) + 'MB',
-                preview: imageSrc.substring(0, 50) + '...'
-              });
+              if (DEBUG.capacityLogs) {
+                console.log(`📊 設定画像データサイズ (${index}):`, {
+                  base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
+                  originalSizeKB: (originalSize / 1024).toFixed(2) + 'KB',
+                  originalSizeMB: (originalSize / 1024 / 1024).toFixed(2) + 'MB',
+                  preview: imageSrc.substring(0, 50) + '...'
+                });
+              }
             }
           }
         });
@@ -700,10 +727,12 @@ export const settingsAPI = {
       console.warn('画像データサイズ計算中にエラー:', error);
     }
     
-    console.log('📊 合計画像データサイズ:', {
-      totalKB: (totalImageSize / 1024).toFixed(2) + 'KB',
-      totalMB: (totalImageSize / 1024 / 1024).toFixed(2) + 'MB'
-    });
+    if (DEBUG.capacityLogs) {
+      console.log('📊 合計画像データサイズ:', {
+        totalKB: (totalImageSize / 1024).toFixed(2) + 'KB',
+        totalMB: (totalImageSize / 1024 / 1024).toFixed(2) + 'MB'
+      });
+    }
     
     return Math.round(totalImageSize);
   },
@@ -724,8 +753,8 @@ export const settingsAPI = {
       return 0;
     }
     
-    // Base64から元のバイナリサイズに変換（Base64は元データの約133%）
-    return (base64Data.length * 3) / 4;
+    // Base64から元のバイナリサイズに変換（パディング考慮）
+    return CAPACITY_UTILS.calculateBinarySize(base64Data);
   }
 };
 

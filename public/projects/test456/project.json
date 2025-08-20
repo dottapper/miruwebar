@@ -1,0 +1,9 @@
+{
+  "name": "テストプロジェクト",
+  "description": "テスト用",
+  "type": "markerless",
+  "loadingScreen": {
+    "enabled": true
+  },
+  "models": []
+}

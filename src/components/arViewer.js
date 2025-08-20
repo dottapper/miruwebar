@@ -155,7 +155,12 @@ const updateLoadingProgress = (id, percent, message) => globalLoadingManager.upd
 const cleanupLoading = () => globalLoadingManager.cleanup();
 
 export async function initARViewer(containerId, options = {}) {
-  console.log('🎯 initARViewer開始:', { containerId, options });
+  console.log('🎯 initARViewer開始:', { 
+    containerId, 
+    options, 
+    timestamp: new Date().toISOString(),
+    callerStack: new Error().stack 
+  });
   console.log('🔧 アニメーション機能を初期化中...');
   
   const container = document.getElementById(containerId);
