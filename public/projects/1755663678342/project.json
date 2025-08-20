@@ -2,6 +2,9 @@
   "name": "テスト",
   "description": "",
   "type": "marker",
+  "loadingScreen": {
+    "selectedScreenId": "template_1755615890729"
+  },
   "models": [
     {
       "url": "/assets/kuri_danceNLA.glb",
