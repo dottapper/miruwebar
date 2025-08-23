@@ -13,6 +13,7 @@
     "start": "npm run build && node server/simple-server.js"
   },
   "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
     "vite": "^6.2.0"
   },
   "dependencies": {

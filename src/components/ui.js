@@ -464,6 +464,7 @@ export function showNewProjectModal() {
     const localIP = await getLocalNetworkIP();
     const currentPort = window.location.port || '3000';
     const localHost = `${localIP}:${currentPort}`;
+    const scheme = (window.location.protocol === 'https:') ? 'https' : 'http';
     
     console.log('🌐 ネットワーク情報:', {
       currentHost: window.location.host,
@@ -473,7 +474,7 @@ export function showNewProjectModal() {
     });
     
     // URL生成（実際のローカルIPを使用）
-    const localUrl = `http://${localHost}/#/viewer?src=http://${localHost}/projects/${projectId}/project.json`;
+    const localUrl = `${scheme}://${localHost}/#/viewer?src=${scheme}://${localHost}/projects/${projectId}/project.json`;
     const appOrigin = window.location.origin;
     const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${projectId}/project.json`;
     
@@ -482,7 +483,7 @@ export function showNewProjectModal() {
       localHost,
       localUrl,
       webUrl,
-      projectJsonUrl: `http://${localHost}/projects/${projectId}/project.json`
+      projectJsonUrl: `${scheme}://${localHost}/projects/${projectId}/project.json`
     });
     
     modalOverlay.innerHTML = `

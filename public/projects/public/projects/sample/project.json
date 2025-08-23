@@ -1,0 +1,15 @@
+{
+  "name": "サンプル",
+  "description": "テスト用プロジェクト",
+  "type": "markerless",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": [
+    {
+      "url": "https://192.168.179.2:3005/assets/sample.glb",
+      "fileName": "sample.glb",
+      "fileSize": "0.5"
+    }
+  ]
+}

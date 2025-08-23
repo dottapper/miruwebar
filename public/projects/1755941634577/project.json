@@ -1,0 +1,15 @@
+{
+  "name": "f",
+  "description": "",
+  "type": "markerless",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": [
+    {
+      "url": "/assets/カーネーションサンプル.glb",
+      "fileName": "カーネーションサンプル.glb",
+      "fileSize": "13.42"
+    }
+  ]
+}

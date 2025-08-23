@@ -1,0 +1,15 @@
+{
+  "name": "っｚ",
+  "description": "",
+  "type": "markerless",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": [
+    {
+      "url": "/assets/sample.glb",
+      "fileName": "sample.glb",
+      "fileSize": "2.89"
+    }
+  ]
+}

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR診断システム</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+        }
+        
+        .diagnosis-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .step {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #666;
+        }
+        
+        .step.testing {
+            border-left-color: #ffa500;
+            background: #2a2200;
+        }
+        
+        .step.success {
+            border-left-color: #00ff00;
+            background: #002200;
+        }
+        
+        .step.error {
+            border-left-color: #ff0000;
+            background: #220000;
+        }
+        
+        .step-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-detail {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        
+        .test-video {
+            width: 200px;
+            height: 150px;
+            border: 2px solid #666;
+            margin: 10px 0;
+        }
+        
+        .test-canvas {
+            width: 200px;
+            height: 150px;
+            border: 2px solid #666;
+            margin: 10px 0;
+            background: #333;
+        }
+        
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #005a99;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .info-box {
+            background: #333;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        
+        #ar-test-area {
+            width: 300px;
+            height: 200px;
+            border: 2px solid #ffa500;
+            position: relative;
+            margin: 20px 0;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="diagnosis-container">
+        <h1>🔍 AR診断システム</h1>
+        <p>ARが正常に動作しない原因を段階的に特定します</p>
+        
+        <div id="step1" class="step">
+            <div class="step-title">1. デバイス・ブラウザ判定</div>
+            <div class="step-detail" id="device-info">判定中...</div>
+        </div>
+        
+        <div id="step2" class="step">
+            <div class="step-title">2. カメラアクセステスト</div>
+            <div class="step-detail" id="camera-info">待機中...</div>
+            <video id="test-video" class="test-video" autoplay muted playsInline style="display:none;"></video>
+            <button onclick="testCamera()">カメラテスト開始</button>
+        </div>
+        
+        <div id="step3" class="step">
+            <div class="step-title">3. WebGL・Three.js テスト</div>
+            <div class="step-detail" id="webgl-info">待機中...</div>
+            <canvas id="test-canvas" class="test-canvas" style="display:none;"></canvas>
+            <button onclick="testWebGL()">WebGLテスト開始</button>
+        </div>
+        
+        <div id="step4" class="step">
+            <div class="step-title">4. AR統合テスト</div>
+            <div class="step-detail" id="ar-info">待機中...</div>
+            <div id="ar-test-area">
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                    AR テストエリア
+                </div>
+            </div>
+            <button onclick="testAR()">統合ARテスト開始</button>
+        </div>
+        
+        <div id="step5" class="step">
+            <div class="step-title">5. 診断結果・修正案</div>
+            <div class="step-detail" id="result-info">全てのテストを完了してください</div>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-box">
+                <strong>現在のURL:</strong><br>
+                <span id="current-url"></span>
+            </div>
+            <div class="info-box">
+                <strong>タイムスタンプ:</strong><br>
+                <span id="timestamp"></span>
+            </div>
+        </div>
+        
+        <button onclick="runFullTest()" style="background: #ff6600; font-size: 16px; padding: 15px 30px;">🚀 全テスト自動実行</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let testResults = {
+            device: null,
+            camera: null,
+            webgl: null,
+            ar: null
+        };
+        
+        // 初期化
+        document.getElementById('current-url').textContent = window.location.href;
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+        
+        // 1. デバイス判定
+        function detectDevice() {
+            const ua = navigator.userAgent;
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua);
+            const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const isSmallScreen = window.innerWidth < 768;
+            const isMobileDevice = isMobile || isTouchDevice || isSmallScreen;
+            
+            const deviceInfo = {
+                userAgent: ua,
+                isMobile,
+                isTouchDevice,
+                isSmallScreen,
+                isMobileDevice,
+                screenSize: { w: window.innerWidth, h: window.innerHeight },
+                pixelRatio: window.devicePixelRatio,
+                isHTTPS: window.location.protocol === 'https:',
+                hasMediaDevices: !!navigator.mediaDevices,
+                hasGetUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+            };
+            
+            testResults.device = deviceInfo;
+            
+            const step1 = document.getElementById('step1');
+            step1.className = 'step success';
+            document.getElementById('device-info').innerHTML = `
+                <strong>デバイス:</strong> ${isMobileDevice ? 'モバイル' : 'デスクトップ'}<br>
+                <strong>画面:</strong> ${deviceInfo.screenSize.w}×${deviceInfo.screenSize.h}<br>
+                <strong>HTTPS:</strong> ${deviceInfo.isHTTPS ? '✅' : '❌'}<br>
+                <strong>MediaDevices:</strong> ${deviceInfo.hasMediaDevices ? '✅' : '❌'}<br>
+                <strong>getUserMedia:</strong> ${deviceInfo.hasGetUserMedia ? '✅' : '❌'}
+            `;
+        }
+        
+        // 2. カメラテスト
+        async function testCamera() {
+            const step2 = document.getElementById('step2');
+            step2.className = 'step testing';
+            document.getElementById('camera-info').textContent = 'カメラアクセス試行中...';
+            
+            const video = document.getElementById('test-video');
+            const cameraConstraints = [
+                { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+                { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } } },
+                { video: { facingMode: 'environment' } },
+                { video: true }
+            ];
+            
+            let success = false;
+            let errorDetails = [];
+            
+            for (let i = 0; i < cameraConstraints.length; i++) {
+                try {
+                    console.log(`カメラ設定${i + 1}を試行:`, cameraConstraints[i]);
+                    const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints[i]);
+                    video.srcObject = stream;
+                    video.style.display = 'block';
+                    
+                    const videoTrack = stream.getVideoTracks()[0];
+                    const settings = videoTrack.getSettings();
+                    
+                    testResults.camera = {
+                        success: true,
+                        constraintIndex: i,
+                        constraint: cameraConstraints[i],
+                        videoTrack: settings
+                    };
+                    
+                    step2.className = 'step success';
+                    document.getElementById('camera-info').innerHTML = `
+                        <strong>✅ 成功!</strong> 設定${i + 1}でカメラアクセス成功<br>
+                        <strong>解像度:</strong> ${settings.width || '不明'}×${settings.height || '不明'}<br>
+                        <strong>フェイシング:</strong> ${settings.facingMode || 'unknown'}<br>
+                        <strong>デバイスID:</strong> ${settings.deviceId ? settings.deviceId.substring(0, 20) + '...' : 'unknown'}
+                    `;
+                    success = true;
+                    break;
+                } catch (error) {
+                    console.error(`カメラ設定${i + 1}失敗:`, error);
+                    errorDetails.push(`設定${i + 1}: ${error.name} - ${error.message}`);
+                }
+            }
+            
+            if (!success) {
+                testResults.camera = { success: false, errors: errorDetails };
+                step2.className = 'step error';
+                document.getElementById('camera-info').innerHTML = `
+                    <strong>❌ 失敗!</strong> 全てのカメラ設定で失敗<br>
+                    ${errorDetails.map(e => `• ${e}`).join('<br>')}
+                `;
+            }
+        }
+        
+        // 3. WebGLテスト
+        function testWebGL() {
+            const step3 = document.getElementById('step3');
+            step3.className = 'step testing';
+            document.getElementById('webgl-info').textContent = 'WebGL初期化中...';
+            
+            const canvas = document.getElementById('test-canvas');
+            canvas.style.display = 'block';
+            canvas.width = 200;
+            canvas.height = 150;
+            
+            try {
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, canvas.width / canvas.height, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+                
+                renderer.setSize(200, 150);
+                renderer.setClearColor(0x222222, 1);
+                
+                // テストキューブ
+                const geometry = new THREE.BoxGeometry(1, 1, 1);
+                const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+                const cube = new THREE.Mesh(geometry, material);
+                scene.add(cube);
+                
+                camera.position.z = 3;
+                
+                // アニメーション
+                let frame = 0;
+                function animate() {
+                    frame++;
+                    if (frame > 120) return; // 2秒で停止
+                    requestAnimationFrame(animate);
+                    cube.rotation.x += 0.01;
+                    cube.rotation.y += 0.01;
+                    renderer.render(scene, camera);
+                }
+                animate();
+                
+                const gl = renderer.getContext();
+                testResults.webgl = {
+                    success: true,
+                    version: gl.getParameter(gl.VERSION),
+                    vendor: gl.getParameter(gl.VENDOR),
+                    renderer: gl.getParameter(gl.RENDERER),
+                    maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE)
+                };
+                
+                step3.className = 'step success';
+                document.getElementById('webgl-info').innerHTML = `
+                    <strong>✅ 成功!</strong> WebGL正常動作<br>
+                    <strong>バージョン:</strong> ${testResults.webgl.version}<br>
+                    <strong>ベンダー:</strong> ${testResults.webgl.vendor}<br>
+                    <strong>レンダラー:</strong> ${testResults.webgl.renderer.substring(0, 30)}...
+                `;
+                
+            } catch (error) {
+                console.error('WebGLエラー:', error);
+                testResults.webgl = { success: false, error: error.message };
+                step3.className = 'step error';
+                document.getElementById('webgl-info').innerHTML = `
+                    <strong>❌ 失敗!</strong> WebGL初期化エラー<br>
+                    ${error.message}
+                `;
+            }
+        }
+        
+        // 4. AR統合テスト
+        async function testAR() {
+            const step4 = document.getElementById('step4');
+            step4.className = 'step testing';
+            document.getElementById('ar-info').textContent = 'AR統合テスト実行中...';
+            
+            const container = document.getElementById('ar-test-area');
+            container.innerHTML = '';
+            
+            try {
+                // ビデオ要素
+                const video = document.createElement('video');
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = true;
+                video.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    z-index: 1;
+                `;
+                
+                // キャンバス要素
+                const canvas = document.createElement('canvas');
+                canvas.width = 300;
+                canvas.height = 200;
+                canvas.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 2;
+                    pointer-events: auto;
+                `;
+                
+                container.appendChild(video);
+                container.appendChild(canvas);
+                
+                // カメラストリーム
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                video.srcObject = stream;
+                
+                await new Promise(resolve => {
+                    video.addEventListener('loadedmetadata', resolve, { once: true });
+                });
+                
+                // Three.jsシーン
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(75, 300/200, 0.1, 1000);
+                const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+                
+                renderer.setSize(300, 200);
+                renderer.setClearColor(0x000000, 0);
+                
+                // テストオブジェクト
+                const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+                const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(0, 0, -1);
+                scene.add(cube);
+                
+                camera.position.set(0, 0, 0);
+                
+                // アニメーションループ
+                let arFrame = 0;
+                function animate() {
+                    arFrame++;
+                    if (arFrame > 180) return; // 3秒で停止
+                    requestAnimationFrame(animate);
+                    cube.rotation.y += 0.02;
+                    renderer.render(scene, camera);
+                }
+                animate();
+                
+                testResults.ar = { 
+                    success: true, 
+                    videoWidth: video.videoWidth,
+                    videoHeight: video.videoHeight
+                };
+                step4.className = 'step success';
+                document.getElementById('ar-info').innerHTML = `
+                    <strong>✅ 成功!</strong> AR統合テスト完了<br>
+                    <strong>ビデオ解像度:</strong> ${video.videoWidth}×${video.videoHeight}<br>
+                    カメラフィード + 3Dオブジェクトの重ね合わせ表示確認
+                `;
+                
+            } catch (error) {
+                console.error('AR統合エラー:', error);
+                testResults.ar = { success: false, error: error.message };
+                step4.className = 'step error';
+                document.getElementById('ar-info').innerHTML = `
+                    <strong>❌ 失敗!</strong> AR統合エラー<br>
+                    ${error.name}: ${error.message}
+                `;
+            }
+        }
+        
+        // 5. 診断結果
+        function generateDiagnosis() {
+            const issues = [];
+            const fixes = [];
+            let severity = 'success';
+            
+            if (!testResults.device.isHTTPS) {
+                issues.push('❌ HTTPSでない');
+                fixes.push('🔧 HTTPSでアクセスしてください（必須）');
+                severity = 'error';
+            }
+            
+            if (!testResults.device.hasGetUserMedia) {
+                issues.push('❌ getUserMedia未対応');
+                fixes.push('🔧 対応ブラウザを使用してください（Chrome, Firefox, Safari等）');
+                severity = 'error';
+            }
+            
+            if (testResults.camera && !testResults.camera.success) {
+                issues.push('❌ カメラアクセス失敗');
+                fixes.push('🔧 ブラウザでカメラ権限を許可してください');
+                fixes.push('🔧 他のアプリでカメラを使用していないか確認してください');
+                severity = 'error';
+            }
+            
+            if (testResults.webgl && !testResults.webgl.success) {
+                issues.push('❌ WebGL初期化失敗');
+                fixes.push('🔧 WebGL対応ブラウザを使用してください');
+                fixes.push('🔧 ハードウェアアクセラレーションを有効にしてください');
+                severity = 'error';
+            }
+            
+            if (testResults.ar && !testResults.ar.success) {
+                issues.push('❌ AR統合失敗');
+                fixes.push('🔧 上記の問題をすべて解決してください');
+                severity = 'error';
+            }
+            
+            const step5 = document.getElementById('step5');
+            if (severity === 'success' && issues.length === 0) {
+                step5.className = 'step success';
+                document.getElementById('result-info').innerHTML = `
+                    <strong>✅ 診断完了!</strong> 全てのテストが成功しました。<br>
+                    ARは正常に動作するはずです。<br><br>
+                    <strong>推奨設定:</strong><br>
+                    • デバイス: ${testResults.device.isMobileDevice ? 'モバイル' : 'デスクトップ'}適合<br>
+                    • カメラ: ${testResults.camera?.constraint ? JSON.stringify(testResults.camera.constraint.video) : 'N/A'}<br>
+                    • WebGL: ${testResults.webgl?.version || 'N/A'}
+                `;
+            } else {
+                step5.className = 'step error';
+                document.getElementById('result-info').innerHTML = `
+                    <strong>⚠️ 問題発見:</strong><br>
+                    ${issues.join('<br>')}<br><br>
+                    <strong>🛠️ 修正方法:</strong><br>
+                    ${fixes.join('<br>')}
+                `;
+            }
+        }
+        
+        // 全テスト自動実行
+        async function runFullTest() {
+            console.log('🚀 全テスト自動実行開始');
+            
+            detectDevice();
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testCamera();
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            testWebGL();
+            
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testAR();
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            generateDiagnosis();
+            
+            console.log('🏁 全テスト完了', testResults);
+        }
+        
+        // 自動開始
+        detectDevice();
+        
+    </script>
+</body>
+</html>

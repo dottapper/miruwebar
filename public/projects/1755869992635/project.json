@@ -1,0 +1,15 @@
+{
+  "name": "ｃ",
+  "description": "",
+  "type": "markerless",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": [
+    {
+      "url": "https://192.168.179.2:3001/assets/kuri_danceNLA.glb",
+      "fileName": "kuri_danceNLA.glb",
+      "fileSize": 14738660
+    }
+  ]
+}

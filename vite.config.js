@@ -1,5 +1,6 @@
 // vite.config.js
 import { defineConfig } from 'vite';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -78,6 +79,8 @@ export default defineConfig({
     }
   },
   plugins: [
+    // 開発用の簡易HTTPSを有効化（スマホのカメラ許可要件を満たす）
+    basicSsl(),
     {
       name: 'project-api',
       configureServer(server) {
@@ -102,6 +105,34 @@ export default defineConfig({
               'Access-Control-Allow-Headers': 'Content-Type'
             });
             res.end(JSON.stringify(networkInfo));
+          } else {
+            next();
+          }
+        });
+
+        // 静的project.json配信ミドルウェア
+        server.middlewares.use('/projects', (req, res, next) => {
+          if (req.method === 'GET' && req.url?.endsWith('.json')) {
+            console.log('📡 project.json配信:', req.url);
+            
+            // /projects/1755953302605/project.json -> /1755953302605/project.json
+            const relativePath = req.url; // 既に /1755953302605/project.json
+            const filePath = path.join(__dirname, 'public', 'projects', relativePath);
+            console.log('📁 ファイルパス:', filePath);
+            
+            if (fs.existsSync(filePath)) {
+              res.writeHead(200, { 
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+              });
+              const content = fs.readFileSync(filePath, 'utf8');
+              console.log('✅ project.json配信成功');
+              res.end(content);
+            } else {
+              console.error('❌ project.jsonファイルが見つかりません:', filePath);
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'プロジェクトが見つかりません' }));
+            }
           } else {
             next();
           }
@@ -170,7 +201,8 @@ export default defineConfig({
                 await fs.writeJson(projectFilePath, viewerProject, { spaces: 2 });
                 
                 console.log(`✅ プロジェクトファイル保存完了: ${projectFilePath}`);
-                console.log(`🔗 アクセスURL: http://localhost:3000/projects/${projectId}/project.json`);
+                const scheme = server.config.server.https ? 'https' : 'http';
+                console.log(`🔗 アクセスURL: ${scheme}://localhost:3000/projects/${projectId}/project.json`);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 

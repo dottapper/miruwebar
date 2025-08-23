@@ -1,0 +1,9 @@
+{
+  "name": "d",
+  "description": "",
+  "type": "marker",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": []
+}

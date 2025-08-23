@@ -1,0 +1,32 @@
+{
+  "name": "栗ダンス",
+  "description": "",
+  "type": "markerless",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": [
+    {
+      "url": "https://192.168.179.2:3006/assets/kuri_danceNLA.glb",
+      "fileName": "kuri_danceNLA.glb",
+      "fileSize": "14.06",
+      "modelSettings": {
+        "scale": {
+          "x": 1,
+          "y": 1,
+          "z": 1
+        },
+        "position": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "rotation": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      }
+    }
+  ]
+}

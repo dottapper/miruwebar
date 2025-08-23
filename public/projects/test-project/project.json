@@ -1,0 +1,8 @@
+{
+  "name": "テストプロジェクト",
+  "type": "marker",
+  "loadingScreen": {
+    "selectedScreenId": "none"
+  },
+  "models": []
+}

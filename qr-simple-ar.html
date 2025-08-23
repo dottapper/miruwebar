@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR対応Simple AR</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        #ar-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #camera-video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 1;
+        }
+        
+        #three-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: auto;
+        }
+        
+        #status {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            z-index: 10;
+            font-size: 12px;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container">
+        <video id="camera-video" autoplay muted playsInline></video>
+        <canvas id="three-canvas"></canvas>
+        
+        <div id="status">初期化中...</div>
+        
+        <div id="instructions">
+            画面をタップ/クリックして3Dモデルを配置
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.158.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.158.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        
+        class QRSimpleAR {
+            constructor() {
+                this.video = document.getElementById('camera-video');
+                this.canvas = document.getElementById('three-canvas');
+                this.status = document.getElementById('status');
+                
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.models = [];
+                this.loadedGLTF = null;
+                this.mixer = null;
+                
+                // URLパラメータからプロジェクト情報を取得
+                this.parseURLParams();
+                this.init();
+            }
+            
+            parseURLParams() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.projectSrc = urlParams.get('src');
+                this.projectData = null;
+                
+                if (!this.projectSrc) {
+                    console.warn('⚠️ srcパラメータがありません。デフォルトモデルを使用します。');
+                    this.modelUrls = ['/assets/sample.glb'];
+                }
+            }
+            
+            async init() {
+                try {
+                    this.updateStatus('Three.js初期化中...');
+                    this.initThree();
+                    
+                    this.updateStatus('カメラ初期化中...');
+                    await this.initCamera();
+                    
+                    if (this.projectSrc) {
+                        this.updateStatus('プロジェクト読み込み中...');
+                        await this.loadProject();
+                    }
+                    
+                    this.updateStatus('モデル読み込み中...');
+                    await this.loadModel();
+                    
+                    this.updateStatus('イベント設定中...');
+                    this.setupEvents();
+                    
+                    this.updateStatus('✅ AR準備完了');
+                    this.startRender();
+                    
+                } catch (error) {
+                    console.error('初期化エラー:', error);
+                    this.updateStatus(`❌ エラー: ${error.message}`);
+                }
+            }
+            
+            async loadProject() {
+                try {
+                    const response = await fetch(this.projectSrc);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    this.projectData = await response.json();
+                    
+                    // プロジェクトからモデルURLを取得
+                    if (this.projectData.models && Array.isArray(this.projectData.models) && this.projectData.models.length > 0) {
+                        this.modelUrls = this.projectData.models.map(model => model.url);
+                        console.log('✅ プロジェクト読み込み成功:', this.projectData.name);
+                        console.log('📦 モデル数:', this.modelUrls.length);
+                    } else {
+                        throw new Error('プロジェクトにモデルが設定されていません');
+                    }
+                } catch (error) {
+                    console.error('❌ プロジェクト読み込み失敗:', error);
+                    this.updateStatus(`❌ プロジェクトエラー: ${error.message}`);
+                    // フォールバック: デフォルトモデル使用
+                    this.modelUrls = ['/assets/sample.glb'];
+                }
+            }
+            
+            async initCamera() {
+                const constraints = [
+                    { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+                    { video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } } },
+                    { video: { facingMode: 'environment' } },
+                    { video: true }
+                ];
+                
+                for (let i = 0; i < constraints.length; i++) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia(constraints[i]);
+                        this.video.srcObject = stream;
+                        
+                        await new Promise(resolve => {
+                            this.video.addEventListener('loadedmetadata', resolve, { once: true });
+                        });
+                        
+                        // VideoTexture背景設定
+                        this.videoTexture = new THREE.VideoTexture(this.video);
+                        this.videoTexture.colorSpace = THREE.SRGBColorSpace;
+                        this.scene.background = this.videoTexture;
+                        console.log('✅ VideoTexture背景設定完了');
+                        
+                        console.log(`✅ カメラ初期化成功 (設定${i + 1})`);
+                        return;
+                    } catch (error) {
+                        console.warn(`⚠️ カメラ設定${i + 1}失敗:`, error);
+                        if (i === constraints.length - 1) throw error;
+                    }
+                }
+            }
+            
+            initThree() {
+                // シーン
+                this.scene = new THREE.Scene();
+                
+                // カメラ（Simple AR成功設定）
+                this.camera = new THREE.PerspectiveCamera(
+                    45, // FOV45度
+                    window.innerWidth / window.innerHeight,
+                    0.1,
+                    1000
+                );
+                this.camera.position.set(0, 0, 0);
+                
+                // レンダラー
+                this.renderer = new THREE.WebGLRenderer({
+                    canvas: this.canvas,
+                    alpha: true,
+                    antialias: true
+                });
+                
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                
+                // ライト
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(1, 1, 1);
+                this.scene.add(directionalLight);
+            }
+            
+            async loadModel() {
+                console.log('🔍 モデル読み込み開始...');
+                this.updateStatus('モデル読み込み中...');
+                
+                try {
+                    const loader = new GLTFLoader();
+                    
+                    const possibleUrls = this.modelUrls || [
+                        '/assets/sample.glb',
+                        '/public/assets/sample.glb',
+                        'https://192.168.179.2:3005/assets/sample.glb',
+                        './assets/sample.glb'
+                    ];
+                    
+                    let modelLoaded = false;
+                    let lastError = null;
+                    
+                    for (const modelUrl of possibleUrls) {
+                        try {
+                            console.log(`🔍 試行中: ${modelUrl}`);
+                            this.updateStatus(`モデル試行: ${modelUrl}`);
+                            
+                            // ファイル存在確認
+                            const response = await fetch(modelUrl, { method: 'HEAD' });
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            
+                            console.log(`✅ ファイル存在確認成功: ${modelUrl}`);
+                            
+                            // GLTFモデル読み込み
+                            this.loadedGLTF = await new Promise((resolve, reject) => {
+                                loader.load(
+                                    modelUrl,
+                                    (gltf) => {
+                                        console.log('✅ GLTF読み込み成功:', gltf);
+                                        resolve(gltf);
+                                    },
+                                    (progress) => {
+                                        console.log('📊 読み込み進捗:', (progress.loaded / progress.total) * 100 + '%');
+                                    },
+                                    (error) => {
+                                        console.error('❌ GLTF読み込みエラー:', error);
+                                        reject(error);
+                                    }
+                                );
+                            });
+                            
+                            // AnimationMixer設定
+                            const gltf = this.loadedGLTF;
+                            if (gltf.animations && gltf.animations.length > 0) {
+                                this.mixer = new THREE.AnimationMixer(gltf.scene);
+                                const action = this.mixer.clipAction(gltf.animations[0]);
+                                action.setLoop(THREE.LoopRepeat);
+                                action.play();
+                                console.log('✅ GLTFアニメーション開始:', gltf.animations[0].name);
+                            }
+                            
+                            console.log('✅ GLTFモデル読み込み完全成功!');
+                            this.updateStatus('✅ モデル読み込み成功');
+                            modelLoaded = true;
+                            
+                            // ✅ 初期モデルを1個自動配置
+                            setTimeout(() => {
+                                this.placeModelAtPosition(new THREE.Vector3(0, 0, -1.5));
+                                this.updateStatus('✅ AR準備完了 - タップで追加配置');
+                            }, 500);
+                            
+                            break;
+                            
+                        } catch (error) {
+                            console.warn(`⚠️ ${modelUrl} 失敗:`, error.message);
+                            lastError = error;
+                        }
+                    }
+                    
+                    if (!modelLoaded) {
+                        throw new Error(`全てのURL試行失敗。最後のエラー: ${lastError?.message}`);
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ 全モデル読み込み失敗:', error);
+                    this.updateStatus(`❌ モデル読み込み失敗: ${error.message}`);
+                    
+                    // デフォルトキューブ作成
+                    console.log('🔶 デフォルトキューブにフォールバック');
+                    const geometry = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+                    const material = new THREE.MeshPhongMaterial({ color: 0xff6600 });
+                    this.defaultModel = new THREE.Mesh(geometry, material);
+                    
+                    // デフォルトキューブを自動配置
+                    setTimeout(() => {
+                        this.placeModelAtPosition(new THREE.Vector3(0, 0, -1.5));
+                        this.updateStatus('✅ デフォルトキューブ表示');
+                    }, 500);
+                }
+            }
+            
+            setupEvents() {
+                let lastPlacement = 0;
+                const PLACEMENT_COOLDOWN = 500;
+                
+                const placeModel = (event) => {
+                    const now = Date.now();
+                    if (now - lastPlacement < PLACEMENT_COOLDOWN) {
+                        console.log('⏳ 配置クールダウン中、無視');
+                        return;
+                    }
+                    lastPlacement = now;
+                    
+                    const rect = this.canvas.getBoundingClientRect();
+                    
+                    let clientX, clientY;
+                    if (event.touches && event.touches[0]) {
+                        clientX = event.touches[0].clientX;
+                        clientY = event.touches[0].clientY;
+                        event.preventDefault();
+                    } else {
+                        clientX = event.clientX;
+                        clientY = event.clientY;
+                    }
+                    
+                    const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+                    const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+                    
+                    const distance = 1.5;
+                    const position = new THREE.Vector3(
+                        x * 0.8,
+                        y * 0.8,
+                        -distance
+                    );
+                    
+                    console.log('🎯 モデル配置実行:', { x, y, position });
+                    this.placeModelAtPosition(position);
+                };
+                
+                this.canvas.addEventListener('touchstart', placeModel, { 
+                    passive: false, 
+                    capture: true 
+                });
+                this.canvas.addEventListener('click', placeModel, { 
+                    capture: true 
+                });
+                
+                // リサイズ対応
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                
+                console.log('✅ イベントリスナー設定完了');
+            }
+            
+            placeModelAtPosition(position) {
+                let model;
+                
+                if (this.loadedGLTF) {
+                    model = this.loadedGLTF.scene.clone();
+                    
+                    // サイズ調整
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = box.getSize(new THREE.Vector3());
+                    const maxSize = Math.max(size.x, size.y, size.z);
+                    const targetSize = 1.0;
+                    const scale = targetSize / maxSize;
+                    model.scale.setScalar(scale);
+                    
+                    console.log(`✅ モデルサイズ調整: ${size.x.toFixed(2)}→${targetSize} (スケール: ${scale.toFixed(3)})`);
+                    
+                } else {
+                    // デフォルトキューブ
+                    const geometry = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+                    const material = new THREE.MeshPhongMaterial({ 
+                        color: Math.random() * 0xffffff 
+                    });
+                    model = new THREE.Mesh(geometry, material);
+                }
+                
+                // 配置距離調整
+                const adjustedPosition = position.clone();
+                adjustedPosition.z = Math.min(adjustedPosition.z, -1.5);
+                
+                model.position.copy(adjustedPosition);
+                
+                // アニメーションフラグ設定
+                model.userData.hasGLTFAnimation = !!this.loadedGLTF?.animations?.length;
+                model.userData.rotationSpeed = model.userData.hasGLTFAnimation ? 0 : 0.01;
+                
+                this.scene.add(model);
+                this.models.push(model);
+                
+                console.log(`✅ モデル配置: ${this.models.length}個目`, adjustedPosition);
+                this.updateStatus(`✅ モデル配置完了 (${this.models.length}個) - 距離: ${Math.abs(adjustedPosition.z).toFixed(1)}m`);
+            }
+            
+            startRender() {
+                const clock = new THREE.Clock();
+                
+                const animate = () => {
+                    requestAnimationFrame(animate);
+                    
+                    const delta = clock.getDelta();
+                    
+                    // AnimationMixer更新
+                    if (this.mixer) {
+                        this.mixer.update(delta);
+                    }
+                    
+                    // モデル回転
+                    this.models.forEach(model => {
+                        if (model.userData.rotationSpeed && !model.userData.hasGLTFAnimation) {
+                            model.rotation.y += model.userData.rotationSpeed;
+                        }
+                    });
+                    
+                    this.renderer.render(this.scene, this.camera);
+                };
+                
+                animate();
+                console.log('🎬 統合アニメーションループ開始');
+            }
+            
+            updateStatus(message) {
+                this.status.textContent = message;
+                console.log('📱 Status:', message);
+            }
+        }
+        
+        // 自動起動
+        document.addEventListener('DOMContentLoaded', () => {
+            new QRSimpleAR();
+        });
+        
+    </script>
+</body>
+</html>
