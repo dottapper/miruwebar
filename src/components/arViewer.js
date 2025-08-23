@@ -700,7 +700,8 @@ export async function initARViewer(containerId, options = {}) {
       const maxSize = Math.max(size.x, size.y, size.z);
       let scale = 1.0;
       if (isFinite(maxSize) && maxSize > 1e-6) {
-        const targetSize = config.markerMode ? 0.5 : 2.0;
+        // 両モードで統一した見え方になるようターゲットサイズを固定
+        const targetSize = 1.0;
         scale = targetSize / maxSize;
         scale = isFinite(scale) ? scale : 1.0;
       }
@@ -915,19 +916,22 @@ export async function initARViewer(containerId, options = {}) {
     const modelWorldCenter = new THREE.Vector3();
     const worldBox = box.clone().applyMatrix4(model.matrixWorld);
     worldBox.getCenter(modelWorldCenter);
-    
-    // 統一した構図でカメラを配置（マーカーモードと同じ比率）
+
+    // 注視点を地面(y=0)に統一して見た目のズレを解消
+    const lookTarget = new THREE.Vector3(modelWorldCenter.x, 0, modelWorldCenter.z);
+
+    // 統一した構図でカメラを配置（マーカーと同じ比率/距離）
     const newCameraPos = new THREE.Vector3(
-      modelWorldCenter.x,                    // X軸: 正面（中央）
-      modelWorldCenter.y + distance * 0.3,  // Y軸: ちょい斜め上（統一した比率）
-      modelWorldCenter.z + distance         // Z軸: 統一した距離感
+      lookTarget.x,
+      lookTarget.y + distance * 0.3,
+      lookTarget.z + distance
     );
-    
+
     camera.position.copy(newCameraPos);
     camera.near = Math.max(0.01, distance * 0.1);
     camera.far = distance * 10;
     camera.updateProjectionMatrix();
-    controls.target.copy(modelWorldCenter); 
+    controls.target.copy(lookTarget); 
     
     // 統一した距離制限を設定
     controls.minDistance = 1.0;
