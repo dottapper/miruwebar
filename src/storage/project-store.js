@@ -239,10 +239,18 @@ function createLightweightProject(projectData) {
       backgroundColor: projectData.settings?.backgroundColor || 0x222222
     },
 
-    // ローディング画面（選択のみを軽量保存）
-    loadingScreen: projectData.loadingScreen
-      ? { selectedScreenId: projectData.loadingScreen.selectedScreenId || 'none' }
-      : { selectedScreenId: 'none' },
+    // ローディング画面（主要プロパティを保存）
+    loadingScreen: projectData.loadingScreen ? {
+      selectedScreenId: projectData.loadingScreen.selectedScreenId || 'none',
+      template: projectData.loadingScreen.template || 'default',
+      backgroundColor: projectData.loadingScreen.backgroundColor || '#1a1a1a',
+      textColor: projectData.loadingScreen.textColor || '#ffffff',
+      // 互換: accentColor or progressColor
+      progressColor: projectData.loadingScreen.progressColor || projectData.loadingScreen.accentColor || '#4CAF50',
+      message: projectData.loadingScreen.message || 'ARコンテンツを準備中...',
+      showProgress: projectData.loadingScreen.showProgress !== false,
+      logoImage: projectData.loadingScreen.logoImage || null
+    } : { selectedScreenId: 'none' },
     
     // マーカー画像データ（小さい場合のみ保存）
     markerImage: projectData.markerImage && projectData.markerImage.length < 100000 ? projectData.markerImage : null,
