@@ -196,7 +196,66 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    
+
+    // ローカル公開用API: /api/publish-project
+    if (pathname === '/api/publish-project' && req.method === 'POST') {
+      try {
+        const body = await parsePostData(req);
+        const { id, type, loadingScreen, models } = body || {};
+
+        if (!id) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'id is required' }));
+          return;
+        }
+
+        // 保存先: uploads/projects/<id>
+        const projectDir = path.join(uploadsDir, 'projects', id);
+        if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
+
+        const modelEntries = [];
+        if (Array.isArray(models)) {
+          for (const m of models) {
+            try {
+              const fileName = m.fileName || 'model.glb';
+              const base64 = (m.dataBase64 || '').split(',').pop();
+              if (!base64) continue;
+              const buffer = Buffer.from(base64, 'base64');
+              const filePath = path.join(projectDir, fileName);
+              fs.writeFileSync(filePath, buffer);
+              modelEntries.push({
+                url: `/projects/${id}/${fileName}`,
+                fileName,
+                fileSize: buffer.length
+              });
+            } catch (e) {
+              console.warn('モデル保存に失敗:', e);
+            }
+          }
+        }
+
+        // project.json を生成
+        const projectJson = {
+          id,
+          type: type || 'markerless',
+          loadingScreen: loadingScreen || null,
+          models: modelEntries
+        };
+        fs.writeFileSync(path.join(projectDir, 'project.json'), JSON.stringify(projectJson, null, 2));
+
+        const host = req.headers['x-forwarded-host'] || req.headers.host || `localhost:${PORT}`;
+        const scheme = (req.headers['x-forwarded-proto'] || 'http');
+        const viewerUrl = `${scheme}://${host}/#/viewer?src=${scheme}://${host}/projects/${id}/project.json`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, viewerUrl, projectUrl: `${scheme}://${host}/projects/${id}/project.json` }));
+      } catch (e) {
+        console.error('publish-project エラー:', e);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'publish failed', message: e.message }));
+      }
+      return;
+    }
+
     // AR表示用ページ
     if (pathname.startsWith('/ar/')) {
       const projectId = pathname.split('/')[2];
@@ -245,7 +304,7 @@ const server = http.createServer(async (req, res) => {
       res.end(html);
       return;
     }
-    
+
     // アップロードファイルの配信
     if (pathname.startsWith('/uploads/')) {
       const filePath = path.join(uploadsDir, pathname.replace('/uploads/', ''));
@@ -258,13 +317,46 @@ const server = http.createServer(async (req, res) => {
         return;
       }
     }
+
+    // /projects 配下の静的配信（uploads/projects をマッピング）
+    if (pathname.startsWith('/projects/')) {
+      const filePath = path.join(uploadsDir, 'projects', pathname.replace('/projects/', ''));
+      if (fs.existsSync(filePath)) {
+        const ext = path.extname(filePath);
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        const data = await readFile(filePath);
+        res.writeHead(200, { 'Content-Type': contentType });
+        res.end(data);
+        return;
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
+        return;
+      }
+    }
     
     // 静的ファイルの配信
-    let filePath = path.join(__dirname, '../dist', pathname === '/' ? 'index.html' : pathname);
+    let filePath;
     
-    // ファイルが存在しない場合はindex.htmlを返す（SPA対応）
-    if (!fs.existsSync(filePath)) {
-      filePath = path.join(__dirname, '../dist/index.html');
+    // ルートディレクトリから直接ファイルを配信（開発用）
+    if (pathname === '/') {
+      filePath = path.join(__dirname, '../index.html');
+    } else {
+      // まずルートディレクトリから探す
+      filePath = path.join(__dirname, '..', pathname);
+      
+      // ファイルが存在しない場合はdistから探す
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(__dirname, '../dist', pathname);
+      }
+      
+      // それでも存在しない場合はindex.htmlを返す（SPA対応）
+      if (!fs.existsSync(filePath)) {
+        filePath = path.join(__dirname, '../index.html');
+        if (!fs.existsSync(filePath)) {
+          filePath = path.join(__dirname, '../dist/index.html');
+        }
+      }
     }
     
     const ext = path.extname(filePath);

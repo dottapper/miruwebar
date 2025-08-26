@@ -225,6 +225,58 @@ export default defineConfig({
             next();
           }
         });
+
+        // ローカル公開API（Vite開発サーバー用）
+        server.middlewares.use('/api/publish-project', async (req, res, next) => {
+          if (req.method !== 'POST') return next();
+          try {
+            let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            await new Promise(resolve => req.on('end', resolve));
+
+            const parsed = JSON.parse(body || '{}');
+            const { id, type, loadingScreen, models } = parsed;
+            if (!id) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'id is required' }));
+              return;
+            }
+
+            const projectDir = path.join(__dirname, 'public', 'projects', id);
+            await fs.ensureDir(projectDir);
+
+            const modelEntries = [];
+            if (Array.isArray(models)) {
+              for (const m of models) {
+                try {
+                  const fileName = m.fileName || 'model.glb';
+                  const base64 = String(m.dataBase64 || '').split(',').pop();
+                  if (!base64) continue;
+                  const buffer = Buffer.from(base64, 'base64');
+                  const filePath = path.join(projectDir, fileName);
+                  await fs.writeFile(filePath, buffer);
+                  modelEntries.push({ url: `/projects/${id}/${fileName}`, fileName, fileSize: buffer.length });
+                } catch (e) {
+                  console.warn('モデル保存に失敗:', e);
+                }
+              }
+            }
+
+            const projectJson = { id, type: type || 'markerless', loadingScreen: loadingScreen || null, models: modelEntries };
+            await fs.writeJson(path.join(projectDir, 'project.json'), projectJson, { spaces: 2 });
+
+            const scheme = server.config.server.https ? 'https' : 'http';
+            const host = server.config.server.host === true ? getServerNetworkIP() : 'localhost';
+            const port = server.config.server.port || 3000;
+            const viewerUrl = `${scheme}://${host}:${port}/#/viewer?src=${scheme}://${host}:${port}/projects/${id}/project.json`;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, viewerUrl, projectUrl: `${scheme}://${host}:${port}/projects/${id}/project.json` }));
+          } catch (error) {
+            console.error('❌ publish-project (vite) エラー:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'publish failed', message: error.message }));
+          }
+        });
       }
     }
   ],

@@ -1,6 +1,7 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
+import { getProject, loadProjectWithModels } from '../api/projects-new.js';
 // QRCodeライブラリをトップレベルでインポート
 let QRCodeLib = null;
 async function loadQRCode() {
@@ -446,7 +447,7 @@ export function showNewProjectModal() {
     return null;
   }
 
-  export async function showQRCodeModal(options = {}) {
+export async function showQRCodeModal(options = {}) {
     console.log('🚀 QRコードモーダル開始:', {
       timestamp: new Date().toISOString(),
       options,
@@ -457,8 +458,8 @@ export function showNewProjectModal() {
     const modalOverlay = document.createElement('div');
     modalOverlay.className = 'modal-overlay';
     
-    // プロジェクトIDを正確に使用（modelNameではなくプロジェクトIDを使用）
-    const projectId = options.modelName ? encodeURIComponent(options.modelName) : 'sample';
+    // プロジェクトIDを正確に使用（modelNameにIDが来ている想定）
+    const projectId = options.modelName ? decodeURIComponent(options.modelName) : 'sample';
     
     // ローカルネットワークIPを取得
     const localIP = await getLocalNetworkIP();
@@ -473,8 +474,8 @@ export function showNewProjectModal() {
       port: currentPort
     });
     
-    // URL生成（実際のローカルIPを使用）
-    const localUrl = `${scheme}://${localHost}/#/viewer?src=${scheme}://${localHost}/projects/${projectId}/project.json`;
+    // URL生成（ローカル公開の想定パス）
+    let localUrl = `${scheme}://${localHost}/#/viewer?src=${scheme}://${localHost}/projects/${encodeURIComponent(projectId)}/project.json`;
     const appOrigin = window.location.origin;
     const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${projectId}/project.json`;
     
@@ -761,10 +762,57 @@ export function showNewProjectModal() {
         }
     };
 
-    // QRコードを生成（DOM要素の準備を待つ）
-    setTimeout(() => {
-      generateQRCode();
-    }, 200);
+    // 補助: Blob→Base64
+    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    // 開いたタイミングでローカル公開を試行（同一Wi-Fi前提）
+    (async () => {
+      try {
+        if (!projectId || projectId === 'sample') throw new Error('プロジェクトID不明');
+
+        const project = getProject(projectId);
+        if (!project) throw new Error('プロジェクトデータが見つかりません');
+
+        const withModels = await loadProjectWithModels(project);
+        const modelPayload = [];
+        for (const m of withModels.modelData || []) {
+          if (m.blob) {
+            const dataBase64 = await blobToBase64(m.blob);
+            modelPayload.push({ fileName: m.fileName || 'model.glb', dataBase64 });
+          }
+        }
+
+        const resp = await fetch('/api/publish-project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: projectId, type: project.type || 'markerless', loadingScreen: project.loadingScreen || null, models: modelPayload })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.viewerUrl) {
+            localUrl = data.viewerUrl;
+            // 表示を更新
+            const localUrlEl = modalOverlay.querySelector('#local-url');
+            if (localUrlEl) localUrlEl.textContent = localUrl;
+            // タブ状態がlocalならQR再生成
+            if (currentMethod === 'local') {
+              currentUrl = localUrl;
+              generateQRCode();
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('ローカル公開に失敗（フォールバックでURLのみ表示）:', e);
+      } finally {
+        // 初期QR生成（公開に成功していれば更新されたURLになる）
+        setTimeout(() => generateQRCode(), 200);
+      }
+    })();
 
     // QRコードモーダルの強制クローズを検出するための監視
     let modalClosedByScript = false;
@@ -921,4 +969,3 @@ export function showNewProjectModal() {
       console.error('❌ ARプレビュー読み込みエラー:', e);
     });
   }
-
