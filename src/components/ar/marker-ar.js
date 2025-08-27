@@ -97,6 +97,19 @@ export class MarkerAR {
    * AR.js ライブラリを動的読み込み
    */
   async loadARjsLibrary() {
+    // まず、AR.js が期待するグローバル THREE を用意
+    try {
+      if (!window.THREE || !window.THREE.REVISION || parseInt(window.THREE.REVISION) > 130) {
+        // AR.js互換のthree r122をグローバルに読み込む
+        console.log('🔧 グローバルTHREEを準備（r122）');
+        await this.loadScript('https://cdn.jsdelivr.net/npm/three@0.122.0/build/three.min.js');
+      }
+    } catch (e) {
+      console.warn('⚠️ グローバルTHREE準備に失敗（続行）:', e);
+      // 最低限、現在のモジュール版THREEをグローバルに割り当て
+      window.THREE = window.THREE || THREE;
+    }
+
     // AR.js が既に読み込まれているかチェック
     if (window.THREEx && window.THREEx.ArToolkitSource) {
       console.log('📦 AR.js は既に読み込み済み');
