@@ -15,8 +15,10 @@ export class MarkerAR {
     this.container = container;
     this.options = {
       sourceType: 'webcam',
-      markerUrl: options.markerUrl || 'https://ar-js-org.github.io/AR.js/data/patt.hiro',
-      cameraParametersUrl: 'https://ar-js-org.github.io/AR.js/data/camera_para.dat',
+      // 既定マーカー（CDN経由で安定配信）
+      markerUrl: options.markerUrl || 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
+      // カメラパラメータ（GH Pages直下は404のため、CDNパスを使用）
+      cameraParametersUrl: options.cameraParametersUrl || 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
       worldScale: options.worldScale || 1.0,
       ...options
     };
