@@ -146,7 +146,7 @@ export default function showARViewer(container) {
       padding: 1rem;
       border-radius: 12px;
       text-align: center;
-      z-index: 900;
+      z-index: 1100; /* ローディング画面(1000)より前面に表示 */
       max-width: 320px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
