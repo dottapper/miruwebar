@@ -72,6 +72,28 @@ export class MarkerAR {
       // レンダラー設定
       this.setupRenderer();
 
+      // 必要アセットURLを解決（ローカル > CDN 順に）
+      this.options.cameraParametersUrl = await this.resolveAssetUrl(
+        [
+          '/arjs/camera_para.dat',
+          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
+          'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/camera_para.dat'
+        ]
+      );
+      this.options.markerUrl = await this.resolveAssetUrl(
+        [
+          this.options.markerUrl, // 優先（カスタム指定）
+          '/arjs/patt.hiro',
+          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
+          'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/patt.hiro'
+        ]
+      );
+
+      console.log('🔗 解決したアセットURL:', {
+        cameraParametersUrl: this.options.cameraParametersUrl,
+        markerUrl: this.options.markerUrl
+      });
+
       // ARToolkitSource 初期化（カメラ）
       await this.initARToolkitSource();
 
@@ -93,6 +115,29 @@ export class MarkerAR {
       console.error('❌ MarkerAR初期化失敗:', error);
       throw new Error(`MarkerAR初期化エラー: ${error.message}`);
     }
+  }
+
+  /**
+   * 最初に到達可能なアセットURLを返す（タイムアウト2秒）
+   */
+  async resolveAssetUrl(candidates = []) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    for (const url of candidates) {
+      if (!url) continue;
+      try {
+        const res = await fetch(url, { method: 'HEAD', mode: 'cors', signal: controller.signal });
+        if (res.ok) {
+          clearTimeout(timeout);
+          return url;
+        }
+      } catch (_) {
+        // 次の候補へ
+      }
+    }
+    clearTimeout(timeout);
+    // 最後の候補を返す（AR.js 側で取得失敗時にエラー）
+    return candidates.find(Boolean);
   }
 
   /**
