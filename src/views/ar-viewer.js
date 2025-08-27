@@ -1,5 +1,6 @@
 // src/views/ar-viewer.js
 // 統合ARビューア - QRコードからプロジェクトデータを読み込んでAR表示
+import { MarkerAR } from '../components/ar/marker-ar.js';
 
 function navigateBackOrHome() {
   try {
