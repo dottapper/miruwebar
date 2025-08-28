@@ -207,9 +207,14 @@ export class MarkerAR {
     const height = this.container.clientHeight || window.innerHeight;
     
     this.renderer.setSize(width, height);
+    // 背景を完全透明にして背面のカメラ映像を見せる
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0px';
     this.renderer.domElement.style.left = '0px';
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.zIndex = '1'; // カメラ映像の上に重ねる
     this.container.appendChild(this.renderer.domElement);
 
     console.log('🖥️ レンダラー設定完了:', { width, height });
@@ -253,8 +258,29 @@ export class MarkerAR {
               videoHeight: this.arToolkitSource.domElement?.videoHeight
             });
             
+            try {
+              // カメラ映像（video/canvas）をDOMに追加して背面に表示
+              const camEl = this.arToolkitSource.domElement;
+              if (camEl && !camEl.parentNode) {
+                camEl.setAttribute('playsinline', 'true');
+                camEl.setAttribute('muted', 'true');
+                camEl.style.position = 'absolute';
+                camEl.style.top = '0';
+                camEl.style.left = '0';
+                camEl.style.width = '100%';
+                camEl.style.height = '100%';
+                camEl.style.objectFit = 'cover';
+                camEl.style.zIndex = '0';
+                this.container.appendChild(camEl);
+              }
+            } catch (e) {
+              console.warn('⚠️ カメラDOM要素の配置に失敗（続行）:', e);
+            }
+
             // サイズ調整
             this.onResize();
+            // リサイズ対応
+            window.addEventListener('resize', () => this.onResize());
             resolve();
           },
           // エラーコールバック
