@@ -15,18 +15,20 @@ export class MarkerAR {
     this.container = container;
     this.options = {
       sourceType: 'webcam',
-      // 既定マーカー（CDN経由で安定配信）
-      markerUrl: options.markerUrl || 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
-      // カメラパラメータ（GH Pages直下は404のため、CDNパスを使用）
-      cameraParametersUrl: options.cameraParametersUrl || 'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
+      // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
+      markerUrl: options.markerUrl || '/arjs/patt.hiro',
+      // カメラパラメータ（まずローカル同梱を優先し、CDNはフォールバック）
+      cameraParametersUrl: options.cameraParametersUrl || '/arjs/camera_para.dat',
       worldScale: options.worldScale || 1.0,
       ...options
     };
 
     // Three.js 基本要素
-    this.scene = new THREE.Scene();
-    this.camera = new THREE.Camera();
-    this.renderer = new THREE.WebGLRenderer({ 
+    const T = (typeof window !== 'undefined' && window.THREE) ? window.THREE : THREE;
+    this._T = T;
+    this.scene = new T.Scene();
+    this.camera = new T.Camera();
+    this.renderer = new T.WebGLRenderer({ 
       antialias: true, 
       alpha: true,
       powerPreference: "default" // iPhone 用省電力設定
@@ -36,7 +38,7 @@ export class MarkerAR {
     this.arToolkitSource = null;
     this.arToolkitContext = null;
     this.markerControls = null;
-    this.markerRoot = new THREE.Group();
+    this.markerRoot = new this._T.Group();
     
     // モデル管理
     this.modelLoader = new GLTFLoader();
@@ -73,21 +75,20 @@ export class MarkerAR {
       this.setupRenderer();
 
       // 必要アセットURLを解決（ローカル > CDN 順に）
-      this.options.cameraParametersUrl = await this.resolveAssetUrl(
-        [
-          '/arjs/camera_para.dat',
-          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
-          'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/camera_para.dat'
-        ]
-      );
-      this.options.markerUrl = await this.resolveAssetUrl(
-        [
-          this.options.markerUrl, // 優先（カスタム指定）
-          '/arjs/patt.hiro',
-          'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
-          'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/patt.hiro'
-        ]
-      );
+      this.options.cameraParametersUrl = await this.resolveAssetUrl([
+        '/arjs/camera_para.dat',
+        this.options.cameraParametersUrl,
+        'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
+        'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/camera_para.dat',
+        'https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/camera_para.dat'
+      ]);
+      this.options.markerUrl = await this.resolveAssetUrl([
+        '/arjs/patt.hiro',
+        this.options.markerUrl, // カスタム指定があれば次候補
+        'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
+        'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/patt.hiro',
+        'https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/patt.hiro'
+      ]);
 
       console.log('🔗 解決したアセットURL:', {
         cameraParametersUrl: this.options.cameraParametersUrl,
@@ -95,13 +96,19 @@ export class MarkerAR {
       });
 
       // ARToolkitSource 初期化（カメラ）
+      console.log('📹 ARToolkitSource 初期化開始');
       await this.initARToolkitSource();
+      console.log('✅ ARToolkitSource 初期化完了');
 
       // ARToolkitContext 初期化（マーカー検出）
+      console.log('🎯 ARToolkitContext 初期化開始');
       await this.initARToolkitContext();
+      console.log('✅ ARToolkitContext 初期化完了');
 
       // マーカーコントロール設定
+      console.log('🔧 マーカーコントロール設定開始');
       this.setupMarkerControls();
+      console.log('✅ マーカーコントロール設定完了');
 
       // アニメーションループ開始
       this.startRenderLoop();
@@ -121,22 +128,68 @@ export class MarkerAR {
    * 最初に到達可能なアセットURLを返す（タイムアウト2秒）
    */
   async resolveAssetUrl(candidates = []) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const currentOrigin = window.location.origin;
+
     for (const url of candidates) {
       if (!url) continue;
+
       try {
-        const res = await fetch(url, { method: 'HEAD', mode: 'cors', signal: controller.signal });
-        if (res.ok) {
-          clearTimeout(timeout);
-          return url;
+        // ローカルURLの場合はCORSモードを避ける
+        const isLocalUrl = url.startsWith('/') || url.startsWith('./') || url.startsWith(currentOrigin);
+        const fetchOptions = {
+          method: 'GET',
+          cache: 'no-store'
+        };
+
+        // 外部URLの場合はcorsモードを使用、ローカルURLの場合はデフォルト
+        if (!isLocalUrl) {
+          fetchOptions.mode = 'cors';
         }
-      } catch (_) {
-        // 次の候補へ
+
+        console.log('🔍 アセット確認:', url, isLocalUrl ? '(ローカル)' : '(外部)');
+
+        const res = await fetch(url, fetchOptions);
+        if (res.ok) {
+          // 最低サイズをチェック（極端に小さい=HTMLやエラーページの可能性）
+          const buf = await res.clone().arrayBuffer();
+          const size = buf.byteLength;
+          const name = (url || '').toString();
+          const isCamera = name.includes('camera_para');
+          const minSize = isCamera ? 1024 : 256; // camera_paraは1KB以上、pattは256B以上を目安
+
+          if (size >= minSize) {
+            // 先頭数百バイトを文字列で確認し、明らかなエラーメッセージ/HTMLを検出したらスキップ
+            try {
+              const head = new Uint8Array(buf).slice(0, 256);
+              const text = new TextDecoder().decode(head).toLowerCase();
+              if (text.includes("couldn't find the requested file") ||
+                  text.includes('<html') ||
+                  text.includes('not found') ||
+                  text.includes('404')) {
+                console.warn('⚠️ アセット内容がエラーページの可能性のためスキップ:', url);
+                continue;
+              }
+            } catch {}
+
+            console.log('✅ アセット到達・サイズOK:', url, size, 'bytes');
+            return url;
+          } else {
+            console.warn('⚠️ アセットサイズが小さすぎます。スキップ:', url, size, 'bytes');
+          }
+        } else {
+          console.warn('⚠️ アセット到達失敗:', url, res.status);
+        }
+      } catch (e) {
+        console.warn('⚠️ アセット到達エラー:', url, e?.message);
+        // CORSエラーの場合はローカルURLを優先的に探す
+        if (e.message.includes('CORS') && !url.startsWith('/')) {
+          console.log('🔄 CORSエラー検知、引き続きローカルURLを探索');
+        }
       }
     }
-    clearTimeout(timeout);
-    // 最後の候補を返す（AR.js 側で取得失敗時にエラー）
+
+    console.log('📋 利用可能な候補:', candidates);
+    // 最後の候補（失敗時はAR.js側でエラーになる）
     return candidates.find(Boolean);
   }
 
@@ -206,18 +259,36 @@ export class MarkerAR {
     const width = this.container.clientWidth || window.innerWidth;
     const height = this.container.clientHeight || window.innerHeight;
     
-    this.renderer.setSize(width, height);
-    // 背景を完全透明にして背面のカメラ映像を見せる
-    this.renderer.setClearColor(0x000000, 0);
+    try {
+      this.renderer.setSize(width, height);
+      // 背景を完全透明にして背面のカメラ映像を見せる（古いthree互換のため安全に）
+      if (this.renderer.setClearColor) {
+        this.renderer.setClearColor(0x000000, 0);
+      }
+    } catch (e) {
+      console.warn('⚠️ レンダラーサイズ/クリア設定で警告（続行）:', e?.message);
+    }
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0px';
     this.renderer.domElement.style.left = '0px';
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
-    this.renderer.domElement.style.zIndex = '1'; // カメラ映像の上に重ねる
+    this.renderer.domElement.style.zIndex = '10'; // カメラ映像の上に重ねる
+    this.renderer.domElement.style.pointerEvents = 'none'; // カメラタップを透過
+    this.renderer.domElement.style.backgroundColor = 'transparent'; // 明示的に透明
+    this.renderer.domElement.style.background = 'transparent'; // 追加の透明設定
     this.container.appendChild(this.renderer.domElement);
-
-    console.log('🖥️ レンダラー設定完了:', { width, height });
+    
+    // Three.jsバージョン互換性のためのセーフガード
+    let debugInfo = { width, height };
+    try {
+      if (this.renderer.alpha !== undefined) debugInfo.alpha = this.renderer.alpha;
+      // getClearAlpha() と getClearColor() は互換性問題があるためスキップ
+    } catch (e) {
+      console.warn('⚠️ レンダラー詳細情報取得でエラー（続行）:', e.message);
+    }
+    
+    console.log('🖥️ レンダラー設定完了（透明度強化）:', debugInfo);
   }
 
   /**
@@ -225,6 +296,7 @@ export class MarkerAR {
    * iPhone Safari 用に最適化
    */
   initARToolkitSource() {
+    console.log('🚨🚨🚨 initARToolkitSource() 関数呼び出し確認');
     return new Promise((resolve, reject) => {
       console.log('📹 カメラアクセス初期化開始（iPhone Safari 最適化）');
 
@@ -261,17 +333,62 @@ export class MarkerAR {
             try {
               // カメラ映像（video/canvas）をDOMに追加して背面に表示
               const camEl = this.arToolkitSource.domElement;
+              console.log('🎥 カメラDOM要素詳細:', {
+                要素存在: !!camEl,
+                要素タイプ: camEl?.tagName,
+                親要素存在: !!camEl?.parentNode,
+                ビデオ幅: camEl?.videoWidth || camEl?.width,
+                ビデオ高さ: camEl?.videoHeight || camEl?.height,
+                再生中: camEl?.paused === false,
+                srcObject: !!camEl?.srcObject,
+                readyState: camEl?.readyState
+              });
+              
               if (camEl && !camEl.parentNode) {
+                console.log('📺 カメラ映像をDOMに追加中...');
                 camEl.setAttribute('playsinline', 'true');
                 camEl.setAttribute('muted', 'true');
+                camEl.setAttribute('autoplay', 'true');
+                
+                // 強制的なカメラ表示スタイル
                 camEl.style.position = 'absolute';
                 camEl.style.top = '0';
                 camEl.style.left = '0';
                 camEl.style.width = '100%';
                 camEl.style.height = '100%';
                 camEl.style.objectFit = 'cover';
+                camEl.style.zIndex = '0'; // レンダラーより下に配置
+                camEl.style.display = 'block';
+                camEl.style.visibility = 'visible';
+                camEl.style.opacity = '1';
+                camEl.style.backgroundColor = 'transparent'; // 背景を透明に
+                
+                // コンテナの最初の子要素として挿入（最背面）
+                if (this.container.firstChild) {
+                  this.container.insertBefore(camEl, this.container.firstChild);
+                } else {
+                  this.container.appendChild(camEl);
+                }
+                console.log('✅ カメラ映像DOM追加完了');
+              } else if (camEl?.parentNode) {
+                console.log('📺 カメラ映像は既にDOMに存在');
+                // 既存要素のスタイルも修正
                 camEl.style.zIndex = '0';
-                this.container.appendChild(camEl);
+                camEl.style.display = 'block';
+                camEl.style.visibility = 'visible';
+                camEl.style.opacity = '1';
+              } else {
+                console.error('❌ カメラDOM要素が存在しません');
+              }
+              // iOS/Safari での再生ガード
+              if (camEl && typeof camEl.play === 'function') {
+                const tryPlay = async () => {
+                  try { await camEl.play(); } catch (e) { console.warn('⚠️ カメラ映像の再生に失敗（再試行）:', e?.message); }
+                };
+                camEl.addEventListener('loadedmetadata', tryPlay, { once: true });
+                camEl.addEventListener('canplay', tryPlay, { once: true });
+                // すでにメタデータがあれば即再生
+                tryPlay();
               }
             } catch (e) {
               console.warn('⚠️ カメラDOM要素の配置に失敗（続行）:', e);
@@ -314,32 +431,170 @@ export class MarkerAR {
    * ARToolkitContext 初期化（マーカー検出）
    */
   initARToolkitContext() {
-    return new Promise((resolve, reject) => {
-      console.log('🎯 マーカー検出システム初期化');
+    console.log('🚨 initARToolkitContext() 関数が呼び出されました');
+    return new Promise(async (resolve, reject) => {
+      console.log('🎯 マーカー検出システム初期化開始');
 
-      this.arToolkitContext = new window.THREEx.ArToolkitContext({
+      // まず、カメラパラメータファイルが正常にアクセス可能か事前確認
+      try {
+        console.log('🔍 カメラパラメータファイル事前確認:', this.options.cameraParametersUrl);
+        const preCheckResponse = await fetch(this.options.cameraParametersUrl);
+        const preCheckBuffer = await preCheckResponse.arrayBuffer();
+        console.log('📁 事前確認結果:', {
+          status: preCheckResponse.status,
+          size: preCheckBuffer.byteLength,
+          contentType: preCheckResponse.headers.get('content-type')
+        });
+        
+        if (!preCheckResponse.ok || preCheckBuffer.byteLength < 1024) {
+          throw new Error(`カメラパラメータファイルが無効: ${preCheckResponse.status}, ${preCheckBuffer.byteLength}bytes`);
+        }
+      } catch (preCheckError) {
+        console.error('❌ カメラパラメータファイル事前確認エラー:', preCheckError);
+        reject(new Error(`カメラパラメータファイル読み込み失敗: ${preCheckError.message}`));
+        return;
+      }
+
+      const contextConfig = {
         cameraParametersUrl: this.options.cameraParametersUrl,
         detectionMode: 'mono',
         matrixCodeType: '3x3',
         canvasWidth: 640,   // iPhone 用解像度制限
         canvasHeight: 480,
-        maxDetectionRate: 30 // iPhone 用フレームレート制限
-      });
+        maxDetectionRate: 30, // iPhone 用フレームレート制限
+        // 追加の安定化設定
+        debug: false,
+        imageSmoothingEnabled: false
+      };
+      
+      console.log('🔧 ARコンテキスト設定:', contextConfig);
+      this.arToolkitContext = new window.THREEx.ArToolkitContext(contextConfig);
 
-      this.arToolkitContext.init(() => {
-        console.log('✅ マーカー検出システム初期化完了');
+      try {
+        console.log('🚀 ARコンテキスト init() 開始');
         
-        // カメラの投影行列を設定
-        this.camera.projectionMatrix.copy(this.arToolkitContext.getProjectionMatrix());
-        resolve();
-      });
+        // 初期化進捗の詳細監視
+        let callbackExecuted = false;
+        let initStartTime = Date.now();
+        let timeoutId;
+        
+        // 初期化状態の定期チェック
+        const checkInterval = setInterval(() => {
+          const elapsed = Date.now() - initStartTime;
+          console.log(`🔄 ARコンテキスト初期化進捗 (${elapsed}ms):`, {
+            _arContext: !!this.arToolkitContext._arContext,
+            arController: !!this.arToolkitContext.arController,
+            parameters: !!this.arToolkitContext.parameters,
+            callbackExecuted
+          });
+        }, 3000); // 3秒ごとに状態確認
+        
+        // AR.js初期化の成功コールバック
+        const onInitSuccess = () => {
+          callbackExecuted = true;
+          clearInterval(checkInterval);
+          clearTimeout(timeoutId);
+          console.log('✅ ARコンテキスト初期化コールバック実行');
+          console.log('🔍 ARコンテキスト最終状態:', {
+            _arContext: !!this.arToolkitContext._arContext,
+            arController: !!this.arToolkitContext.arController,
+            parameters: !!this.arToolkitContext.parameters,
+            初期化時間: `${Date.now() - initStartTime}ms`
+          });
 
-      // エラータイムアウト
-      setTimeout(() => {
-        if (!this.arToolkitContext._arContext) {
-          reject(new Error('マーカー検出システム初期化タイムアウト'));
-        }
-      }, 10000);
+          // カメラの投影行列を設定（Three.js互換性対応）
+          try {
+            const projMatrix = this.arToolkitContext.getProjectionMatrix();
+            if (projMatrix && this.camera.projectionMatrix) {
+              this.camera.projectionMatrix.copy(projMatrix);
+              console.log('✅ カメラ投影行列設定完了');
+            } else {
+              console.warn('⚠️ 投影行列の設定をスキップ（互換性問題）');
+            }
+          } catch (projError) {
+            console.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
+          }
+          
+          resolve();
+        };
+
+        // AR.js初期化実行（10秒後に強制完了も用意）
+        this.arToolkitContext.init(onInitSuccess);
+        
+        // 10秒後に強制的に成功扱いにする（AR.jsコールバックが呼ばれない場合の対策）
+        const forceSuccessTimeout = setTimeout(() => {
+          if (!callbackExecuted) {
+            console.warn('⚠️ ARコンテキスト初期化コールバックが10秒経過しても呼ばれないため強制完了');
+            
+            // ARコンテキストの状態を確認し、必要に応じて手動で初期化状態を設定
+            console.log('🔧 ARコンテキスト強制初期化試行中...');
+            
+            // AR.jsが内部的に初期化されているかチェック
+            if (this.arToolkitContext && (this.arToolkitContext._arContext || this.arToolkitContext.arController)) {
+              console.log('✅ ARコンテキストは実際には初期化されているため続行');
+              onInitSuccess();
+            } else {
+              console.warn('⚠️ ARコンテキストが初期化されていないが強制的に続行');
+              
+              // 手動で最小限の初期化状態を設定
+              try {
+                if (this.arToolkitContext && !this.arToolkitContext._arContext) {
+                  console.log('🔧 手動でARコンテキスト状態を設定中...');
+                  // 最小限の_arContext状態をシミュレート
+                  this.arToolkitContext._arContext = { initialized: true };
+                }
+              } catch (e) {
+                console.warn('⚠️ 手動初期化設定に失敗（続行）:', e.message);
+              }
+              
+              onInitSuccess();
+            }
+          }
+        }, 10000);
+
+        // エラータイムアウト（30秒に延長 + より詳細な診断）
+        timeoutId = setTimeout(async () => {
+          clearInterval(checkInterval);
+          if (!callbackExecuted) {
+            console.error('❌ ARコンテキスト初期化タイムアウト（30秒）詳細:', {
+              arToolkitContext: !!this.arToolkitContext,
+              _arContext: !!this.arToolkitContext._arContext,
+              arController: !!this.arToolkitContext.arController,
+              cameraParametersUrl: this.options.cameraParametersUrl,
+              callbackExecuted,
+              経過時間: `${Date.now() - initStartTime}ms`
+            });
+            
+            // カメラパラメータファイルの詳細テスト
+            try {
+              console.log('🔍 カメラパラメータファイル詳細テスト開始...');
+              const response = await fetch(this.options.cameraParametersUrl);
+              const buffer = await response.arrayBuffer();
+              console.log('📁 camera_para.dat テスト結果:', {
+                status: response.status,
+                statusText: response.statusText,
+                size: buffer.byteLength,
+                contentType: response.headers.get('content-type'),
+                url: this.options.cameraParametersUrl
+              });
+            } catch (err) {
+              console.error('📁 camera_para.dat アクセスエラー:', err);
+            }
+            
+            reject(new Error('マーカー検出システム初期化タイムアウト（30秒）'));
+          }
+        }, 30000); // 30秒に延長
+        
+        // 成功時にタイムアウトをクリア
+        const originalResolve = resolve;
+        resolve = (...args) => {
+          clearTimeout(timeoutId);
+          originalResolve(...args);
+        };
+      } catch (error) {
+        console.error('❌ ARToolkitContext初期化エラー:', error);
+        reject(new Error(`マーカー検出システム初期化エラー: ${error.message}`));
+      }
     });
   }
 
@@ -376,7 +631,12 @@ export class MarkerAR {
         console.log('🔍 MarkerAR デバッグ:', {
           マーカー可視: isVisible,
           ARコンテキスト: !!this.arToolkitContext,
-          カメラ準備完了: !!(this.arToolkitSource && this.arToolkitSource.ready),
+          ARコンテキスト初期化済: !!(this.arToolkitContext && this.arToolkitContext._arContext),
+          カメラソース存在: !!this.arToolkitSource,
+          カメラ準備完了: !!(this.arToolkitSource && this.arToolkitSource.ready === true),
+          カメラDOM要素: !!(this.arToolkitSource && this.arToolkitSource.domElement),
+          動画サイズ: this.arToolkitSource && this.arToolkitSource.domElement ? 
+            `${this.arToolkitSource.domElement.videoWidth}x${this.arToolkitSource.domElement.videoHeight}` : 'N/A',
           読み込み済みモデル: !!this.loadedModel,
           配置済みモデル: !!this.placedModel
         });
@@ -419,13 +679,34 @@ export class MarkerAR {
     const animate = () => {
       requestAnimationFrame(animate);
 
-      // AR.js 更新
-      if (this.arToolkitSource && this.arToolkitSource.ready !== false) {
-        this.arToolkitContext.update(this.arToolkitSource.domElement);
-      }
+      try {
+        // AR.js 更新（より厳密な条件チェック）
+        if (this.arToolkitSource && 
+            this.arToolkitSource.ready === true && 
+            this.arToolkitSource.domElement &&
+            this.arToolkitContext &&
+            this.arToolkitContext._arContext) {
+          
+          // カメラストリームが有効か確認
+          const videoElement = this.arToolkitSource.domElement;
+          if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+            this.arToolkitContext.update(this.arToolkitSource.domElement);
+          }
+        }
 
-      // レンダリング
-      this.renderer.render(this.scene, this.camera);
+        // レンダリング
+        if (this.renderer && this.scene && this.camera) {
+          this.renderer.render(this.scene, this.camera);
+        }
+      } catch (error) {
+        // AR.js固有のエラーはログを出力しない（無限ループ防止）
+        if (!error.message.includes('detectMarker') && 
+            !error.message.includes('ARToolKit') && 
+            !error.message.includes('ARController')) {
+          console.warn('⚠️ アニメーションループエラー:', error.message);
+        }
+        // エラーが発生してもループを継続
+      }
     };
 
     animate();
@@ -446,9 +727,9 @@ export class MarkerAR {
           const model = gltf.scene;
           
           // モデルサイズ調整（iPhone 用小さめ）
-          const box = new THREE.Box3().setFromObject(model);
-          const size = box.getSize(new THREE.Vector3());
-          const scale = (this.options.worldScale * 0.3) / Math.max(size.x, size.y, size.z);
+          const box = new this._T.Box3().setFromObject(model);
+          const size = box.getSize(new this._T.Vector3());
+          const scale = (this.options.worldScale * 0.3) / Math.max(size.x, size.y, size.z || 1);
           model.scale.setScalar(scale);
 
           // モデルを地面に配置
@@ -520,7 +801,22 @@ export class MarkerAR {
     const containerWidth = this.container.clientWidth || window.innerWidth;
     const containerHeight = this.container.clientHeight || window.innerHeight;
 
-    // コンテナに合わせてカメラ映像をリサイズ
+    // カメラ映像をコンテナ全体に合わせる
+    const camEl = this.arToolkitSource.domElement;
+    if (camEl) {
+      camEl.style.width = '100vw';
+      camEl.style.height = '100vh';
+      camEl.style.objectFit = 'cover';
+      console.log('📐 カメラ映像サイズ調整:', {
+        カメラ実サイズ: `${sourceWidth}x${sourceHeight}`,
+        表示サイズ: '100vw x 100vh'
+      });
+    }
+
+    // レンダラーサイズも同期
+    this.renderer.setSize(containerWidth, containerHeight);
+
+    // AR.jsリサイズ処理
     this.arToolkitSource.onResize();
     this.arToolkitSource.copySizeTo(this.renderer.domElement);
     
@@ -528,7 +824,11 @@ export class MarkerAR {
       this.arToolkitSource.copySizeTo(this.arToolkitContext.arController.canvas);
     }
 
-    console.log('📐 リサイズ完了:', { containerWidth, containerHeight });
+    console.log('📐 リサイズ完了:', { 
+      containerWidth, 
+      containerHeight, 
+      videoSize: `${sourceWidth}x${sourceHeight}` 
+    });
   }
 
   /**

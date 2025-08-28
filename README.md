@@ -18,6 +18,14 @@
 - ビルド: `npm run build`
 - プレビュー: `npm run preview`
 
+### Vite 開発サーバーの構成（メモ）
+
+- `vite.config.js`: サーバー設定とプラグイン読み込みのみ（単一責任化）
+- `vite/plugins/networkInfo.js`: `GET /api/network-info`（端末IP検出）
+- `vite/plugins/projectsStatic.js`: `GET /projects/:id/project.json`（静的配信）
+- `vite/plugins/projectsApi.js`: `POST /api/projects/:id/save` と `POST /api/publish-project`
+- `vite/utils/network.js`: ネットワークIP検出ユーティリティ
+
 詳細な貢献ルールは `CONTRIBUTING.md` を参照してください。
 
 ## トラブルシューティング
@@ -30,7 +38,7 @@
 # 1. 現在のブランチを確認
 git branch
 
-# 2. indexeddb-storage-refactorブランチに戻る
+# 2. メインブランチ（indexeddb-storage-refactor）に戻る  
 git checkout indexeddb-storage-refactor
 
 # 3. リモートの最新状態を取得

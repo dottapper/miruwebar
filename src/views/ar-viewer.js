@@ -72,6 +72,13 @@ export default function showARViewer(container) {
       
       <!-- マーカーガイド -->
       <div id="ar-marker-guide" class="ar-marker-guide" style="display: none;"></div>
+      <div id="marker-guide-tips" class="marker-guide-tips" style="display: none;">
+        <strong>スキャンTips:</strong><br>
+        • マーカーを枠内に収めてください<br>
+        • 十分な明るさを確保してください<br>
+        • ゆっくり動かさないように<br>
+        • 距離を適度に保ってください
+      </div>
     </div>
   `;
 
@@ -177,7 +184,7 @@ export default function showARViewer(container) {
       z-index: 500;
       background: rgba(76, 175, 80, 0.1);
     }
-    
+
     .ar-marker-guide::before {
       content: "📱 マーカーをここに";
       position: absolute;
@@ -190,6 +197,40 @@ export default function showARViewer(container) {
       border-radius: 15px;
       font-size: 11px;
       white-space: nowrap;
+    }
+
+    .ar-marker-guide::after {
+      content: "💡 十分な明るさを確保してください";
+      position: absolute;
+      bottom: -45px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 193, 7, 0.9);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .marker-guide-tips {
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-size: 11px;
+      text-align: center;
+      z-index: 490;
+      max-width: 280px;
+      line-height: 1.4;
+    }
+
+    .marker-guide-tips strong {
+      color: #4CAF50;
     }
     
     .btn-primary, .btn-success, .btn-secondary {
@@ -235,6 +276,7 @@ async function initIntegratedARViewer(container, projectSrc) {
   const detectBtn = container.querySelector('#ar-detect-btn');
   const backBtn = container.querySelector('#ar-back-btn');
   const markerGuide = container.querySelector('#ar-marker-guide');
+  const markerGuideTips = container.querySelector('#marker-guide-tips');
   
   let camera, scene, renderer, video;
   let markerDetected = false;
@@ -251,6 +293,10 @@ async function initIntegratedARViewer(container, projectSrc) {
   function updateProgress(percent, message) {
     loadingBar.style.width = percent + '%';
     if (message) loadingMessage.textContent = message;
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   function updateInstruction(text) {
@@ -280,28 +326,67 @@ async function initIntegratedARViewer(container, projectSrc) {
     if (currentProject.loadingScreen) {
       const ls = currentProject.loadingScreen;
       console.log('🎨 ローディング画面設定を適用:', ls);
-      
+
       const loadingTitle = container.querySelector('#ar-loading-title');
       const loadingMessage = container.querySelector('#ar-loading-message');
-      
-      if (ls.message && loadingTitle) {
+
+      // メッセージ適用
+      if (ls.loadingMessage && loadingTitle) {
+        loadingTitle.textContent = ls.loadingMessage;
+        console.log('📝 メッセージ適用:', ls.loadingMessage);
+      } else if (ls.message && loadingTitle) {
         loadingTitle.textContent = ls.message;
-        console.log('📝 メッセージ適用:', ls.message);
+        console.log('📝 メッセージ適用（旧形式）:', ls.message);
       }
+
+      // 背景色適用
       if (ls.backgroundColor && loadingScreen) {
         loadingScreen.style.backgroundColor = ls.backgroundColor;
         loadingScreen.style.background = ls.backgroundColor;
         console.log('🎨 背景色適用:', ls.backgroundColor);
       }
+
+      // テキスト色適用
       if (ls.textColor && loadingTitle) {
         loadingTitle.style.color = ls.textColor;
         if (loadingMessage) loadingMessage.style.color = ls.textColor;
         console.log('📝 テキスト色適用:', ls.textColor);
       }
-      if (ls.progressColor && loadingBar) {
-        loadingBar.style.backgroundColor = ls.progressColor;
-        loadingBar.style.background = ls.progressColor;
-        console.log('📊 プログレス色適用:', ls.progressColor);
+
+      // プログレス色適用（accentColorもしくはprogressColor）
+      const progressColor = ls.progressColor || ls.accentColor;
+      if (progressColor && loadingBar) {
+        loadingBar.style.backgroundColor = progressColor;
+        loadingBar.style.background = progressColor;
+        console.log('📊 プログレス色適用:', progressColor);
+      }
+
+      // プログレスバー表示制御
+      if (ls.showProgress === false && loadingBar) {
+        loadingBar.style.display = 'none';
+        console.log('📊 プログレスバー非表示');
+      }
+
+      // ブランド名適用
+      if (ls.brandName && loadingMessage) {
+        loadingMessage.textContent = ls.brandName;
+        console.log('🏢 ブランド名適用:', ls.brandName);
+      } else if (ls.subTitle && loadingMessage) {
+        loadingMessage.textContent = ls.subTitle;
+        console.log('🏢 サブタイトル適用:', ls.subTitle);
+      }
+
+      // フォントスケール適用
+      if (ls.fontScale && loadingTitle) {
+        const scale = Math.max(0.5, Math.min(2.0, ls.fontScale));
+        loadingTitle.style.fontSize = `${scale}em`;
+        if (loadingMessage) loadingMessage.style.fontSize = `${scale * 0.8}em`;
+        console.log('🔤 フォントスケール適用:', scale);
+      }
+
+      // ロゴ適用（将来の実装）
+      if (ls.logo) {
+        console.log('🏷️ ロゴ設定あり（将来実装）:', ls.logo);
       }
     } else {
       console.log('⚠️ ローディング画面設定が見つかりません');
@@ -326,10 +411,8 @@ async function initIntegratedARViewer(container, projectSrc) {
     updateProgress(100, '読み込み完了');
 
     // ローディングは開始ボタン押下まで維持（ユーザー操作でカメラ起動）
-    updateInstruction(`
-      <strong>✅ ${currentProject.name || 'ARプロジェクト'}読み込み完了</strong><br>
-      画面の「AR開始」を押して体験を始めてください
-    `);
+    const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
+    updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
     startBtn.style.display = 'inline-block';
 
   } catch (error) {
@@ -419,8 +502,17 @@ async function initIntegratedARViewer(container, projectSrc) {
         const MarkerAR = mod.MarkerAR;
         if (!arHost) throw new Error('ARホスト要素が見つかりません');
 
-        const markerUrl = currentProject.markerUrl || 'https://ar-js-org.github.io/AR.js/data/patt.hiro';
-        const markerAR = new MarkerAR(arHost, { markerUrl, worldScale: 1.0 });
+        // カスタムマーカーがあれば渡し、無ければMarkerAR側のローカル/CDN解決に委ねる
+        const markerOptions = { worldScale: 1.0 };
+        if (currentProject.markerUrl) {
+          const badGh = /ar-js-org\.github\.io\/AR\.js\/data\//;
+          if (!badGh.test(currentProject.markerUrl)) {
+            markerOptions.markerUrl = currentProject.markerUrl;
+          } else {
+            console.warn('⚠️ 無効な旧GHパスのmarkerUrlを無視し、既定解決を使用します:', currentProject.markerUrl);
+          }
+        }
+        const markerAR = new MarkerAR(arHost, markerOptions);
         await markerAR.init();
 
         // プロジェクトのモデルを順に読み込み
@@ -437,6 +529,7 @@ async function initIntegratedARViewer(container, projectSrc) {
         // detectボタンは不要
         detectBtn.style.display = 'none';
         markerGuide.style.display = 'block';
+        if (markerGuideTips) markerGuideTips.style.display = 'block';
         return;
       }
 
@@ -459,8 +552,54 @@ async function initIntegratedARViewer(container, projectSrc) {
       detectBtn.style.display = 'inline-block';
       updateInstruction('<strong>📱 画面の指示に従ってください</strong>');
     } catch (error) {
+      console.error('❌ AR開始エラー:', error);
       updateStatus(`❌ AR開始失敗: ${error.message}`, 'error');
-      startBtn.style.display = 'inline-block';
+
+      // エラーの種類に応じたメッセージと再試行ボタンを表示
+      let errorTitle = 'AR開始エラー';
+      let errorMessage = '不明なエラーが発生しました。';
+      let showRetryButton = true;
+
+      if (error.message.includes('カメラ') || error.message.includes('permission') || error.name === 'NotAllowedError') {
+        errorTitle = 'カメラ権限エラー';
+        errorMessage = 'カメラへのアクセス権限がありません。ブラウザの設定でカメラアクセスを許可してください。';
+      } else if (error.message.includes('HTTPS') || error.message.includes('secure')) {
+        errorTitle = 'HTTPS必要エラー';
+        errorMessage = 'AR機能を使用するにはHTTPS接続が必要です。';
+        showRetryButton = false;
+      } else if (error.message.includes('NotFoundError') || error.message.includes('カメラデバイスが見つかりません')) {
+        errorTitle = 'カメラが見つかりません';
+        errorMessage = 'カメラデバイスが見つかりません。カメラが接続されているか確認してください。';
+      } else if (error.message.includes('アセット') || error.message.includes('marker') || error.message.includes('camera_para')) {
+        errorTitle = 'アセット読み込みエラー';
+        errorMessage = 'ARに必要なファイルの読み込みに失敗しました。インターネット接続を確認してください。';
+      }
+
+      // エラーUIを表示
+      updateInstruction(`
+        <div style="text-align: center; padding: 1rem;">
+          <h3 style="color: #ff6b6b; margin-bottom: 0.5rem;">${errorTitle}</h3>
+          <p style="margin-bottom: 1rem; font-size: 0.9em;">${errorMessage}</p>
+          ${showRetryButton ? '<button id="retry-ar-btn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">再試行</button>' : ''}
+        </div>
+      `);
+
+      // 再試行ボタンのイベントリスナーを追加
+      if (showRetryButton) {
+        setTimeout(() => {
+          const retryBtn = container.querySelector('#retry-ar-btn');
+          if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+              updateInstruction('<strong>🔄 再試行中...</strong>');
+              startBtn.style.display = 'inline-block';
+              // ページをリロードして再試行
+              window.location.reload();
+            });
+          }
+        }, 100);
+      }
+
+      startBtn.style.display = showRetryButton ? 'inline-block' : 'none';
     }
   });
 
@@ -471,7 +610,8 @@ async function initIntegratedARViewer(container, projectSrc) {
       markerDetected = false;
       arObjects.forEach(obj => scene.remove(obj));
       arObjects = [];
-      markerGuide.style.display = 'none';
+      markerGuide.style.display = 'block'; // マーカーを見失ったらガイドを再表示
+      if (markerGuideTips) markerGuideTips.style.display = 'block'; // ヒントも再表示
 
       updateStatus('❌ マーカーを見失いました', 'warning');
       detectBtn.textContent = '🎯 マーカー検出';
@@ -481,7 +621,8 @@ async function initIntegratedARViewer(container, projectSrc) {
       // マーカー検出
       markerDetected = true;
       createARScene();
-      markerGuide.style.display = 'block';
+      markerGuide.style.display = 'none'; // マーカー検出後はガイドを非表示
+      if (markerGuideTips) markerGuideTips.style.display = 'none'; // ヒントも非表示
 
       updateStatus('🎯 マーカー検出成功！', 'success');
       updateInstruction(`

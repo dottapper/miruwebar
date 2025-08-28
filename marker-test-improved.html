@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>マーカーARテスト - 改良版</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    
+    #arContainer {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    
+    #status {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.9);
+      padding: 8px 12px;
+      border-radius: 8px;
+      z-index: 1000;
+      max-width: 280px;
+      font-size: 11px;
+      line-height: 1.3;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    }
+    
+    #instructions {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9);
+      padding: 12px 16px;
+      border-radius: 12px;
+      text-align: center;
+      z-index: 1000;
+      max-width: 300px;
+      font-size: 13px;
+    }
+    
+    #markerImage {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 80px;
+      height: 80px;
+      border: 2px solid #4CAF50;
+      border-radius: 8px;
+      background: white;
+      z-index: 1000;
+      object-fit: cover;
+    }
+    
+    .error {
+      color: #ff4444;
+    }
+    
+    .success {
+      color: #44ff44;
+    }
+    
+    .warning {
+      color: #ffaa44;
+    }
+    
+    .info {
+      color: #4488ff;
+    }
+    
+    #debugInfo {
+      position: absolute;
+      top: 120px;
+      left: 10px;
+      background: rgba(0,0,0,0.8);
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      z-index: 1000;
+      color: #ccc;
+      max-width: 250px;
+    }
+  </style>
+</head>
+<body>
+  <div id="arContainer">
+    <div id="status">
+      <div id="statusText">初期化中...</div>
+    </div>
+    
+    <div id="debugInfo">
+      <div id="debugText">デバッグ情報読み込み中...</div>
+    </div>
+    
+    <img id="markerImage" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" alt="HIROマーカー" style="display: none;">
+    
+    <div id="instructions">
+      <h3>🎯 マーカーARテスト（改良版）</h3>
+      <p>右上の画像をスマホで表示し、<br>このブラウザのカメラで読み取ってください</p>
+      <button onclick="downloadMarker()" style="background: #4CAF50; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-top: 8px; cursor: pointer;">
+        📱 マーカー画像をダウンロード
+      </button>
+    </div>
+  </div>
+
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- AR.js -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/build/ar-threex.js"></script>
+
+  <script>
+    // ステータス表示用
+    const statusEl = document.getElementById('statusText');
+    const debugEl = document.getElementById('debugText');
+    const markerImg = document.getElementById('markerImage');
+    
+    function updateStatus(message, type = 'info') {
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`[${timestamp}] [${type.toUpperCase()}] ${message}`);
+      statusEl.innerHTML = `<span class="${type}">[${timestamp}] ${message}</span>`;
+    }
+    
+    function updateDebug(info) {
+      debugEl.innerHTML = Object.entries(info)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join('<br>');
+    }
+
+    // HIROマーカーをダウンロードする関数
+    function downloadMarker() {
+      const link = document.createElement('a');
+      link.href = 'https://ar-js-org.github.io/AR.js/data/images/HIRO.jpg';
+      link.download = 'HIRO-marker.jpg';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      updateStatus('📱 マーカー画像のダウンロードを開始しました', 'info');
+    }
+
+    // メイン初期化関数
+    async function initMarkerAR() {
+      updateStatus('🚀 マーカーAR初期化開始...', 'info');
+      
+      // 環境情報を表示
+      updateDebug({
+        'ブラウザ': navigator.userAgent.split(' ').pop(),
+        'プロトコル': location.protocol,
+        'ホスト': location.host,
+        'カメラAPI': !!navigator.mediaDevices ? '✅' : '❌',
+        'HTTPS': location.protocol === 'https:' ? '✅' : '❌'
+      });
+      
+      try {
+        // AR.js の読み込み確認
+        if (!window.THREEx || !window.THREEx.ArToolkitSource) {
+          throw new Error('AR.js ライブラリが読み込まれていません');
+        }
+        updateStatus('✅ AR.js ライブラリ確認完了', 'success');
+
+        // HIROマーカー画像を表示
+        markerImg.src = 'https://ar-js-org.github.io/AR.js/data/images/HIRO.jpg';
+        markerImg.style.display = 'block';
+        markerImg.onerror = () => {
+          updateStatus('⚠️ マーカー画像読み込み失敗（ネットワーク問題）', 'warning');
+        };
+
+        // Three.js 基本要素
+        const scene = new THREE.Scene();
+        const camera = new THREE.Camera();
+        const renderer = new THREE.WebGLRenderer({ 
+          antialias: true, 
+          alpha: true,
+          powerPreference: "default"
+        });
+
+        const container = document.getElementById('arContainer');
+        const containerWidth = window.innerWidth;
+        const containerHeight = window.innerHeight;
+        
+        renderer.setSize(containerWidth, containerHeight);
+        renderer.domElement.style.position = 'absolute';
+        renderer.domElement.style.top = '0px';
+        renderer.domElement.style.left = '0px';
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // モバイル最適化
+        container.appendChild(renderer.domElement);
+
+        updateStatus('✅ Three.js レンダラー設定完了', 'success');
+        updateDebug({
+          '画面サイズ': `${containerWidth}x${containerHeight}`,
+          'ピクセル比': window.devicePixelRatio,
+          'WebGL': renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1'
+        });
+
+        // AR.js カメラソース（モバイル最適化）
+        const arToolkitSource = new THREEx.ArToolkitSource({
+          sourceType: 'webcam',
+          sourceWidth: 480,  // 解像度を下げて安定性向上
+          sourceHeight: 640,
+          displayWidth: 480,
+          displayHeight: 640,
+          facingMode: 'environment' // 背面カメラを優先
+        });
+
+        updateStatus('📹 カメラアクセス要求中...', 'warning');
+
+        // カメラ初期化（エラーハンドリング強化）
+        await new Promise((resolve, reject) => {
+          let initTimeout = setTimeout(() => {
+            reject(new Error('カメラ初期化タイムアウト（10秒）'));
+          }, 10000);
+
+          arToolkitSource.init(
+            () => {
+              clearTimeout(initTimeout);
+              updateStatus('✅ カメラアクセス成功', 'success');
+              
+              // カメラ情報を取得
+              const video = arToolkitSource.domElement;
+              updateDebug({
+                'カメラ解像度': `${video.videoWidth}x${video.videoHeight}`,
+                'カメラ準備': video.readyState >= 2 ? '✅' : '⏳',
+                'ストリーム': video.srcObject ? '✅' : '❌'
+              });
+              
+              arToolkitSource.onResize();
+              arToolkitSource.copySizeTo(renderer.domElement);
+              resolve();
+            },
+            (error) => {
+              clearTimeout(initTimeout);
+              updateStatus(`❌ カメラアクセス失敗: ${error.message}`, 'error');
+              
+              // エラー詳細を表示
+              let errorDetail = '';
+              if (error.name === 'NotAllowedError') {
+                errorDetail = 'カメラ権限が拒否されました。ブラウザ設定を確認してください。';
+              } else if (error.name === 'NotFoundError') {
+                errorDetail = 'カメラデバイスが見つかりません。';
+              } else if (error.name === 'NotSupportedError') {
+                errorDetail = 'カメラがサポートされていません。HTTPS接続を試してください。';
+              } else {
+                errorDetail = `詳細: ${error.message}`;
+              }
+              
+              updateDebug({
+                'エラー名': error.name || 'Unknown',
+                'エラー詳細': errorDetail
+              });
+              
+              reject(error);
+            }
+          );
+        });
+
+        // AR.js コンテキスト（検出精度向上）
+        const arToolkitContext = new THREEx.ArToolkitContext({
+          cameraParametersUrl: await (async () => {
+            const candidates = [
+              '/arjs/camera_para.dat',
+              'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat',
+              'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/camera_para.dat',
+              'https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/camera_para.dat'
+            ];
+            for (const url of candidates) {
+              try {
+                const res = await fetch(url, { cache: 'no-store' });
+                if (!res.ok) continue;
+                const buf = await res.clone().arrayBuffer();
+                if (buf.byteLength >= 1024) {
+                  const head = new TextDecoder().decode(new Uint8Array(buf).slice(0, 256)).toLowerCase();
+                  if (!head.includes("couldn't find the requested file") && !head.includes('<html') && !head.includes('not found')) return url;
+                }
+              } catch {}
+            }
+            return candidates[0];
+          })(),
+          detectionMode: 'mono',
+          matrixCodeType: '3x3',
+          canvasWidth: 480,
+          canvasHeight: 640,
+          maxDetectionRate: 60,  // 検出レート向上
+          imageSmoothingEnabled: true
+        });
+
+        updateStatus('🎯 マーカー検出システム初期化中...', 'warning');
+
+        // コンテキスト初期化
+        await new Promise((resolve, reject) => {
+          let contextTimeout = setTimeout(() => {
+            reject(new Error('マーカー検出システム初期化タイムアウト'));
+          }, 8000);
+
+          arToolkitContext.init(() => {
+            clearTimeout(contextTimeout);
+            camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+            updateStatus('✅ マーカー検出システム準備完了', 'success');
+            resolve();
+          });
+        });
+
+        // マーカールート
+        const markerRoot = new THREE.Group();
+        scene.add(markerRoot);
+
+        // マーカーコントロール（検出精度向上）
+        const markerControls = new THREEx.ArMarkerControls(
+          arToolkitContext, 
+          markerRoot, 
+          {
+            type: 'pattern',
+            patternUrl: await (async () => {
+              const candidates = [
+                '/arjs/patt.hiro',
+                'https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro',
+                'https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/data/patt.hiro',
+                'https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/patt.hiro'
+              ];
+              for (const url of candidates) {
+                try {
+                  const res = await fetch(url, { cache: 'no-store' });
+                  if (!res.ok) continue;
+                  const buf = await res.clone().arrayBuffer();
+                  if (buf.byteLength >= 256) {
+                    const head = new TextDecoder().decode(new Uint8Array(buf).slice(0, 256)).toLowerCase();
+                    if (!head.includes("couldn't find the requested file") && !head.includes('<html') && !head.includes('not found')) return url;
+                  }
+                } catch {}
+              }
+              return candidates[0];
+            })(),
+            changeMatrixMode: 'cameraTransformMatrix',
+            minConfidence: 0.6  // 信頼度閾値を設定
+          }
+        );
+
+        // テスト用3Dオブジェクト（より目立つように）
+        const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+        const material = new THREE.MeshLambertMaterial({ 
+          color: 0x00ff00,
+          transparent: true,
+          opacity: 0.9
+        });
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.y = 0.4;
+        markerRoot.add(cube);
+
+        // 追加オブジェクト（より分かりやすく）
+        const sphereGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.set(0, 1.2, 0);
+        markerRoot.add(sphere);
+
+        // ライト（より明るく）
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        updateStatus('✅ 3D要素配置完了', 'success');
+
+        // マーカー検出状態監視（詳細情報付き）
+        let lastMarkerVisible = false;
+        let detectionCount = 0;
+        let totalFrames = 0;
+        
+        setInterval(() => {
+          totalFrames++;
+          const isVisible = markerRoot.visible;
+          
+          if (isVisible) {
+            detectionCount++;
+          }
+          
+          // デバッグ情報更新
+          const detectionRate = totalFrames > 0 ? Math.round((detectionCount / totalFrames) * 100) : 0;
+          updateDebug({
+            'マーカー状態': isVisible ? '🎯 検出中' : '❌ 未検出',
+            '検出フレーム': `${detectionCount}/${totalFrames}`,
+            '検出率': `${detectionRate}%`,
+            'カメラ状態': arToolkitSource.ready ? '✅ 準備完了' : '⏳ 準備中'
+          });
+          
+          if (isVisible !== lastMarkerVisible) {
+            if (isVisible) {
+              updateStatus('🎯 マーカー検出成功！緑のキューブと赤い球が表示中', 'success');
+            } else {
+              updateStatus('⚠️ マーカーを見失いました。マーカーを再度向けてください', 'warning');
+            }
+            lastMarkerVisible = isVisible;
+          }
+        }, 200); // 200ms間隔で更新
+
+        // アニメーションループ
+        function animate() {
+          requestAnimationFrame(animate);
+          
+          if (arToolkitSource.ready) {
+            arToolkitContext.update(arToolkitSource.domElement);
+          }
+          
+          // 3Dオブジェクトアニメーション（より目立つように）
+          if (markerRoot.visible) {
+            cube.rotation.x += 0.02;
+            cube.rotation.y += 0.02;
+            sphere.position.y = 1.2 + Math.sin(Date.now() * 0.005) * 0.2;
+          }
+          
+          renderer.render(scene, camera);
+        }
+
+        animate();
+        updateStatus('🚀 マーカーAR開始完了！HIROマーカーを向けてください', 'success');
+
+        // リサイズ対応
+        window.addEventListener('resize', () => {
+          const newWidth = window.innerWidth;
+          const newHeight = window.innerHeight;
+          
+          renderer.setSize(newWidth, newHeight);
+          if (arToolkitSource) {
+            arToolkitSource.onResize();
+            arToolkitSource.copySizeTo(renderer.domElement);
+            if (arToolkitContext.arController) {
+              arToolkitSource.copySizeTo(arToolkitContext.arController.canvas);
+            }
+          }
+        });
+
+      } catch (error) {
+        updateStatus(`❌ 初期化エラー: ${error.message}`, 'error');
+        console.error('MarkerAR Error:', error);
+        
+        updateDebug({
+          'エラー': error.name || 'Unknown',
+          '詳細': error.message,
+          'スタック': error.stack ? '確認可能' : 'なし'
+        });
+      }
+    }
+
+    // ページ読み込み完了後に初期化
+    window.addEventListener('load', () => {
+      updateStatus('ページ読み込み完了。初期化開始まで1秒待機...', 'info');
+      setTimeout(initMarkerAR, 1000);
+    });
+  </script>
+</body>
+</html>

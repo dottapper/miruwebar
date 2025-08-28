@@ -669,7 +669,7 @@ export async function showQRCodeModal(options = {}) {
 
     // PCブラウザで開く
     modalOverlay.querySelector('#open-local-url').addEventListener('click', () => {
-      window.open(localUrl, '_blank');
+      window.open(localUrl, '_blank', 'noopener,noreferrer');
     });
 
     // Web URL更新
@@ -795,7 +795,14 @@ export async function showQRCodeModal(options = {}) {
         if (resp.ok) {
           const data = await resp.json();
           if (data.viewerUrl) {
-            localUrl = data.viewerUrl;
+            // APIがlocalhostを返す場合は上書きしない（スマホ不可）。IPが含まれている場合のみ採用
+            try {
+              const u = new URL(data.viewerUrl);
+              const isLocalHost = (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+              if (!isLocalHost) {
+                localUrl = data.viewerUrl;
+              }
+            } catch (_) {}
             // 表示を更新
             const localUrlEl = modalOverlay.querySelector('#local-url');
             if (localUrlEl) localUrlEl.textContent = localUrl;
@@ -949,7 +956,7 @@ export async function showQRCodeModal(options = {}) {
     });
     
     previewOverlay.querySelector('#open-in-new-tab').addEventListener('click', () => {
-      window.open(arUrl, '_blank');
+      window.open(arUrl, '_blank', 'noopener,noreferrer');
     });
     
     // 背景クリックで閉じる

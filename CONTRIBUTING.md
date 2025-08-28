@@ -10,7 +10,12 @@
 
 ## ブランチ/PR 運用
 
-- main 直コミット禁止。feature ブランチ →PR
+### メインブランチ
+- **`indexeddb-storage-refactor`** - 現在のメインブランチ（最新機能を含む）
+- 直コミット禁止。feature ブランチ → PR でのマージのみ
+
+### ブランチルール
+- feature ブランチは `indexeddb-storage-refactor` から作成
 - PR にスクショ（PC/モバイル）と影響範囲の記載が必須
 - CODEOWNERS により、UI/共通スタイル/主要導線の変更はオーナー承認必須
 

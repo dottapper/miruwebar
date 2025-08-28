@@ -201,8 +201,17 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/publish-project' && req.method === 'POST') {
       try {
         const body = await parsePostData(req);
-        const { id, type, loadingScreen, models } = body || {};
+        const { id: rawId, type, loadingScreen, models } = body || {};
+        const sanitizeId = (x) => String(x || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'project';
+        const sanitizeFileName = (name) => {
+          const just = String(name || 'model.glb').split(/[\\/]/).pop();
+          return just.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'model.glb';
+        };
+        const isAllowedExt = (n) => /\.(glb|gltf)$/i.test(n);
+        const MAX_MODEL_BYTES = 50 * 1024 * 1024;
+        const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 
+        const id = sanitizeId(rawId);
         if (!id) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'id is required' }));
@@ -214,13 +223,18 @@ const server = http.createServer(async (req, res) => {
         if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
 
         const modelEntries = [];
+        let totalBytes = 0;
         if (Array.isArray(models)) {
           for (const m of models) {
             try {
-              const fileName = m.fileName || 'model.glb';
+              let fileName = sanitizeFileName(m.fileName || 'model.glb');
+              if (!isAllowedExt(fileName)) fileName = fileName + '.glb';
               const base64 = (m.dataBase64 || '').split(',').pop();
               if (!base64) continue;
               const buffer = Buffer.from(base64, 'base64');
+              if (buffer.length > MAX_MODEL_BYTES) throw new Error(`file too large: ${fileName}`);
+              totalBytes += buffer.length;
+              if (totalBytes > MAX_TOTAL_BYTES) throw new Error('total size exceeded');
               const filePath = path.join(projectDir, fileName);
               fs.writeFileSync(filePath, buffer);
               modelEntries.push({
