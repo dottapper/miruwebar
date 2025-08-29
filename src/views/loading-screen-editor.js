@@ -3,7 +3,7 @@
  */
 
 import '../styles/loading-screen-editor.css';
-import { defaultSettings, settingsAPI } from '../components/loading-screen/settings.js';
+import { defaultSettings, settingsAPI, loadLastUsedTemplateId, syncLastUsedTemplateId } from '../components/loading-screen/settings.js';
 import { createMainEditorTemplate } from '../components/loading-screen/ui-templates.js';
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { 
@@ -18,15 +18,18 @@ import {
   setupStorageUsageDisplay
 } from '../components/loading-screen/event-handlers.js';
 import { updatePreview } from '../components/loading-screen/preview.js';
+// DEBUG ログ制御
+const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
+const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 export default function showLoadingScreenEditor(container) {
-  console.log('🚨 showLoadingScreenEditor が呼び出されました', {
+  dlog('🚨 showLoadingScreenEditor が呼び出されました', {
     currentHash: window.location.hash,
     timestamp: new Date().toISOString(),
     container: container
   });
   
-  console.log('📋 デフォルト設定参照:', defaultSettings);
+  dlog('📋 デフォルト設定参照:', defaultSettings);
 
   // URLパラメータを確認
   const fullHash = window.location.hash;
@@ -37,7 +40,7 @@ export default function showLoadingScreenEditor(container) {
   const templateId = urlParams.get('template');
   const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
   
-  console.log('🔍 URL解析詳細:', {
+  dlog('🔍 URL解析詳細:', {
     fullHash: fullHash,
     hashParts: hashParts,
     queryString: queryString,
@@ -56,67 +59,68 @@ export default function showLoadingScreenEditor(container) {
   if (mode === 'new') {
     // 新規作成モード: デフォルト設定を使用
     currentSettings = JSON.parse(JSON.stringify(defaultSettings));
-    console.log('🆕 新規作成モード: デフォルト設定を使用');
-    console.log('🆕 使用する設定:', currentSettings);
+    dlog('🆕 新規作成モード: デフォルト設定を使用');
+    dlog('🆕 使用する設定:', currentSettings);
   } else if (templateId) {
     // テンプレート編集モード: 指定されたテンプレートを読み込み
     const template = getLoadingScreenTemplate(templateId);
-    console.log('📄 テンプレート取得結果:', template);
+    dlog('📄 テンプレート取得結果:', template);
     if (template && template.settings) {
       currentSettings = JSON.parse(JSON.stringify(template.settings));
-      console.log('📄 テンプレート編集モード: テンプレートを読み込み', template.name);
-      console.log('📄 テンプレート元データ:', template.settings);
-      console.log('📄 コピー後の設定:', currentSettings);
-      console.log('📄 アニメーション設定確認:', currentSettings.loadingScreen.animation);
+      dlog('📄 テンプレート編集モード: テンプレートを読み込み', template.name);
+      dlog('📄 テンプレート元データ:', template.settings);
+      dlog('📄 コピー後の設定:', currentSettings);
+      dlog('📄 アニメーション設定確認:', currentSettings.loadingScreen.animation);
       
-      // 最後に使用したテンプレートIDを記録
+      // 最後に使用したテンプレートIDを記録（IP間同期機能付き）
       localStorage.setItem('lastUsedTemplateId', templateId);
-      console.log('📄 最後に使用したテンプレートIDを記録:', templateId);
+      syncLastUsedTemplateId(templateId);
+      dlog('📄 最後に使用したテンプレートIDを記録:', templateId);
     } else {
       console.warn('⚠️ テンプレートが見つかりません。デフォルト設定を使用:', templateId);
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
-      console.log('⚠️ デフォルト設定使用:', currentSettings);
+      dlog('⚠️ デフォルト設定使用:', currentSettings);
     }
   } else {
     // 通常モード: 最後に使用したテンプレートまたは保存済み設定を読み込み
     try {
-      // 最後に使用したテンプレートIDを確認
-      const lastTemplateId = localStorage.getItem('lastUsedTemplateId');
+      // 最後に使用したテンプレートIDを確認（IP間同期機能付き）
+      const lastTemplateId = loadLastUsedTemplateId();
       if (lastTemplateId) {
-        console.log('💾 最後に使用したテンプレートを読み込み:', lastTemplateId);
+        dlog('💾 最後に使用したテンプレートを読み込み:', lastTemplateId);
         const template = getLoadingScreenTemplate(lastTemplateId);
         if (template && template.settings) {
           currentSettings = JSON.parse(JSON.stringify(template.settings));
-          console.log('💾 テンプレートからの設定読み込み完了:', template.name);
-          console.log('💾 使用する設定:', currentSettings);
+          dlog('💾 テンプレートからの設定読み込み完了:', template.name);
+          dlog('💾 使用する設定:', currentSettings);
         } else {
           // テンプレートが見つからない場合は通常の設定を読み込み
           currentSettings = settingsAPI.getSettings();
-          console.log('💾 テンプレートが見つからないため通常設定を読み込み');
+          dlog('💾 テンプレートが見つからないため通常設定を読み込み');
         }
       } else {
         // 最後のテンプレートIDがない場合は通常の設定を読み込み
         currentSettings = settingsAPI.getSettings();
-        console.log('💾 通常モード: 保存済み設定を読み込み');
-        console.log('💾 使用する設定:', currentSettings);
+        dlog('💾 通常モード: 保存済み設定を読み込み');
+        dlog('💾 使用する設定:', currentSettings);
       }
     } catch (error) {
       console.error('設定の読み込みに失敗:', error);
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
-      console.log('💾 エラー時デフォルト設定使用:', currentSettings);
+      dlog('💾 エラー時デフォルト設定使用:', currentSettings);
     }
   }
   
   // 初期化時のアニメーション設定調整（無効なslideのみ修正）
   if (currentSettings.loadingScreen.animation === 'slide') {
     currentSettings.loadingScreen.animation = 'none';
-    console.log('🔧 無効なスライドアニメーションを「なし」に修正');
+    dlog('🔧 無効なスライドアニメーションを「なし」に修正');
   }
   
   // デフォルト値設定（未定義の場合のみ）
   if (!currentSettings.loadingScreen.animation) {
     currentSettings.loadingScreen.animation = 'none';
-    console.log('🔧 未定義のアニメーション設定をデフォルト「なし」に設定');
+    dlog('🔧 未定義のアニメーション設定をデフォルト「なし」に設定');
   }
   
   // タイマーIDを保持するための変数
@@ -124,7 +128,7 @@ export default function showLoadingScreenEditor(container) {
   
   // 設定をフォームに適用する関数
   function applySettingsToForm(settings) {
-    console.log('⚙️ 設定をフォームに適用開始:', settings);
+    dlog('⚙️ 設定をフォームに適用開始:', settings);
     
     // 各画面タイプの設定を適用
     ['startScreen', 'loadingScreen', 'guideScreen'].forEach(screenType => {
@@ -156,7 +160,7 @@ export default function showLoadingScreenEditor(container) {
             input.value = value || '';
           }
           
-          console.log(`⚙️ ${inputId} = ${value}`);
+          dlog(`⚙️ ${inputId} = ${value}`);
         }
       });
     });
@@ -166,7 +170,7 @@ export default function showLoadingScreenEditor(container) {
       const logoTypeRadio = document.querySelector(`input[name="loadingLogoType"][value="${settings.loadingScreen.logoType}"]`);
       if (logoTypeRadio) {
         logoTypeRadio.checked = true;
-        console.log(`⚙️ logoType = ${settings.loadingScreen.logoType}`);
+        dlog(`⚙️ logoType = ${settings.loadingScreen.logoType}`);
         
         // UI表示の更新
         const customLogoSection = document.getElementById('loading-custom-logo-section');
@@ -189,13 +193,13 @@ export default function showLoadingScreenEditor(container) {
     // 画像データの復元
     restoreImageData(settings);
     
-    console.log('⚙️ 設定のフォーム適用完了');
+    dlog('⚙️ 設定のフォーム適用完了');
   }
   
   // 画像データを復元する関数
   function restoreImageData(settings) {
-    console.log('🖼️ 画像データ復元開始');
-    console.log('🖼️ 復元する設定データ:', settings);
+    dlog('🖼️ 画像データ復元開始');
+    dlog('🖼️ 復元する設定データ:', settings);
     
     // 少し遅延を入れてDropzone要素の準備を確実にする
     setTimeout(() => {
@@ -220,7 +224,7 @@ export default function showLoadingScreenEditor(container) {
               removeButton.style.display = 'block';
             }
           }
-          console.log('🖼️ サムネイル画像を復元');
+          dlog('🖼️ サムネイル画像を復元');
         } else {
           console.warn('🖼️ サムネイルDropzoneが見つかりません');
         }
@@ -247,7 +251,7 @@ export default function showLoadingScreenEditor(container) {
               removeButton.style.display = 'block';
             }
           }
-          console.log('🖼️ スタート画面ロゴを復元');
+          dlog('🖼️ スタート画面ロゴを復元');
         } else {
           console.warn('🖼️ スタート画面ロゴDropzoneが見つかりません');
         }
@@ -274,7 +278,7 @@ export default function showLoadingScreenEditor(container) {
               removeButton.style.display = 'block';
             }
           }
-          console.log('🖼️ ローディング画面ロゴを復元');
+          dlog('🖼️ ローディング画面ロゴを復元');
         } else {
           console.warn('🖼️ ローディング画面ロゴDropzoneが見つかりません');
         }
@@ -285,7 +289,7 @@ export default function showLoadingScreenEditor(container) {
         const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
         if (surfaceGuideDropzone) {
           surfaceGuideDropzone.innerHTML = `<img src="${settings.guideScreen.surfaceDetection.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="平面検出ガイド画像">`;
-          console.log('🖼️ 平面検出ガイド画像を復元');
+          dlog('🖼️ 平面検出ガイド画像を復元');
         } else {
           console.warn('🖼️ 平面検出ガイドDropzoneが見つかりません');
         }
@@ -296,23 +300,23 @@ export default function showLoadingScreenEditor(container) {
         const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
         if (worldGuideDropzone) {
           worldGuideDropzone.innerHTML = `<img src="${settings.guideScreen.worldTracking.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="空間検出ガイド画像">`;
-          console.log('🖼️ 空間検出ガイド画像を復元');
+          dlog('🖼️ 空間検出ガイド画像を復元');
         } else {
           console.warn('🖼️ 空間検出ガイドDropzoneが見つかりません');
         }
       }
       
-      console.log('🖼️ 画像データ復元完了');
+      dlog('🖼️ 画像データ復元完了');
       
       // 画像復元後にファイルドロップゾーンのイベントリスナーを再設定
       setTimeout(() => {
         setupFileDropzones();
-        console.log('🔄 画像復元後のイベントリスナーを再設定');
+        dlog('🔄 画像復元後のイベントリスナーを再設定');
       }, 50);
       
       // 画像復元後にプレビューを更新
       setTimeout(() => {
-        console.log('🔄 画像復元後にプレビューを更新');
+        dlog('🔄 画像復元後にプレビューを更新');
         updatePreview('startScreen'); // デフォルトでスタート画面を表示
       }, 100);
     }, 200); // DOM準備のために200ms遅延
@@ -320,18 +324,18 @@ export default function showLoadingScreenEditor(container) {
 
   // エディタの初期化
   function initializeEditor() {
-    console.log('ローディング画面エディタを初期化中...');
+    dlog('ローディング画面エディタを初期化中...');
 
     // 現在の設定を使用してメインテンプレートを作成してDOMに追加
     const templateHTML = createMainEditorTemplate(currentSettings);
-    console.log('HTMLテンプレート生成完了:', templateHTML.length, '文字');
-    console.log('使用した設定:', currentSettings);
+    dlog('HTMLテンプレート生成完了:', templateHTML.length, '文字');
+    dlog('使用した設定:', currentSettings);
     
     const editorContainer = document.createElement('div');
     editorContainer.innerHTML = templateHTML;
     container.appendChild(editorContainer);
     
-    console.log('エディタのDOM構造を追加しました');
+    dlog('エディタのDOM構造を追加しました');
     
     // DOMに追加されたかチェック
     setTimeout(() => {
@@ -339,7 +343,7 @@ export default function showLoadingScreenEditor(container) {
       const addedSidebar = document.querySelector('.side-menu');
       const addedPreview = document.querySelector('.loading-screen-editor__preview-panel');
       
-      console.log('DOM追加確認:', {
+      dlog('DOM追加確認:', {
         editor: !!addedEditor,
         sidebar: !!addedSidebar,
         preview: !!addedPreview,
@@ -349,15 +353,15 @@ export default function showLoadingScreenEditor(container) {
       
       // DOM構造をさらに詳しく調査
       if (addedEditor) {
-        console.log('エディタ要素のクラス:', addedEditor.className);
+        dlog('エディタ要素のクラス:', addedEditor.className);
         const mainContentEl = addedEditor.querySelector('.main-content');
         if (mainContentEl) {
-          console.log('メインコンテンツの子要素数:', mainContentEl.children.length);
-          console.log('メインコンテンツの子要素:', Array.from(mainContentEl.children).map(el => el.className));
+          dlog('メインコンテンツの子要素数:', mainContentEl.children.length);
+          dlog('メインコンテンツの子要素:', Array.from(mainContentEl.children).map(el => el.className));
         }
         const settingsPanel = addedEditor.querySelector('.loading-screen-editor__settings-panel');
         if (settingsPanel) {
-          console.log('設定パネルが見つかりました');
+          dlog('設定パネルが見つかりました');
         }
       }
     }, 10);
@@ -365,7 +369,7 @@ export default function showLoadingScreenEditor(container) {
     // DOM要素が確実に存在する状態でイベントリスナーを設定
     setTimeout(() => {
       try {
-        console.log('イベントリスナーの設定を開始...');
+        dlog('イベントリスナーの設定を開始...');
         
         // イベントリスナーの設定
         setupTabHandlers();
@@ -381,12 +385,12 @@ export default function showLoadingScreenEditor(container) {
         // ヘッダーにテンプレート名を表示
         updateEditorTitle(mode, templateName, templateId);
         
-        console.log('全てのイベントリスナーを設定しました');
+        dlog('全てのイベントリスナーを設定しました');
 
         // モードに応じた設定処理
         if (mode === 'new' || templateId) {
-          console.log('🔧 新規作成またはテンプレートモード: loadSettings()をスキップ');
-          console.log('🔧 使用する設定:', currentSettings);
+          dlog('🔧 新規作成またはテンプレートモード: loadSettings()をスキップ');
+          dlog('🔧 使用する設定:', currentSettings);
           
           // フォーム要素に設定値を直接適用
           applySettingsToForm(currentSettings);
@@ -403,7 +407,7 @@ export default function showLoadingScreenEditor(container) {
         } else {
           // 通常モード: 保存済み設定を読み込み
           loadSettings().then(() => {
-            console.log('設定の読み込みが完了しました');
+            dlog('設定の読み込みが完了しました');
             
             // 初期タブの表示を強制
             const initialTab = document.querySelector('.loading-screen-editor__main-tab--active');
@@ -509,14 +513,14 @@ export default function showLoadingScreenEditor(container) {
     // 現在のハッシュが loading-screen でない場合はスキップ
     const currentHash = window.location.hash || '';
     if (!currentHash.includes('loading-screen')) {
-      console.log('ローディング画面エディタではないため、レイアウト検証をスキップします', {
+      dlog('ローディング画面エディタではないため、レイアウト検証をスキップします', {
         currentHash: currentHash,
         timestamp: new Date().toISOString()
       });
       return;
     }
 
-    console.log('ローディング画面エディタのレイアウト検証を開始します', {
+    dlog('ローディング画面エディタのレイアウト検証を開始します', {
       currentHash: currentHash,
       timestamp: new Date().toISOString()
     });
@@ -527,7 +531,7 @@ export default function showLoadingScreenEditor(container) {
     const mainContent = document.querySelector('.main-content');
     const settingsPanel = document.querySelector('.loading-screen-editor__settings-panel');
 
-    console.log('レイアウト要素の状態:', {
+    dlog('レイアウト要素の状態:', {
       editor: !!editor,
       preview: !!preview,
       sidebar: !!sidebar,
@@ -553,7 +557,7 @@ export default function showLoadingScreenEditor(container) {
       return;
     }
 
-    console.log('✅ レイアウト検証完了');
+    dlog('✅ レイアウト検証完了');
     
     // プレビューの初期表示を更新（既に初期化時に実行済みなのでコメントアウト）
     // updatePreview('startScreen');
@@ -562,14 +566,14 @@ export default function showLoadingScreenEditor(container) {
   // クリーンアップ処理
   function cleanup() {
     try {
-      console.log('🧹 ローディング画面エディタをクリーンアップしています...');
+      dlog('🧹 ローディング画面エディタをクリーンアップしています...');
       
       // 実行中のタイマーをクリア
       if (verifyLayoutTimeoutId) {
         try {
           clearTimeout(verifyLayoutTimeoutId);
           verifyLayoutTimeoutId = null;
-          console.log('✅ verifyLayout タイマーをクリアしました');
+          dlog('✅ verifyLayout タイマーをクリアしました');
         } catch (timerError) {
           console.warn('⚠️ タイマークリア中にエラー:', timerError);
         }
@@ -579,7 +583,7 @@ export default function showLoadingScreenEditor(container) {
       try {
         // hashchange イベントリスナーを削除
         window.removeEventListener('hashchange', updateActiveMenuItem);
-        console.log('✅ hashchange イベントリスナーを削除しました');
+        dlog('✅ hashchange イベントリスナーを削除しました');
       } catch (eventError) {
         console.warn('⚠️ イベントリスナー削除中にエラー:', eventError);
       }
@@ -590,13 +594,13 @@ export default function showLoadingScreenEditor(container) {
           while (container.firstChild) {
             container.removeChild(container.firstChild);
           }
-          console.log('✅ コンテナの内容をクリアしました');
+          dlog('✅ コンテナの内容をクリアしました');
         } catch (containerError) {
           console.warn('⚠️ コンテナクリア中にエラー:', containerError);
         }
       }
       
-      console.log('🧹 クリーンアップ処理完了');
+      dlog('🧹 クリーンアップ処理完了');
     } catch (error) {
       console.error('❌ クリーンアップ処理中にエラー:', error);
       console.error('エラースタック:', error.stack);
@@ -621,7 +625,7 @@ export default function showLoadingScreenEditor(container) {
       badgeElement.textContent = templateName;
       badgeElement.className = 'template-name-badge new-template';
       badgeElement.style.display = 'inline-block';
-      console.log('🏷️ 新規テンプレート名を表示:', templateName);
+      dlog('🏷️ 新規テンプレート名を表示:', templateName);
     } else if (templateId) {
       // 編集モード - テンプレート名を取得して表示
       const template = getLoadingScreenTemplate(templateId);
@@ -629,12 +633,12 @@ export default function showLoadingScreenEditor(container) {
         badgeElement.textContent = `${template.name} (編集中)`;
         badgeElement.className = 'template-name-badge editing-template';
         badgeElement.style.display = 'inline-block';
-        console.log('🏷️ 編集中テンプレート名を表示:', template.name);
+        dlog('🏷️ 編集中テンプレート名を表示:', template.name);
       }
     } else {
       // 通常モード - バッジを非表示
       badgeElement.style.display = 'none';
-      console.log('🏷️ 通常モード - バッジを非表示');
+      dlog('🏷️ 通常モード - バッジを非表示');
     }
   }
 

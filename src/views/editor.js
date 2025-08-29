@@ -9,6 +9,9 @@ import { getLoadingScreenTemplate } from '../components/loading-screen-selector.
 // CSSファイルのインポート
 import '../styles/common.css';
 import '../styles/editor.css';
+// DEBUG ログ制御
+const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
+const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * ファイルサイズを適切な単位でフォーマットする
@@ -307,7 +310,7 @@ export function showEditor(container) {
   let exportButton = document.getElementById('export-button');
 
   // 基本DOM要素の取得状況をログ出力
-  console.log('基本DOM要素の取得状況:', {
+  dlog('基本DOM要素の取得状況:', {
     backButton: !!backButton,
     saveButton: !!saveButton,
     qrcodeButton: !!qrcodeButton,
@@ -368,12 +371,12 @@ export function showEditor(container) {
   // --- 変更追跡用の関数 ---
   function markAsChanged() {
     hasUnsavedChanges = true;
-    console.log('変更が検出されました - 未保存状態に設定');
+    dlog('変更が検出されました - 未保存状態に設定');
   }
 
   function markAsSaved() {
     hasUnsavedChanges = false;
-    console.log('保存完了 - 保存済み状態に設定');
+    dlog('保存完了 - 保存済み状態に設定');
   }
 
   function checkForUnsavedChanges() {
@@ -388,10 +391,10 @@ export function showEditor(container) {
       
       if (result) {
         // 「OK」を選択 - 保存してから戻る
-        console.log('ユーザーが保存を選択しました');
+        dlog('ユーザーが保存を選択しました');
         handleSaveProject()
           .then(() => {
-            console.log('保存完了 - プロジェクト一覧に戻ります');
+            dlog('保存完了 - プロジェクト一覧に戻ります');
             resolve(true);
           })
           .catch((error) => {
@@ -402,7 +405,7 @@ export function showEditor(container) {
       } else {
         // 「キャンセル」を選択 - 保存せずに戻る
         const confirmDiscard = confirm("変更内容を破棄してプロジェクト一覧に戻りますか？");
-        console.log(confirmDiscard ? 'ユーザーが変更破棄を選択しました' : 'ユーザーが操作をキャンセルしました');
+        dlog(confirmDiscard ? 'ユーザーが変更破棄を選択しました' : 'ユーザーが操作をキャンセルしました');
         resolve(confirmDiscard);
       }
     });
@@ -414,20 +417,20 @@ export function showEditor(container) {
   
   async function initialize() {
     try {
-      console.log('🚀 エディタの初期化を開始... [修正版 v2.0]');
-      console.log('🔧 デバッグモード: アニメーション機能付き');
-      console.log('🔍 projectId:', projectId);
-      console.log('🔍 arType:', arType);
-      console.log('🔍 isMarkerMode:', isMarkerMode);
+      dlog('🚀 エディタの初期化を開始... [修正版 v2.0]');
+      dlog('🔧 デバッグモード: アニメーション機能付き');
+      dlog('🔍 projectId:', projectId);
+      dlog('🔍 arType:', arType);
+      dlog('🔍 isMarkerMode:', isMarkerMode);
       
       // DOM要素の存在確認
       const arViewerElement = document.getElementById('ar-viewer');
-      console.log('ar-viewer要素:', arViewerElement);
+      dlog('ar-viewer要素:', arViewerElement);
       if (!arViewerElement) {
         throw new Error('ar-viewer要素が見つかりません');
       }
       
-      console.log('ar-viewer要素のサイズ:', {
+      dlog('ar-viewer要素のサイズ:', {
         width: arViewerElement.clientWidth,
         height: arViewerElement.clientHeight,
         offsetWidth: arViewerElement.offsetWidth,
@@ -448,20 +451,20 @@ export function showEditor(container) {
       `;
       document.head.appendChild(style);
 
-      console.log('ARビューアーの初期化を開始...');
+      dlog('ARビューアーの初期化を開始...');
       // ARビューアの初期化
       viewerInstance = await initARViewer('ar-viewer', {
         markerMode: isMarkerMode,
         showGrid: true,
         backgroundColor: 0x222222,
         onModelLoaded: (size) => {
-          console.log('モデルが読み込まれました:', size);
+          dlog('モデルが読み込まれました:', size);
           originalModelSize = { width: size.x, height: size.y, depth: size.z };
           updateRealSizeDisplay(1.0);
         }
       });
 
-      console.log('ARビューアーの初期化完了:', viewerInstance);
+      dlog('ARビューアーの初期化完了:', viewerInstance);
 
       if (!viewerInstance) {
         const arViewerElement = document.getElementById('ar-viewer');
@@ -479,16 +482,16 @@ export function showEditor(container) {
       }
 
       // イベントリスナーの設定
-      console.log('イベントリスナーの設定を開始...');
+      dlog('イベントリスナーの設定を開始...');
       setupEventListeners();
 
       // 既存プロジェクトの場合は読み込み
       if (projectId) {
-        console.log('既存プロジェクトの読み込みを開始:', projectId);
+        dlog('既存プロジェクトの読み込みを開始:', projectId);
         
         // デバッグ: プロジェクトデータを直接確認
         const debugProject = getProject(projectId);
-        console.log('🔍 デバッグ: プロジェクトデータ直接確認:', {
+        dlog('🔍 デバッグ: プロジェクトデータ直接確認:', {
           exists: !!debugProject,
           id: debugProject?.id,
           name: debugProject?.name,
@@ -506,7 +509,7 @@ export function showEditor(container) {
         updateLoadingSettingsDisplay();
       }, 100);
 
-      console.log('エディタの初期化が完了しました');
+      dlog('エディタの初期化が完了しました');
     } catch (error) {
       console.error('エディタの初期化に失敗しました:', error);
       alert('エディタの初期化に失敗しました。ページを再読み込みしてください。\n詳細: ' + error.message);
@@ -700,7 +703,7 @@ export function showEditor(container) {
             const expectedValue = project.loadingScreen.selectedScreenId;
             
             if (currentValue !== expectedValue) {
-              console.log('🔄 ローディング画面選択の再復元:', {
+              dlog('🔄 ローディング画面選択の再復元:', {
                 current: currentValue,
                 expected: expectedValue
               });
@@ -720,7 +723,7 @@ export function showEditor(container) {
           if (loadingScreenSelect) {
             loadingScreenSelect.value = project.loadingScreen.selectedScreenId;
             savedSelectedScreenId = project.loadingScreen.selectedScreenId;
-            console.log('✅ ローディング画面設定を復元:', project.loadingScreen.selectedScreenId);
+            dlog('✅ ローディング画面設定を復元:', project.loadingScreen.selectedScreenId);
           }
         }, 200);
       }
@@ -746,7 +749,7 @@ export function showEditor(container) {
       
       // ローディング画面選択ドロップダウンの復元
       const loadingScreenSelect = document.getElementById('loading-screen-select');
-      console.log('🔍 ローディング画面選択復元処理:', {
+      dlog('🔍 ローディング画面選択復元処理:', {
         selectElement: !!loadingScreenSelect,
         selectedScreenId: settings.selectedScreenId,
         selectCurrentValue: loadingScreenSelect?.value,
@@ -758,8 +761,8 @@ export function showEditor(container) {
         const screenIdToSet = settings.selectedScreenId || 'none';
         loadingScreenSelect.value = screenIdToSet;
         savedSelectedScreenId = screenIdToSet; // グローバル変数に保存
-        console.log('🔄 ローディング画面選択を復元:', screenIdToSet, '→', loadingScreenSelect.value);
-        console.log('💾 savedSelectedScreenId に保存:', savedSelectedScreenId);
+        dlog('🔄 ローディング画面選択を復元:', screenIdToSet, '→', loadingScreenSelect.value);
+        dlog('💾 savedSelectedScreenId に保存:', savedSelectedScreenId);
         // 編集ボタンの状態も更新
         updateEditButtonState();
       }
@@ -770,7 +773,7 @@ export function showEditor(container) {
         loadingLogoPreview.style.display = 'block';
       }
       
-      console.log('✅ ローディング設定をUIに復元しました');
+      dlog('✅ ローディング設定をUIに復元しました');
     } catch (error) {
       console.error('❌ ローディング設定の復元エラー:', error);
     }
@@ -819,7 +822,7 @@ export function showEditor(container) {
           updateAnimationInfo();
         }, 100);
         
-        console.log(`モデル "${file.name}" (${fileSizeMB}MB) を読み込みました`);
+        dlog(`モデル "${file.name}" (${fileSizeMB}MB) を読み込みました`);
       } catch (error) {
         console.error('モデルのアップロードに失敗しました:', error);
         alert('モデルのアップロードに失敗しました: ' + error.message);
@@ -831,7 +834,7 @@ export function showEditor(container) {
 
   // タブ切り替え機能の設定
   function setupTabSwitching() {
-    console.log('🔧 タブ切り替え機能を設定中...');
+    dlog('🔧 タブ切り替え機能を設定中...');
     
     const tabButtons = document.querySelectorAll('.panel-tab');
     const tabContents = document.querySelectorAll('.panel-content');
@@ -857,7 +860,7 @@ export function showEditor(container) {
         if (targetContent) {
           targetContent.classList.add('active');
           targetContent.style.display = 'block';
-          console.log(`✅ タブ "${targetTab}" に切り替えました`);
+          dlog(`✅ タブ "${targetTab}" に切り替えました`);
           
           // ローディング設定タブが表示された時にローディング画面一覧を読み込み
           if (targetTab === 'loading-settings') {
@@ -869,12 +872,12 @@ export function showEditor(container) {
       });
     });
     
-    console.log('✅ タブ切り替え機能の設定が完了しました');
+    dlog('✅ タブ切り替え機能の設定が完了しました');
   }
 
   // イベントリスナーのセットアップを関数にまとめる
   function setupEventListeners() {
-    console.log('イベントリスナーの設定を開始...');
+    dlog('イベントリスナーの設定を開始...');
     
     // タブ切り替え機能
     setupTabSwitching();
@@ -882,25 +885,25 @@ export function showEditor(container) {
     // イベント委譲を使用した戻るボタンの設定（フォールバック）
     container.addEventListener('click', async (event) => {
       if (event.target.id === 'back-to-projects' || event.target.closest('#back-to-projects')) {
-        console.log('戻るボタンがクリックされました（イベント委譲）');
+        dlog('戻るボタンがクリックされました（イベント委譲）');
         event.preventDefault();
         
         if (checkForUnsavedChanges()) {
-          console.log('未保存の変更があります - 確認ダイアログを表示（イベント委譲）');
+          dlog('未保存の変更があります - 確認ダイアログを表示（イベント委譲）');
           const shouldProceed = await showUnsavedChangesDialog();
           if (shouldProceed) {
-            console.log('プロジェクト一覧に遷移します（イベント委譲）');
+            dlog('プロジェクト一覧に遷移します（イベント委譲）');
             window.location.hash = '#/projects';
           } else {
-            console.log('戻る操作がキャンセルされました（イベント委譲）');
+            dlog('戻る操作がキャンセルされました（イベント委譲）');
           }
         } else {
-          console.log('未保存の変更はありません - プロジェクト一覧に遷移します（イベント委譲）');
+          dlog('未保存の変更はありません - プロジェクト一覧に遷移します（イベント委譲）');
           window.location.hash = '#/projects';
         }
       }
     });
-    console.log('イベント委譲による戻るボタンのイベントリスナーを設定しました');
+    dlog('イベント委譲による戻るボタンのイベントリスナーを設定しました');
     
     // マーカー画像設定 (マーカーモード時)
     if (isMarkerMode && markerThumbnail) {
@@ -975,24 +978,24 @@ export function showEditor(container) {
     // バックボタン
     if (backButton) {
       backButton.addEventListener('click', async (e) => {
-        console.log('戻るボタンがクリックされました');
+        dlog('戻るボタンがクリックされました');
         e.preventDefault();
         
         if (checkForUnsavedChanges()) {
-          console.log('未保存の変更があります - 確認ダイアログを表示');
+          dlog('未保存の変更があります - 確認ダイアログを表示');
           const shouldProceed = await showUnsavedChangesDialog();
           if (shouldProceed) {
-            console.log('プロジェクト一覧に遷移します');
+            dlog('プロジェクト一覧に遷移します');
             window.location.hash = '#/projects';
           } else {
-            console.log('戻る操作がキャンセルされました');
+            dlog('戻る操作がキャンセルされました');
           }
         } else {
-          console.log('未保存の変更はありません - プロジェクト一覧に遷移します');
+          dlog('未保存の変更はありません - プロジェクト一覧に遷移します');
           window.location.hash = '#/projects';
         }
       });
-      console.log('戻るボタンのイベントリスナーが設定されました');
+      dlog('戻るボタンのイベントリスナーが設定されました');
     } else {
       console.error('戻るボタンの要素が見つかりませんでした。再取得を試行します...');
       // 再取得を試行
@@ -1000,24 +1003,24 @@ export function showEditor(container) {
         const retryBackButton = document.getElementById('back-to-projects');
         if (retryBackButton) {
           retryBackButton.addEventListener('click', async (e) => {
-            console.log('戻るボタンがクリックされました（再取得後）');
+            dlog('戻るボタンがクリックされました（再取得後）');
             e.preventDefault();
             
             if (checkForUnsavedChanges()) {
-              console.log('未保存の変更があります - 確認ダイアログを表示（再取得後）');
+              dlog('未保存の変更があります - 確認ダイアログを表示（再取得後）');
               const shouldProceed = await showUnsavedChangesDialog();
               if (shouldProceed) {
-                console.log('プロジェクト一覧に遷移します（再取得後）');
+                dlog('プロジェクト一覧に遷移します（再取得後）');
                 window.location.hash = '#/projects';
               } else {
-                console.log('戻る操作がキャンセルされました（再取得後）');
+                dlog('戻る操作がキャンセルされました（再取得後）');
               }
             } else {
-              console.log('未保存の変更はありません - プロジェクト一覧に遷移します（再取得後）');
+              dlog('未保存の変更はありません - プロジェクト一覧に遷移します（再取得後）');
               window.location.hash = '#/projects';
             }
           });
-          console.log('戻るボタンのイベントリスナーが設定されました（再取得後）');
+          dlog('戻るボタンのイベントリスナーが設定されました（再取得後）');
         } else {
           console.error('戻るボタンの再取得にも失敗しました');
         }
@@ -1049,7 +1052,7 @@ export function showEditor(container) {
     if (loadingScreenSelect) {
       loadingScreenSelect.addEventListener('change', (event) => {
         savedSelectedScreenId = event.target.value; // グローバル変数を更新
-        console.log('🔄 ローディング画面選択変更:', event.target.value);
+        dlog('🔄 ローディング画面選択変更:', event.target.value);
         updateEditButtonState();
       });
     }
@@ -1059,7 +1062,7 @@ export function showEditor(container) {
     if (createLoadingScreenBtn) {
       createLoadingScreenBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        console.log('新規ローディング画面作成ボタンがクリックされました');
+        dlog('新規ローディング画面作成ボタンがクリックされました');
         
         // 直接ローディング画面エディターを開く（新規作成モード）
         window.location.hash = '#/loading-screen?mode=new';
@@ -1073,7 +1076,7 @@ export function showEditor(container) {
         e.preventDefault();
         const selectedTemplateId = loadingScreenSelect?.value;
         if (selectedTemplateId && selectedTemplateId !== 'none') {
-          console.log('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
+          dlog('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
           
           // 直接ローディング画面エディターを開く（編集モード）
           window.location.hash = `#/loading-screen?template=${selectedTemplateId}`;
@@ -1112,20 +1115,20 @@ export function showEditor(container) {
   // ローディング画面一覧を読み込む関数
   function loadLoadingScreens() {
     try {
-      console.log('🔄 ローディング画面一覧を読み込み中...');
+      dlog('🔄 ローディング画面一覧を読み込み中...');
       
       // localStorageから保存済みのローディング画面を取得
       const stored = localStorage.getItem('loadingScreenTemplates');
       const templates = stored ? JSON.parse(stored) : [];
       
-      console.log('📋 取得したローディング画面:', templates);
+      dlog('📋 取得したローディング画面:', templates);
       
       // ドロップダウンを更新
       const selectElement = document.getElementById('loading-screen-select');
       if (selectElement) {
         // 現在の選択値を保持
         const currentValue = selectElement.value;
-        console.log('🔍 現在の選択値を保持:', currentValue);
+        dlog('🔍 現在の選択値を保持:', currentValue);
         
         // 既存のオプションをクリア（「なし」は残す）
         const noneOption = selectElement.querySelector('option[value="none"]');
@@ -1149,13 +1152,13 @@ export function showEditor(container) {
         
         if (valueToRestore && selectElement.querySelector(`option[value="${valueToRestore}"]`)) {
           selectElement.value = valueToRestore;
-          console.log('🔄 選択値を復元:', valueToRestore, '(ソース:', savedSelectedScreenId ? 'プロジェクト' : 'UI', ')');
+          dlog('🔄 選択値を復元:', valueToRestore, '(ソース:', savedSelectedScreenId ? 'プロジェクト' : 'UI', ')');
         } else if (valueToRestore) {
           console.warn('⚠️ 保存されていた選択値が見つかりません:', valueToRestore);
           selectElement.value = 'none'; // フォールバック
         }
         
-        console.log(`✅ ローディング画面ドロップダウンを更新: ${templates.length}個`);
+        dlog(`✅ ローディング画面ドロップダウンを更新: ${templates.length}個`);
       }
       
       // 編集ボタンの状態を更新
@@ -1188,7 +1191,7 @@ export function showEditor(container) {
 
   // ローディング設定の表示を更新する関数
   function updateLoadingSettingsDisplay() {
-    console.log('🔄 ローディング設定の表示を更新中...');
+    dlog('🔄 ローディング設定の表示を更新中...');
     
     const currentTemplate = document.getElementById('current-template');
     const currentMessage = document.getElementById('current-message');
@@ -1224,7 +1227,7 @@ export function showEditor(container) {
             loadingEnabled.checked = settings.enabled !== false;
           }
           
-          console.log('✅ ローディング設定の表示を更新しました');
+          dlog('✅ ローディング設定の表示を更新しました');
         })
         .catch(error => {
           console.error('❌ ローディング設定の取得に失敗しました:', error);
@@ -1276,7 +1279,7 @@ export function showEditor(container) {
 
   // ローディング設定関連のDOM要素を削除する関数
   function cleanupLoadingSettingsElements() {
-    console.log('🧹 ローディング設定関連のDOM要素を削除中...');
+    dlog('🧹 ローディング設定関連のDOM要素を削除中...');
     
     // ローディング設定関連の要素を削除
     const loadingElements = [
@@ -1304,7 +1307,7 @@ export function showEditor(container) {
         // イベントリスナーを削除
         const newElement = element.cloneNode(true);
         element.parentNode.replaceChild(newElement, element);
-        console.log(`✅ ${id} のイベントリスナーを削除しました`);
+        dlog(`✅ ${id} のイベントリスナーを削除しました`);
       }
     });
 
@@ -1312,31 +1315,31 @@ export function showEditor(container) {
     const loadingSettingsTab = document.querySelector('[data-tab="loading-settings"]');
     if (loadingSettingsTab) {
       loadingSettingsTab.remove();
-      console.log('✅ ローディング設定タブを削除しました');
+      dlog('✅ ローディング設定タブを削除しました');
     }
 
     // ローディング設定パネルの削除
     const loadingSettingsPanel = document.querySelector('#loading-settings-panel');
     if (loadingSettingsPanel) {
       loadingSettingsPanel.remove();
-      console.log('✅ ローディング設定パネルを削除しました');
+      dlog('✅ ローディング設定パネルを削除しました');
     }
 
     // タブナビゲーションが空になった場合の処理
     const panelTabs = document.querySelector('.panel-tabs');
     if (panelTabs && panelTabs.children.length === 0) {
       panelTabs.remove();
-      console.log('✅ 空になったタブナビゲーションを削除しました');
+      dlog('✅ 空になったタブナビゲーションを削除しました');
     }
 
-    console.log('✅ ローディング設定関連のDOM要素の削除が完了しました');
+    dlog('✅ ローディング設定関連のDOM要素の削除が完了しました');
   }
 
   // ローディング設定のイベントリスナーを削除する関数
   function removeLoadingSettingsEventListeners() {
     // この機能は現在使用されていないか、関連コードが削除されたため、
     // 処理をスキップしてエラーの発生を防ぎます。
-    console.log('🔧 スキップ: ローディング設定のイベントリスナー削除');
+    dlog('🔧 スキップ: ローディング設定のイベントリスナー削除');
   }
 
   // 合計ファイルサイズ表示更新
@@ -1376,7 +1379,7 @@ export function showEditor(container) {
     const fileItems = fileListContainer.querySelectorAll('.file-item');
     fileItems.forEach((item, index) => {
       item.dataset.modelIndex = index;
-      console.log(`ファイルアイテム "${item.querySelector('.file-name').textContent}" のインデックスを ${index} に更新`);
+      dlog(`ファイルアイテム "${item.querySelector('.file-name').textContent}" のインデックスを ${index} に更新`);
     });
   }
 
@@ -1508,7 +1511,7 @@ export function showEditor(container) {
               viewerInstance.controls.setScale(modelSetting.transform.scale.x);
             }
             
-            console.log('✅ 保存された設定を適用しました:', modelSetting.transform);
+            dlog('✅ 保存された設定を適用しました:', modelSetting.transform);
             markAsChanged();
             updateAnimationInfo();
           }, 500);
@@ -1663,14 +1666,14 @@ export function showEditor(container) {
     const handleTranslateClick = () => {
       if (viewerInstance?.controls?.setTransformMode('translate')) {
         setActiveButton(translateButton);
-        console.log('Transform mode set to: translate');
+        dlog('Transform mode set to: translate');
       }
     };
 
     const handleRotateClick = () => {
       if (viewerInstance?.controls?.setTransformMode('rotate')) {
         setActiveButton(rotateButton);
-        console.log('Transform mode set to: rotate - ギズモで3軸回転が可能になりました');
+        dlog('Transform mode set to: rotate - ギズモで3軸回転が可能になりました');
       } else {
         console.warn('回転モードの設定に失敗しました。モデルが選択されているか確認してください。');
       }
@@ -1679,7 +1682,7 @@ export function showEditor(container) {
     const handleScaleClick = () => {
       if (viewerInstance?.controls?.setTransformMode('scale')) {
         setActiveButton(scaleButton);
-        console.log('Transform mode set to: scale');
+        dlog('Transform mode set to: scale');
       }
     };
 
@@ -1725,7 +1728,7 @@ export function showEditor(container) {
       uploadArea.classList.add('loading');
       
       // ファイルをARビューワーに読み込む（元ファイルも渡す）
-      console.log('🔄 新しいモデルファイル読み込み [IndexedDB対応]:', {
+      dlog('🔄 新しいモデルファイル読み込み [IndexedDB対応]:', {
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type
@@ -1810,7 +1813,7 @@ export function showEditor(container) {
           fileListContainer.appendChild(loadingIndicator);
 
           modelIndex = await viewerInstance.controls.loadNewModel(objectUrl, file.name, file.size);
-          console.log(`モデル "${file.name}" をインデックス ${modelIndex} でロードしました`);
+          dlog(`モデル "${file.name}" をインデックス ${modelIndex} でロードしました`);
 
           const emptyText = fileListContainer.querySelector('.empty-text');
           if (emptyText) {
@@ -1963,7 +1966,7 @@ export function showEditor(container) {
     }
 
     // ローディング設定のクリーンアップ
-    console.log('🧹 UIリセット時にローディング設定をクリーンアップ中...');
+    dlog('🧹 UIリセット時にローディング設定をクリーンアップ中...');
     
     // ローディング設定のイベントリスナーを削除
     removeLoadingSettingsEventListeners();
@@ -1989,7 +1992,7 @@ export function showEditor(container) {
     loadingShowProgress = null;
     loadingPreviewButton = null;
     
-    console.log('✅ UIリセット時のローディング設定クリーンアップが完了しました');
+    dlog('✅ UIリセット時のローディング設定クリーンアップが完了しました');
   }
 
   // 通知表示関数
@@ -2188,7 +2191,7 @@ export function showEditor(container) {
       }
       
       markAsChanged();
-      console.log('ローディングロゴをアップロードしました:', file.name);
+      dlog('ローディングロゴをアップロードしました:', file.name);
     };
     
     reader.onerror = () => {
@@ -2236,7 +2239,7 @@ export function showEditor(container) {
       }
     }, 100);
     
-    console.log('ローディング画面をプレビュー表示しました');
+    dlog('ローディング画面をプレビュー表示しました');
   };
 
   // 現在のローディング設定を取得
@@ -2257,11 +2260,11 @@ export function showEditor(container) {
     
     // グローバル変数を同期更新
     if (savedSelectedScreenId !== selectedScreenId) {
-      console.log('🔄 selectedScreenId同期更新:', savedSelectedScreenId, '->', selectedScreenId);
+      dlog('🔄 selectedScreenId同期更新:', savedSelectedScreenId, '->', selectedScreenId);
       savedSelectedScreenId = selectedScreenId;
     }
     
-    console.log('🔄 現在のローディング設定を取得:', {
+    dlog('🔄 現在のローディング設定を取得:', {
       selectedScreenId,
       selectElementExists: !!loadingScreenSelect,
       selectValue: loadingScreenSelect?.value,
@@ -2290,7 +2293,7 @@ export function showEditor(container) {
     const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
     const currentProjectId = urlParams.get('id');
     
-    console.log('🔄 QRコード発行:', { currentProjectId });
+    dlog('🔄 QRコード発行:', { currentProjectId });
     
     if (!currentProjectId) {
       alert('プロジェクトを先に保存してください。\n保存後にQRコードを生成できます。');
@@ -2309,7 +2312,7 @@ export function showEditor(container) {
         }
       }
       
-      console.log('📊 プロジェクト情報:', {
+      dlog('📊 プロジェクト情報:', {
         id: currentProjectId,
         name: project?.name,
         modelCount: project?.modelSettings?.length || 0,
@@ -2340,7 +2343,7 @@ export function showEditor(container) {
       try {
         const modelsForSaving = viewerInstance.controls.getAllModels();
         const loadingScreenValue = document.getElementById('loading-screen-select')?.value;
-        console.log('【保存直前デバッグ】', {
+        dlog('【保存直前デバッグ】', {
           models: modelsForSaving,
           modelCount: modelsForSaving.length,
           firstModelDataExists: modelsForSaving.length > 0 ? !!modelsForSaving[0].modelData : 'N/A',
@@ -2360,15 +2363,15 @@ export function showEditor(container) {
       // 既存プロジェクトの場合は現在の情報を取得
       let currentProject = null;
       if (isEdit) {
-        console.log('🔄 プロジェクト取得開始:', currentProjectId);
+        dlog('🔄 プロジェクト取得開始:', currentProjectId);
         
         // まず全プロジェクト一覧を確認
         const allProjects = JSON.parse(localStorage.getItem('miruwebAR_projects') || '[]');
-        console.log('📊 全プロジェクト一覧:', allProjects.map(p => ({ id: p.id, name: p.name })));
+        dlog('📊 全プロジェクト一覧:', allProjects.map(p => ({ id: p.id, name: p.name })));
         
         try {
           currentProject = await getProject(currentProjectId);
-          console.log('🔍 既存プロジェクト情報を取得:', {
+          dlog('🔍 既存プロジェクト情報を取得:', {
             id: currentProject?.id,
             name: currentProject?.name,
             description: currentProject?.description,
@@ -2388,18 +2391,18 @@ export function showEditor(container) {
         currentDescription: currentProject?.description || ''
       };
       
-      console.log('📝 保存モーダルに渡すデータ:', modalData);
+      dlog('📝 保存モーダルに渡すデータ:', modalData);
       
       showSaveProjectModal(modalData, async (projectData) => {
       try {
-        console.log('保存処理開始:', projectData);
-        console.log('arType:', arType);
-        console.log('isMarkerMode:', isMarkerMode);
-        console.log('viewerInstance:', viewerInstance);
+        dlog('保存処理開始:', projectData);
+        dlog('arType:', arType);
+        dlog('isMarkerMode:', isMarkerMode);
+        dlog('viewerInstance:', viewerInstance);
         
         // マーカー画像データを取得
         const markerImageData = isMarkerMode ? localStorage.getItem('markerImageUrl') : null;
-        console.log('🔍 保存前のマーカー画像データ:', {
+        dlog('🔍 保存前のマーカー画像データ:', {
           exists: !!markerImageData,
           type: typeof markerImageData,
           length: markerImageData?.length || 0,
@@ -2409,7 +2412,7 @@ export function showEditor(container) {
         // プロジェクト保存前に最新のUI状態を同期
         const loadingScreenSelect = document.getElementById('loading-screen-select');
         if (loadingScreenSelect && loadingScreenSelect.value !== savedSelectedScreenId) {
-          console.log('🔧 保存前にローディング画面選択を同期:', {
+          dlog('🔧 保存前にローディング画面選択を同期:', {
             oldValue: savedSelectedScreenId,
             newValue: loadingScreenSelect.value
           });
@@ -2427,32 +2430,54 @@ export function showEditor(container) {
           loadingScreen: getCurrentLoadingSettings()
         };
 
-        // ローディング画面の選択テンプレートを反映
+        // ローディング画面の選択テンプレートを反映（完全な設定を保存）
         try {
           const selectedId = saveData.loadingScreen?.selectedScreenId;
           if (selectedId && selectedId !== 'none') {
             const template = getLoadingScreenTemplate(selectedId);
             if (template?.settings?.loadingScreen) {
               const t = template.settings.loadingScreen;
-              // テンプレートの主要プロパティを保存データに反映
-              saveData.loadingScreen.backgroundColor = t.backgroundColor ?? saveData.loadingScreen.backgroundColor;
-              saveData.loadingScreen.textColor = t.textColor ?? saveData.loadingScreen.textColor;
-              // テンプレートでは loadingMessage を使う場合があるため、message にマップ
-              if (t.loadingMessage && typeof t.loadingMessage === 'string') {
-                saveData.loadingScreen.message = t.loadingMessage;
-              }
-              // アクセントカラー相当（存在すれば反映）
-              if (t.accentColor) {
-                saveData.loadingScreen.accentColor = t.accentColor;
-              }
+              dlog('🎨 テンプレート設定を完全統合:', template.name, t);
+              
+              // 完全なテンプレート設定を保存データに統合
+              saveData.loadingScreen = {
+                ...saveData.loadingScreen,
+                // 基本設定
+                backgroundColor: t.backgroundColor ?? saveData.loadingScreen.backgroundColor,
+                textColor: t.textColor ?? saveData.loadingScreen.textColor,
+                progressColor: t.progressColor ?? t.accentColor ?? saveData.loadingScreen.progressColor,
+                accentColor: t.accentColor ?? saveData.loadingScreen.accentColor,
+                
+                // メッセージ設定
+                message: t.loadingMessage ?? t.message ?? saveData.loadingScreen.message,
+                loadingMessage: t.loadingMessage ?? t.message ?? saveData.loadingScreen.loadingMessage,
+                brandName: t.brandName ?? saveData.loadingScreen.brandName,
+                subTitle: t.subTitle ?? saveData.loadingScreen.subTitle,
+                
+                // 表示設定
+                showProgress: t.showProgress ?? saveData.loadingScreen.showProgress,
+                fontScale: t.fontScale ?? saveData.loadingScreen.fontScale,
+                
+                // ロゴ設定
+                logo: t.logo ?? saveData.loadingScreen.logo,
+                logoType: t.logoType ?? saveData.loadingScreen.logoType,
+                logoPosition: t.logoPosition ?? saveData.loadingScreen.logoPosition,
+                logoSize: t.logoSize ?? saveData.loadingScreen.logoSize,
+                
+                // テンプレート情報も保持
+                selectedScreenId: selectedId,
+                templateName: template.name
+              };
+              
+              dlog('✅ 完全統合されたローディング設定:', saveData.loadingScreen);
             }
           }
         } catch (e) {
           console.warn('⚠️ ローディングテンプレート適用に失敗しました（保存は継続）:', e);
         }
         
-        console.log('💾 保存するローディング画面設定:', saveData.loadingScreen);
-        console.log('🔍 保存データ詳細（保存前の完全なデータ）:', {
+        dlog('💾 保存するローディング画面設定:', saveData.loadingScreen);
+        dlog('🔍 保存データ詳細（保存前の完全なデータ）:', {
           id: saveData.id,
           name: saveData.name,
           description: saveData.description,
@@ -2461,7 +2486,7 @@ export function showEditor(container) {
           hasMarkerImage: !!saveData.markerImage,
           markerImageSize: saveData.markerImage ? (saveData.markerImage.length / 1024).toFixed(2) + 'KB' : '0KB'
         });
-        console.log('🔍 保存データ詳細:', {
+        dlog('🔍 保存データ詳細:', {
           id: saveData.id,
           name: saveData.name,
           type: saveData.type,
@@ -2470,7 +2495,7 @@ export function showEditor(container) {
         });
 
         // プロジェクトを保存
-        console.log('🚀 プロジェクト保存開始:', {
+        dlog('🚀 プロジェクト保存開始:', {
           dataKeys: Object.keys(saveData),
           nameLength: saveData.name?.length || 0,
           descriptionLength: saveData.description?.length || 0,
@@ -2482,7 +2507,7 @@ export function showEditor(container) {
         let savedProject;
         try {
           savedProject = await saveProject(saveData, viewerInstance);
-          console.log('✅ プロジェクト保存成功:', {
+          dlog('✅ プロジェクト保存成功:', {
             id: savedProject.id,
             name: savedProject.name,
             selectedScreenId: savedProject.loadingScreen?.selectedScreenId,
@@ -2491,7 +2516,7 @@ export function showEditor(container) {
 
           // QRコード用のproject.jsonファイルをサーバーに生成
           try {
-            console.log('🔄 QRコード用project.json生成開始:', savedProject.id);
+            dlog('🔄 QRコード用project.json生成開始:', savedProject.id);
             const serverResponse = await fetch(`/api/projects/${savedProject.id}/save`, {
               method: 'POST',
               headers: {
@@ -2504,7 +2529,7 @@ export function showEditor(container) {
 
             if (serverResponse.ok) {
               const serverResult = await serverResponse.json();
-              console.log('✅ QRコード用project.json生成成功:', serverResult.url);
+              dlog('✅ QRコード用project.json生成成功:', serverResult.url);
             } else {
               console.warn('⚠️ QRコード用project.json生成失敗:', serverResponse.statusText);
             }
@@ -2543,7 +2568,7 @@ export function showEditor(container) {
         // URLを更新してプロジェクトIDを含める（新規保存の場合のみ）
         const currentUrlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
         if (!currentUrlParams.get('id') && savedProject.id) {
-          console.log('📝 URLを更新:', savedProject.id);
+          dlog('📝 URLを更新:', savedProject.id);
           window.location.hash = `#/editor?id=${savedProject.id}`;
         }
 
@@ -2565,7 +2590,7 @@ export function showEditor(container) {
           window.history.replaceState(null, '', `#/editor?id=${savedProject.id}&type=${arType}`);
         }
 
-        console.log('プロジェクト保存完了:', savedProject);
+        dlog('プロジェクト保存完了:', savedProject);
         markAsSaved(); // 保存完了をマーク
         resolve(savedProject); // Promise解決
       } catch (error) {
@@ -2593,14 +2618,14 @@ export function showEditor(container) {
           setTimeout(() => {
             if (confirm('ブラウザの保存容量が不足しています。\n\n古いプロジェクトを削除して再保存しますか？\n\n※「キャンセル」を選ぶと手動でlocalStorageをクリアできます。')) {
               // 再保存を試行
-              console.log('🔄 容量制限エラー後の再保存を試行...');
+              dlog('🔄 容量制限エラー後の再保存を試行...');
               handleSaveProject();
             } else {
               // 手動でlocalStorageをクリア
               if (confirm('すべての保存されたプロジェクトを削除してよろしいですか？\n\n※この操作は取り消せません。')) {
                 localStorage.removeItem('miruwebAR_projects');
                 alert('保存データを削除しました。再度保存を試してください。');
-                console.log('🧹 localStorage手動クリア完了');
+                dlog('🧹 localStorage手動クリア完了');
               }
             }
           }, 100);
@@ -2654,13 +2679,13 @@ export function showEditor(container) {
   // --- クリーンアップ関数 ---
   // このビューが表示されなくなったときに呼ばれるべき関数を返す
   return () => {
-    console.log("エディタービューのクリーンアップを実行します。");
+    dlog("エディタービューのクリーンアップを実行します。");
     
     // ARビューアのリソースを解放
     if (viewerInstance && viewerInstance.dispose) {
       try {
         viewerInstance.dispose();
-        console.log("ARビューアのリソースを解放しました。");
+        dlog("ARビューアのリソースを解放しました。");
       } catch (error) {
         console.error("ARビューアのリソース解放中にエラー:", error);
       }
@@ -2760,7 +2785,7 @@ export function showEditor(container) {
     arViewerContainer = null;
 
     // ローディング設定のクリーンアップ
-    console.log("🧹 ローディング設定のクリーンアップを実行中...");
+    dlog("🧹 ローディング設定のクリーンアップを実行中...");
     
     // ローディング設定のイベントリスナーを削除
     removeLoadingSettingsEventListeners();
@@ -2786,8 +2811,8 @@ export function showEditor(container) {
     loadingShowProgress = null;
     loadingPreviewButton = null;
     
-    console.log("✅ ローディング設定のクリーンアップが完了しました");
+    dlog("✅ ローディング設定のクリーンアップが完了しました");
 
-    console.log("エディタービューのクリーンアップが完了しました。");
+    dlog("エディタービューのクリーンアップが完了しました。");
   };
 }

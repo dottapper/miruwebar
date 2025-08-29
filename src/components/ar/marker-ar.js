@@ -25,6 +25,10 @@ export class MarkerAR {
       // 検出チューニング（必要に応じて上書き可能）
       patternRatio: typeof options.patternRatio === 'number' ? options.patternRatio : 0.7,
       minConfidence: typeof options.minConfidence === 'number' ? options.minConfidence : 0.5,
+      // デバッグ用：強制的にキューブを配置
+      forceDebugCube: options.forceDebugCube === true,
+      // デバッグ用：モデルのマテリアルを視認性の高い材質に置換
+      forceNormalMaterial: options.forceNormalMaterial === true,
       ...options
     };
 
@@ -41,16 +45,35 @@ export class MarkerAR {
       powerPreference: "default" // iPhone 用省電力設定
     });
 
+    // 最低限のライティング（モデル可視化用）
+    try {
+      const ambient = new this._T.AmbientLight(0xffffff, 0.6);
+      const dir = new this._T.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(1, 1, 1);
+      this.scene.add(ambient);
+      this.scene.add(dir);
+    } catch (_) {}
+
     // AR.js 要素
     this.arToolkitSource = null;
     this.arToolkitContext = null;
     this.markerControls = null;
     this.markerRoot = new this._T.Group();
+    // AR.js は markerRoot の matrix を直接更新するため、autoUpdate をオフにする
+    try { this.markerRoot.matrixAutoUpdate = false; } catch (_) {}
     
     // モデル管理
-    this.modelLoader = new GLTFLoader();
-    this.loadedModel = null;
-    this.placedModel = null;
+    try {
+      this.modelLoader = new GLTFLoader();
+      console.log('✅ GLTFLoader初期化成功');
+    } catch (e) {
+      console.error('❌ GLTFLoader初期化失敗:', e);
+      this.modelLoader = null;
+    }
+    this.loadedModel = null; // 後方互換用（最後に読んだモデル）
+    this.loadedModels = [];  // 読み込まれた全モデル（準備済み）
+    this.placedModel = null; // 互換用（配置済みのルート）
+    this.placedGroup = null; // 複数モデルを束ねるグループ
 
     // 状態管理
     this.isMarkerVisible = false;
@@ -74,15 +97,26 @@ export class MarkerAR {
     console.log('🚀 MarkerAR初期化開始');
 
     try {
+      console.log('🔍 初期化デバッグ:', {
+        container: !!this.container,
+        _T: !!this._T,
+        scene: !!this.scene,
+        camera: !!this.camera,
+        renderer: !!this.renderer,
+        modelLoader: !!this.modelLoader
+      });
       // AR.js の動的読み込み
       console.log('📦 AR.js ライブラリ読み込み開始');
       await this.loadARjsLibrary();
       console.log('✅ AR.js ライブラリ読み込み完了');
 
       // レンダラー設定
+      console.log('🖥️ レンダラー設定開始');
       this.setupRenderer();
+      console.log('✅ レンダラー設定完了');
 
       // 必要アセットURLを解決（ローカル > CDN 順に）
+      console.log('🔗 アセットURL解決開始');
       this.options.cameraParametersUrl = await this.resolveAssetUrl([
         '/arjs/camera_para.dat',
         this.options.cameraParametersUrl,
@@ -97,6 +131,7 @@ export class MarkerAR {
         'https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/patt.hiro', 
         'https://jeromeetienne.github.io/AR.js/data/patt.hiro'
       ]);
+      console.log('✅ アセットURL解決完了');
 
       this.dlog('🔗 解決したアセットURL:', {
         cameraParametersUrl: this.options.cameraParametersUrl,
@@ -127,7 +162,18 @@ export class MarkerAR {
       return true;
 
     } catch (error) {
-      console.error('❌ MarkerAR初期化失敗:', error);
+      console.error('❌ MarkerAR初期化失敗:', {
+        エラーメッセージ: error.message,
+        エラータイプ: error.name,
+        スタックトレース: error.stack,
+        現在の状態: {
+          container: !!this.container,
+          scene: !!this.scene,
+          camera: !!this.camera,
+          renderer: !!this.renderer,
+          modelLoader: !!this.modelLoader
+        }
+      });
       throw new Error(`MarkerAR初期化エラー: ${error.message}`);
     }
   }
@@ -228,6 +274,18 @@ export class MarkerAR {
           window.THREE = window.THREE || THREE;
         }
       }
+
+      // three r122 では removeFromParent が無い場合があるためポリフィル
+      try {
+        const O3D = window.THREE && window.THREE.Object3D;
+        if (O3D && !O3D.prototype.removeFromParent) {
+          O3D.prototype.removeFromParent = function() {
+            if (this.parent) this.parent.remove(this);
+            return this;
+          };
+          console.log('🧩 three.Object3D.removeFromParent ポリフィル適用');
+        }
+      } catch (_) {}
     } catch (e) {
       console.warn('⚠️ グローバルTHREE準備に失敗（続行）:', e);
       // 最低限、現在のモジュール版THREEをグローバルに割り当て
@@ -265,6 +323,8 @@ export class MarkerAR {
       if (!ok) throw new Error('AR.js ライブラリの読み込みに失敗しました');
 
       console.log('✅ AR.js ライブラリ読み込み成功');
+
+      console.log('✅ GLTFLoader モジュール版使用');
 
     } catch (error) {
       if (!window.THREEx || !window.THREEx.ArToolkitSource) {
@@ -645,6 +705,7 @@ export class MarkerAR {
       {
         type: 'pattern',
         patternUrl: this.options.markerUrl,
+        // マーカーにオブジェクトを配置する標準的な方式
         changeMatrixMode: 'cameraTransformMatrix',
         // 認識チューニング
         patternRatio: this.options.patternRatio,
@@ -681,14 +742,32 @@ export class MarkerAR {
         this.isMarkerVisible = true;
         console.log('🎯 マーカーを発見しました！');
         
-        // 自動でモデル配置
-        if (this.loadedModel && !this.placedModel) {
-          console.log('📦 モデルを自動配置中...');
+        // 自動でモデル/デバッグキューブを配置
+        console.log('🔍 モデル配置判定:', {
+          forceDebugCube: this.options.forceDebugCube,
+          loadedModel: !!this.loadedModel,
+          loadedModelsCount: this.loadedModels?.length || 0,
+          placedModel: !!this.placedModel
+        });
+        
+        // sample.glbテスト用：モデルがあれば優先的に表示
+        if ((this.loadedModel || this.loadedModels?.length > 0) && !this.placedModel) {
+          console.log('📦 保存モデルを自動配置中...');
           this.placeModel();
-        } else if (!this.loadedModel && !this.placedModel) {
-          // スマホでも視認できるようフォールバックのデバッグ用キューブを配置
+        } else if (this.options.forceDebugCube && !this.placedModel) {
+          // テストフラグが立っている場合はキューブを出す
+          console.log('🧪 テスト: 強制デバッグキューブを配置');
+          this.placeDebugCube();
+        } else if (!this.loadedModel && (!this.loadedModels || this.loadedModels.length === 0) && !this.placedModel) {
+          // モデルが全くない場合のフォールバック
           console.log('🧪 フォールバック: デバッグ用キューブを配置');
           this.placeDebugCube();
+        } else {
+          console.warn('⚠️ どの配置条件にも該当しませんでした', {
+            loadedModel: !!this.loadedModel,
+            loadedModelsCount: this.loadedModels?.length || 0,
+            placedModel: !!this.placedModel
+          });
         }
         
         if (this.onMarkerFound) this.onMarkerFound();
@@ -736,6 +815,22 @@ export class MarkerAR {
         // レンダリング
         if (this.renderer && this.scene && this.camera) {
           this.renderer.render(this.scene, this.camera);
+          
+          // デバッグ：シーン内容を確認（マーカー検出時のみ）
+          if (this.isMarkerVisible && this.markerRoot && this.markerRoot.children.length > 0) {
+            // 5秒に1回だけログ出力
+            const now = Date.now();
+            if (!this._lastDebugLog || now - this._lastDebugLog > 5000) {
+              this._lastDebugLog = now;
+              console.log('🎬 レンダリング状態:', {
+                markerVisible: this.isMarkerVisible,
+                markerChildren: this.markerRoot.children.length,
+                cameraMatrix: this.camera.matrix.elements.slice(0, 4),
+                placedModel: !!this.placedModel,
+                placedModelVisible: this.placedModel?.visible
+              });
+            }
+          }
         }
       } catch (error) {
         // AR.js固有のエラーはログを出力しない（無限ループ防止）
@@ -756,27 +851,56 @@ export class MarkerAR {
    */
   async loadModel(modelUrl) {
     console.log('📂 3Dモデル読み込み開始:', modelUrl);
+    console.log('📂 現在のloadedModels:', this.loadedModels.length, '個');
 
     return new Promise((resolve, reject) => {
+      // GLTFLoader 準備確認
+      if (!this.modelLoader) {
+        console.warn('⚠️ GLTFLoader 未準備のためモデルを読めません');
+        reject(new Error('GLTFLoader is not available'));
+        return;
+      }
+
       this.modelLoader.load(
         modelUrl,
         (gltf) => {
           console.log('✅ 3Dモデル読み込み完了');
           
-          const model = gltf.scene;
+          const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+          if (!model) {
+            reject(new Error('Invalid GLTF content'));
+            return;
+          }
+
+          // デバッグ: 材質を MeshNormalMaterial に置換（見え方を確認）
+          if (this.options.forceNormalMaterial) {
+            const normalMat = new this._T.MeshNormalMaterial({ wireframe: false });
+            model.traverse((child) => {
+              if (child.isMesh) child.material = normalMat;
+            });
+          }
           
-          // モデルサイズ調整（iPhone 用小さめ）
+          // モデルサイズ調整（ターゲットサイズに正規化 + 大きめ表示）
           const box = new this._T.Box3().setFromObject(model);
           const size = box.getSize(new this._T.Vector3());
-          const scale = (this.options.worldScale * 0.3) / Math.max(size.x, size.y, size.z || 1);
+          const targetEdge = (this.options.worldScale || 1.0) * 2.0; // 2倍に拡大
+          const scale = targetEdge / Math.max(size.x, size.y, size.z || 1);
           model.scale.setScalar(scale);
+          
+          console.log('🔍 モデルサイズ調整:', {
+            元サイズ: { x: size.x, y: size.y, z: size.z },
+            ターゲットサイズ: targetEdge,
+            スケール: scale,
+            最終サイズ: model.scale.x
+          });
 
           // モデルを地面に配置
           box.setFromObject(model);
-          model.position.y = -box.min.y * scale;
+          model.position.y -= box.min.y; // スケール済みのmin.yをそのまま打ち消す
 
           // 保存
           this.loadedModel = model.clone();
+          this.loadedModels.push(model.clone());
           
           console.log('🎯 3Dモデル準備完了');
           if (this.onModelLoaded) this.onModelLoaded(model);
@@ -800,14 +924,30 @@ export class MarkerAR {
    */
   placeDebugCube() {
     try {
-      const size = 0.5 * (this.options.worldScale || 1.0);
+      // 既存のモデルを削除
+      if (this.placedModel) {
+        this.markerRoot.remove(this.placedModel);
+        this.placedModel = null;
+      }
+      
+      const size = 1.0 * (this.options.worldScale || 1.0); // サイズを大きく
       const geometry = new this._T.BoxGeometry(size, size, size);
       const material = new this._T.MeshNormalMaterial({ wireframe: false });
       const cube = new this._T.Mesh(geometry, material);
+      
+      // キューブをマーカー上に配置（中央に）
       cube.position.set(0, size / 2, 0);
+      cube.scale.setScalar(1.0); // スケール確実に設定
+      
       this.markerRoot.add(cube);
       this.placedModel = cube;
-      console.log('🧊 デバッグ用キューブを配置しました');
+      
+      console.log('🧊 デバッグ用キューブを配置しました', {
+        サイズ: size,
+        位置: cube.position.toArray(),
+        スケール: cube.scale.toArray(),
+        マーカールート子要素数: this.markerRoot.children.length
+      });
       return cube;
     } catch (e) {
       console.warn('⚠️ デバッグ用キューブ配置に失敗:', e?.message || e);
@@ -819,22 +959,61 @@ export class MarkerAR {
    * マーカー上にモデルを配置
    */
   placeModel() {
-    if (!this.loadedModel) {
+    // forceDebugCubeが有効でもモデル表示を優先（sample.glbテスト用）
+    console.log('📦 placeModel() 実行開始');
+
+    if (!this.loadedModels || this.loadedModels.length === 0) {
       console.warn('⚠️ 配置可能なモデルがありません');
       return null;
     }
 
-    // 既存モデルを削除
-    if (this.placedModel) {
-      this.markerRoot.remove(this.placedModel);
+    // 既存の配置をクリア
+    if (this.placedGroup) {
+      try { this.markerRoot.remove(this.placedGroup); } catch (_) {}
+      this.placedGroup = null;
     }
 
-    // モデルを複製して配置
-    this.placedModel = this.loadedModel.clone();
-    this.markerRoot.add(this.placedModel);
+    const group = new this._T.Group();
+    let offsetX = 0;
+    const gap = 0.2 * (this.options.worldScale || 1.0);
+
+    for (const baseModel of this.loadedModels) {
+      const m = baseModel.clone(true);
+      // 念のため地面合わせを再適用
+      const b = new this._T.Box3().setFromObject(m);
+      m.position.y -= b.min.y;
+      // 横一列に並べる（複数モデル視認性）
+      m.position.x = offsetX;
+      group.add(m);
+      
+      // テスト用: モデルの隣に大きな赤いキューブを配置
+      const testCube = new this._T.Mesh(
+        new this._T.BoxGeometry(0.5, 0.5, 0.5),
+        new this._T.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
+      );
+      testCube.position.set(offsetX, 0.25, -0.5);
+      group.add(testCube);
+      
+      const maxEdge = Math.max(
+        Math.abs(b.max.x - b.min.x),
+        Math.abs(b.max.y - b.min.y),
+        Math.abs(b.max.z - b.min.z)
+      );
+      offsetX += (maxEdge + gap + 0.5); // テストキューブ分も考慮
+    }
+
+    this.markerRoot.add(group);
+    this.placedGroup = group;
+    this.placedModel = group; // 後方互換
     
-    console.log('🎯 マーカー上にモデルを配置しました');
-    return this.placedModel;
+    console.log('🎯 マーカー上にモデルを配置しました（', this.loadedModels.length, '個）', {
+      グループ子要素数: group.children.length,
+      マーカールート子要素数: this.markerRoot.children.length,
+      グループ表示: group.visible,
+      マーカールート表示: this.markerRoot.visible,
+      グループ位置: group.position.toArray()
+    });
+    return group;
   }
 
   /**

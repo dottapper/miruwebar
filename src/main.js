@@ -21,6 +21,10 @@ import { initializeMigration } from './storage/migrate.js';
 
 // デバッグモードの設定
 const DEBUG_MODE = import.meta.env.DEV || window.location.search.includes('debug=true');
+// 他モジュールから参照できるように DEBUG フラグを公開
+if (typeof window !== 'undefined') {
+  window.DEBUG = Boolean(DEBUG_MODE);
+}
 
 // デバッグ用ログ関数
 function debugLog(message, ...args) {
@@ -32,7 +36,7 @@ function debugLog(message, ...args) {
 // HMRの設定
 if (import.meta.hot) {
   import.meta.hot.accept((newModule) => {
-    console.log('🔄 HMR更新を検知しました');
+    debugLog('🔄 HMR更新を検知しました');
     // ページをリロードしてHMRを確実に適用
     window.location.reload();
   });
@@ -135,7 +139,7 @@ let currentCleanup = null;
 
 // ルーティング処理
 async function render() {
-  console.log('🔥 render関数開始');
+  debugLog('🔥 render関数開始');
   try {
     debugLog('🔄 ルーティング処理開始');
     
@@ -154,39 +158,39 @@ async function render() {
 
     // 現在のハッシュを取得
     let hash = window.location.hash || '#/login';
-    console.log('📍 現在のハッシュ:', hash);
+    debugLog('📍 現在のハッシュ:', hash);
     
     // デバッグ用：usage-guideルートの特別確認
     if (hash === '#/usage-guide') {
-      console.log('🎯 usage-guideルートが検出されました！');
+      debugLog('🎯 usage-guideルートが検出されました！');
     }
     
     // ハッシュにクエリパラメータがある場合は分離
     const [baseHash] = hash.split('?');
-    console.log('📍 ベースハッシュ:', baseHash);
+    debugLog('📍 ベースハッシュ:', baseHash);
     
     // 対応するビューモジュールを取得
     const viewModule = viewModules[baseHash];
-    console.log('📍 対応するビューモジュール:', baseHash, !!viewModule);
+    debugLog('📍 対応するビューモジュール:', baseHash, !!viewModule);
     
     if (viewModule) {
-      console.log(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
+      debugLog(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
       try {
-        console.log('🔄 動的インポート開始...');
+        debugLog('🔄 動的インポート開始...');
         // 動的インポートでビューを読み込み
         const module = await viewModule();
-        console.log('🔍 読み込まれたモジュール:', module);
-        console.log('🔍 module.default:', module.default);
-        console.log('🔍 module.default の型:', typeof module.default);
+        debugLog('🔍 読み込まれたモジュール:', module);
+        debugLog('🔍 module.default:', module.default);
+        debugLog('🔍 module.default の型:', typeof module.default);
         
         const view = module.default || module.showEditor || module;
-        console.log('🔍 最終的なview:', view);
-        console.log('🔍 view の型:', typeof view);
+        debugLog('🔍 最終的なview:', view);
+        debugLog('🔍 view の型:', typeof view);
         
         if (typeof view === 'function') {
-          console.log('🎯 ビュー関数を実行します');
+          debugLog('🎯 ビュー関数を実行します');
           currentCleanup = view(app);
-          console.log('✅ ビュー表示完了');
+          debugLog('✅ ビュー表示完了');
         } else {
           console.error('❌ ビュー関数が見つかりません。view:', view);
           throw new Error('ビュー関数が見つかりません');
@@ -225,7 +229,7 @@ async function render() {
       }
     } else {
       console.warn(`⚠️ 未定義のルート: ${baseHash}`);
-      console.log('📍 利用可能なルート:', Object.keys(viewModules));
+      debugLog('📍 利用可能なルート:', Object.keys(viewModules));
       window.location.hash = '#/login';
     }
   } catch (error) {

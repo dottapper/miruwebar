@@ -117,6 +117,132 @@ export function validateAndFixColor(color) {
   return null;
 }
 
+// IP間データ同期用
+const CROSS_IP_SYNC_KEY = 'loadingScreenSettings_cross_ip_sync';
+
+// IP間データ同期：現在のIPアドレス情報を含めてデータを保存
+function saveCrossIPSync(data) {
+  try {
+    const currentHost = window.location.hostname;
+    const currentPort = window.location.port;
+    const syncData = {
+      timestamp: Date.now(),
+      host: currentHost,
+      port: currentPort,
+      origin: window.location.origin,
+      data: data
+    };
+    
+    // 複数IPからのデータを履歴として保存
+    const existingSync = JSON.parse(localStorage.getItem(CROSS_IP_SYNC_KEY) || '[]');
+    existingSync.unshift(syncData);
+    
+    // 最新5件のみ保持
+    const recentSync = existingSync.slice(0, 5);
+    localStorage.setItem(CROSS_IP_SYNC_KEY, JSON.stringify(recentSync));
+    
+    if (DEBUG) {
+      console.log('🌐 ローディング画面設定IP間同期データ保存:', { host: currentHost, port: currentPort });
+    }
+  } catch (error) {
+    console.warn('⚠️ ローディング画面設定IP間同期データ保存エラー:', error);
+  }
+}
+
+// IP間データ同期：他のIPからのデータを復元
+function loadCrossIPSync() {
+  try {
+    const syncHistory = JSON.parse(localStorage.getItem(CROSS_IP_SYNC_KEY) || '[]');
+    if (syncHistory.length === 0) return null;
+    
+    const currentOrigin = window.location.origin;
+    
+    // 現在のオリジン以外から最新のデータを探す
+    const externalData = syncHistory.find(sync => sync.origin !== currentOrigin);
+    
+    if (externalData) {
+      console.log('🌐 ローディング画面設定IP間同期データ復元:', {
+        from: externalData.origin,
+        timestamp: new Date(externalData.timestamp).toLocaleString()
+      });
+      return externalData.data;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('⚠️ ローディング画面設定IP間同期データ復元エラー:', error);
+    return null;
+  }
+}
+
+// 最後に使用したテンプレートIDのIP間同期
+function syncLastUsedTemplateId(templateId) {
+  try {
+    const syncKey = 'lastUsedTemplateId_cross_ip_sync';
+    const currentHost = window.location.hostname;
+    const currentPort = window.location.port;
+    const syncData = {
+      timestamp: Date.now(),
+      host: currentHost,
+      port: currentPort,
+      origin: window.location.origin,
+      templateId: templateId
+    };
+    
+    const existingSync = JSON.parse(localStorage.getItem(syncKey) || '[]');
+    existingSync.unshift(syncData);
+    
+    // 最新5件のみ保持
+    const recentSync = existingSync.slice(0, 5);
+    localStorage.setItem(syncKey, JSON.stringify(recentSync));
+    
+    if (DEBUG) {
+      console.log('🌐 最後使用テンプレートID IP間同期保存:', { templateId, host: currentHost, port: currentPort });
+    }
+  } catch (error) {
+    console.warn('⚠️ 最後使用テンプレートID IP間同期保存エラー:', error);
+  }
+}
+
+// 最後に使用したテンプレートIDのIP間復元
+function loadLastUsedTemplateId() {
+  try {
+    const syncKey = 'lastUsedTemplateId_cross_ip_sync';
+    
+    // まず現在のIPでのローカルデータをチェック
+    const localTemplateId = localStorage.getItem('lastUsedTemplateId');
+    if (localTemplateId) {
+      return localTemplateId;
+    }
+    
+    // 同期データから復元を試行
+    const syncHistory = JSON.parse(localStorage.getItem(syncKey) || '[]');
+    if (syncHistory.length === 0) return null;
+    
+    const currentOrigin = window.location.origin;
+    
+    // 現在のオリジン以外から最新のデータを探す
+    const externalData = syncHistory.find(sync => sync.origin !== currentOrigin);
+    
+    if (externalData && externalData.templateId) {
+      console.log('🌐 最後使用テンプレートID IP間同期復元:', {
+        templateId: externalData.templateId,
+        from: externalData.origin,
+        timestamp: new Date(externalData.timestamp).toLocaleString()
+      });
+      
+      // 復元したテンプレートIDをローカルにも保存
+      localStorage.setItem('lastUsedTemplateId', externalData.templateId);
+      return externalData.templateId;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('⚠️ 最後使用テンプレートID IP間同期復元エラー:', error);
+    return null;
+  }
+}
+
 // モックAPI - ローカルストレージを使用
 export const settingsAPI = {
   getSettings() {
@@ -129,11 +255,27 @@ export const settingsAPI = {
       });
       
       if (!stored) {
-        console.log('📝 保存された設定が見つかりません。バックアップから復旧を試行します');
+        console.log('📝 保存された設定が見つかりません。IP間同期から復旧を試行します');
+        
+        // IP間同期データから復元を試行
+        const syncedSettings = loadCrossIPSync();
+        if (syncedSettings) {
+          console.log('🌐 IP間同期から設定を復元しました');
+          // 復元したデータをローカルにも保存
+          try {
+            localStorage.setItem('loadingScreenSettings', JSON.stringify(syncedSettings));
+          } catch (saveError) {
+            console.warn('⚠️ 復元データの保存に失敗:', saveError);
+          }
+          return this.mergeWithDefaults(syncedSettings);
+        }
+        
+        // 通常のバックアップからの復旧も試行
         const recoveredSettings = this.recoverFromBackup();
         if (recoveredSettings) {
           return recoveredSettings;
         }
+        
         console.log('📝 バックアップも見つかりません。デフォルト設定を使用します');
         return this.mergeWithDefaults({});
       }
@@ -155,6 +297,9 @@ export const settingsAPI = {
   async saveSettings(settings) {
     try {
       const merged = this.mergeWithDefaults(settings);
+      
+      // IP間同期用にデータをコピー
+      saveCrossIPSync(merged);
       
       // 保存前のバックアップを作成
       const backupKey = `loadingScreenSettings_backup_${Date.now()}`;
@@ -771,4 +916,7 @@ export function convertToHexColor(color) {
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = color;
   return ctx.fillStyle;
-} 
+}
+
+// IP間同期関数をエクスポート
+export { loadLastUsedTemplateId, syncLastUsedTemplateId }; 

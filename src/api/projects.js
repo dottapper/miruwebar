@@ -14,6 +14,10 @@ import { exportProjectBundle } from '../utils/publish.js';
 
 const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
 
+// DEBUG ログ制御
+const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
+const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
+
 /**
  * プロジェクトデータの構造を生成（IndexedDB対応）
  * @param {Object} data - 保存するプロジェクトのデータ
@@ -31,14 +35,14 @@ async function createProjectData(data, viewerInstance, existingProject = null) {
         
         if (viewerInstance && viewerInstance.controls && viewerInstance.controls.getAllModels) {
             try {
-                console.log('🔄 ARViewerからモデル取得開始:', {
+                dlog('🔄 ARViewerからモデル取得開始:', {
                     hasViewerInstance: !!viewerInstance,
                     hasControls: !!viewerInstance.controls,
                     hasGetAllModels: !!viewerInstance.controls.getAllModels
                 });
                 
                 const allModels = viewerInstance.controls.getAllModels();
-                console.log('📊 取得したモデル一覧:', {
+                dlog('📊 取得したモデル一覧:', {
                     modelsType: typeof allModels,
                     isArray: Array.isArray(allModels),
                     modelsLength: allModels?.length,
@@ -64,16 +68,16 @@ async function createProjectData(data, viewerInstance, existingProject = null) {
                         if (existingModel.fileName === model.fileName && existingModel.fileSize === model.fileSize) {
                             // 同じファイル名・サイズの場合は既存IDを再利用
                             modelId = existingModel.modelId;
-                            console.log(`🔄 既存モデルID再利用: ${modelId} (${model.fileName})`);
+                            dlog(`🔄 既存モデルID再利用: ${modelId} (${model.fileName})`);
                         } else {
                             // ファイルが変更された場合のみ新しいID生成
                             modelId = `${projectId}_model_${index}_${Date.now()}`;
-                            console.log(`🆕 新しいモデルID生成: ${modelId} (${model.fileName})`);
+                            dlog(`🆕 新しいモデルID生成: ${modelId} (${model.fileName})`);
                         }
                     } else {
                         // 新規プロジェクトまたは新規モデルの場合
                         modelId = `${projectId}_model_${index}_${Date.now()}`;
-                        console.log(`🆕 新規モデルID生成: ${modelId} (${model.fileName})`);
+                        dlog(`🆕 新規モデルID生成: ${modelId} (${model.fileName})`);
                     }
                     
                     // モデルデータをIndexedDBに保存（既存モデル再利用の場合はスキップ）
@@ -257,7 +261,7 @@ export function getProjects() {
  */
 export async function saveProject(data, viewerInstance) {
     try {
-        console.log('🔄 saveProject開始:', {
+        dlog('🔄 saveProject開始:', {
           id: data.id,
           name: data.name,
           hasLoadingScreen: !!data.loadingScreen,
@@ -278,7 +282,7 @@ export async function saveProject(data, viewerInstance) {
         // 非同期でプロジェクトデータを作成（既存プロジェクト情報を渡す）
         const projectData = await createProjectData(data, viewerInstance, existingProject);
         
-        console.log('🔄 createProjectData完了:', {
+        dlog('🔄 createProjectData完了:', {
           id: projectData.id,
           name: projectData.name,
           hasLoadingScreen: !!projectData.loadingScreen,
@@ -301,12 +305,12 @@ export async function saveProject(data, viewerInstance) {
                     if (!projectData.savedModelIds.includes(oldModelId)) {
                         try {
                             await removeModelFromIDB(oldModelId);
-                            console.log(`🗑️ 未使用の古いモデル削除: ${oldModelId}`);
+                            dlog(`🗑️ 未使用の古いモデル削除: ${oldModelId}`);
                         } catch (cleanupError) {
                             console.warn('⚠️ 古いモデル削除失敗:', oldModelId);
                         }
                     } else {
-                        console.log(`♻️ モデル再利用により削除スキップ: ${oldModelId}`);
+                        dlog(`♻️ モデル再利用により削除スキップ: ${oldModelId}`);
                     }
                 }
             }
@@ -321,12 +325,12 @@ export async function saveProject(data, viewerInstance) {
         // プロジェクト設定のみlocalStorageに保存（軽量）
         try {
             // ハイブリッド保存を適用してデータを最適化
-            console.log('🔄 ハイブリッド保存前:', {
+            dlog('🔄 ハイブリッド保存前:', {
               hasLoadingScreen: !!projectData.loadingScreen,
               selectedScreenId: projectData.loadingScreen?.selectedScreenId
             });
             const optimizedProjectData = await saveProjectHybrid(projectData);
-            console.log('🔄 ハイブリッド保存後:', {
+            dlog('🔄 ハイブリッド保存後:', {
               hasLoadingScreen: !!optimizedProjectData.loadingScreen,
               selectedScreenId: optimizedProjectData.loadingScreen?.selectedScreenId
             });
@@ -341,7 +345,7 @@ export async function saveProject(data, viewerInstance) {
             const dataToSave = JSON.stringify(projects);
             localStorage.setItem(PROJECTS_STORAGE_KEY, dataToSave);
             
-            console.log('✅ localStorage保存完了:', {
+            dlog('✅ localStorage保存完了:', {
               projectId: optimizedProjectData.id,
               hasLoadingScreen: !!optimizedProjectData.loadingScreen,
               selectedScreenId: optimizedProjectData.loadingScreen?.selectedScreenId,
@@ -351,7 +355,7 @@ export async function saveProject(data, viewerInstance) {
             
             // サーバーサイドにproject.jsonファイルを保存
             try {
-                console.log('🔄 プロジェクト保存API呼び出し:', {
+                dlog('🔄 プロジェクト保存API呼び出し:', {
                     projectId: projectData.id,
                     projectName: projectData.name,
                     modelSettingsCount: projectData.modelSettings?.length || 0,
@@ -656,7 +660,7 @@ export function updateLoadingScreenSettings(projectId, loadingSettings) {
         // localStorageに保存
         localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
         
-        console.log('✅ ローディング設定を更新しました:', {
+        dlog('✅ ローディング設定を更新しました:', {
             projectId,
             settings: loadingSettings
         });
@@ -676,7 +680,7 @@ async function optimizeAllProjects() {
         const projects = getProjects();
         let totalSizeBefore = JSON.stringify(projects).length;
         
-        console.log(`📊 最適化前: ${projects.length}プロジェクト、${(totalSizeBefore / 1024).toFixed(2)}KB`);
+        dlog(`📊 最適化前: ${projects.length}プロジェクト、${(totalSizeBefore / 1024).toFixed(2)}KB`);
         
         const optimizedProjects = [];
         
@@ -691,7 +695,7 @@ async function optimizeAllProjects() {
         let totalSizeAfter = JSON.stringify(optimizedProjects).length;
         let savedSize = totalSizeBefore - totalSizeAfter;
         
-        console.log(`✅ 最適化完了: ${(savedSize / 1024).toFixed(2)}KB削減 (${((savedSize / totalSizeBefore) * 100).toFixed(1)}%)`);
+        dlog(`✅ 最適化完了: ${(savedSize / 1024).toFixed(2)}KB削減 (${((savedSize / totalSizeBefore) * 100).toFixed(1)}%)`);
         
     } catch (error) {
         console.error('❌ プロジェクト最適化エラー:', error);

@@ -1,5 +1,7 @@
 // src/storage/migrate.js
 // localStorage の Base64 データを IndexedDB に移行するマイグレーション機能
+const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
+const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 import { saveModelToIDB, getAllModelIds } from './indexeddb-storage.js';
 import { getProjects, saveProject } from './project-store.js';
@@ -63,14 +65,14 @@ function generateModelId(fileName, index) {
  */
 async function migrateProjectModels(project) {
   try {
-    console.log('🔄 プロジェクトモデル移行開始:', {
+    dlog('🔄 プロジェクトモデル移行開始:', {
       projectId: project.id,
       projectName: project.name,
       modelCount: project.modelSettings?.length || 0
     });
 
     if (!project.modelSettings || project.modelSettings.length === 0) {
-      console.log('ℹ️ 移行対象のモデルがありません:', project.id);
+      dlog('ℹ️ 移行対象のモデルがありません:', project.id);
       return project;
     }
 
@@ -81,7 +83,7 @@ async function migrateProjectModels(project) {
     for (let i = 0; i < project.modelSettings.length; i++) {
       const model = project.modelSettings[i];
       
-      console.log(`🔍 モデル ${i + 1}/${project.modelSettings.length} 処理中:`, {
+        dlog(`🔍 モデル ${i + 1}/${project.modelSettings.length} 処理中:`, {
         fileName: model.fileName,
         hasModelData: !!model.modelData,
         modelDataSize: model.modelData ? model.modelData.length : 0
@@ -89,7 +91,7 @@ async function migrateProjectModels(project) {
 
       // Base64 データが存在するかチェック
       if (!model.modelData || typeof model.modelData !== 'string' || !model.modelData.startsWith('data:')) {
-        console.log(`⏭️ Base64 データなし、スキップ: ${model.fileName}`);
+          dlog(`⏭️ Base64 データなし、スキップ: ${model.fileName}`);
         migratedModelSettings.push({
           ...model,
           modelId: null // IndexedDB にデータなし
@@ -136,7 +138,7 @@ async function migrateProjectModels(project) {
         migratedModelSettings.push(migratedModel);
         migratedCount++;
 
-        console.log(`✅ モデル移行完了: ${model.fileName} → ${modelId}`);
+        dlog(`✅ モデル移行完了: ${model.fileName} → ${modelId}`);
       } catch (modelError) {
         console.error(`❌ モデル移行エラー: ${model.fileName}`, modelError);
         
@@ -165,7 +167,7 @@ async function migrateProjectModels(project) {
       }
     };
 
-    console.log('✅ プロジェクトモデル移行完了:', {
+    dlog('✅ プロジェクトモデル移行完了:', {
       projectId: project.id,
       totalModels: project.modelSettings.length,
       migratedCount,
@@ -185,13 +187,13 @@ async function migrateProjectModels(project) {
  */
 export async function migrateLegacyBase64ToIDB() {
   try {
-    console.log('🚀 Base64 → IndexedDB マイグレーション開始');
+    dlog('🚀 Base64 → IndexedDB マイグレーション開始');
 
     // 既に移行済みかチェック
     const migrationFlag = localStorage.getItem(MIGRATION_FLAG_KEY);
     if (migrationFlag) {
       const migrationInfo = JSON.parse(migrationFlag);
-      console.log('ℹ️ マイグレーション済み:', migrationInfo);
+      dlog('ℹ️ マイグレーション済み:', migrationInfo);
       return {
         alreadyMigrated: true,
         migrationInfo
@@ -202,7 +204,7 @@ export async function migrateLegacyBase64ToIDB() {
     const projects = getProjects();
     
     if (projects.length === 0) {
-      console.log('ℹ️ 移行対象のプロジェクトがありません');
+      dlog('ℹ️ 移行対象のプロジェクトがありません');
       
       // 移行完了フラグを設定
       const migrationInfo = {
@@ -222,11 +224,11 @@ export async function migrateLegacyBase64ToIDB() {
       };
     }
 
-    console.log(`📊 移行対象プロジェクト数: ${projects.length}`);
+    dlog(`📊 移行対象プロジェクト数: ${projects.length}`);
 
     // IndexedDB の既存データをチェック
     const existingModelIds = await getAllModelIds();
-    console.log(`📊 既存 IndexedDB モデル数: ${existingModelIds.length}`);
+    dlog(`📊 既存 IndexedDB モデル数: ${existingModelIds.length}`);
 
     // 各プロジェクトを順次移行
     const migratedProjects = [];
@@ -236,7 +238,7 @@ export async function migrateLegacyBase64ToIDB() {
     for (let i = 0; i < projects.length; i++) {
       const project = projects[i];
       
-      console.log(`🔄 プロジェクト ${i + 1}/${projects.length} 移行中: ${project.name}`);
+      dlog(`🔄 プロジェクト ${i + 1}/${projects.length} 移行中: ${project.name}`);
       
       try {
         const migratedProject = await migrateProjectModels(project);
@@ -258,7 +260,7 @@ export async function migrateLegacyBase64ToIDB() {
     }
 
     // 移行されたプロジェクトを localStorage に保存
-    console.log('🔄 移行されたプロジェクトを保存中...');
+    dlog('🔄 移行されたプロジェクトを保存中...');
     
     // 個別に保存（サイズ制限対応）
     for (const project of migratedProjects) {
@@ -282,7 +284,7 @@ export async function migrateLegacyBase64ToIDB() {
 
     localStorage.setItem(MIGRATION_FLAG_KEY, JSON.stringify(migrationInfo));
 
-    console.log('🎉 Base64 → IndexedDB マイグレーション完了:', migrationInfo);
+    dlog('🎉 Base64 → IndexedDB マイグレーション完了:', migrationInfo);
 
     return {
       alreadyMigrated: false,
@@ -300,7 +302,7 @@ export async function migrateLegacyBase64ToIDB() {
 export function resetMigrationFlag() {
   try {
     localStorage.removeItem(MIGRATION_FLAG_KEY);
-    console.log('✅ マイグレーションフラグをリセットしました');
+    dlog('✅ マイグレーションフラグをリセットしました');
     return true;
   } catch (error) {
     console.error('❌ マイグレーションフラグリセットエラー:', error);
@@ -328,14 +330,14 @@ export function getMigrationInfo() {
  */
 export async function initializeMigration() {
   try {
-    console.log('🔄 アプリケーション初期化マイグレーション開始');
+    dlog('🔄 アプリケーション初期化マイグレーション開始');
     
     const result = await migrateLegacyBase64ToIDB();
     
     if (result.alreadyMigrated) {
-      console.log('ℹ️ マイグレーション済み、スキップ');
+      dlog('ℹ️ マイグレーション済み、スキップ');
     } else {
-      console.log('✅ 初期化マイグレーション完了:', result.migrationInfo);
+      dlog('✅ 初期化マイグレーション完了:', result.migrationInfo);
     }
     
     return result;

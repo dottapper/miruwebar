@@ -10,10 +10,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
-    strictPort: true,
+    strictPort: false,
     hmr: {
-      overlay: true, // エラーオーバーレイを有効化
-      port: 3000
+      overlay: true // エラーオーバーレイを有効化（ポートは自動）
     },
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -36,10 +35,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // ファイル名にタイムスタンプを強制追加
-        entryFileNames: `assets/[name]-${Date.now()}.[hash].js`,
-        chunkFileNames: `assets/[name]-${Date.now()}.[hash].js`,
-        assetFileNames: `assets/[name]-${Date.now()}.[hash].[ext]`,
+        // ハッシュのみでキャッシュバスティング（再現性のため Date.now は使用しない）
+        entryFileNames: `assets/[name].[hash].js`,
+        chunkFileNames: `assets/[name].[hash].js`,
+        assetFileNames: `assets/[name].[hash].[ext]`,
         // 手動チャンク分割の設定
         manualChunks: {
           // Three.jsを別チャンクに分離
@@ -54,8 +53,7 @@ export default defineConfig({
   },
   // ★★★ optimizeDeps の設定 ★★★
   optimizeDeps: {
-    exclude: ['three'], // Three.js を事前バンドル対象から除外
-    force: true // 依存関係を強制的に再ビルド
+    exclude: ['three'] // Three.js を事前バンドル対象から除外（必要時のみ再ビルド）
   },
   // ★★★ キャッシュ無効化 ★★★
   esbuild: {

@@ -19,6 +19,9 @@ build/
 data/
 uploads/
 
+# Generated project artifacts (published via API)
+public/projects/
+
 # OS generated files
 .DS_Store
 .DS_Store?

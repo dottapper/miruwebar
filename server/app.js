@@ -99,7 +99,7 @@ app.post('/api/projects/:projectId/save', async (req, res) => {
     
     console.log(`✅ プロジェクトファイル保存完了: ${projectFilePath}`);
     console.log(`📁 プロジェクトディレクトリ: ${projectDir}`);
-    console.log(`🔗 アクセスURL: http://localhost:3000/public/projects/${projectId}/project.json`);
+    console.log(`🔗 アクセスURL: http://localhost:3000/projects/${projectId}/project.json`);
     
     res.json({ 
       success: true, 

@@ -9,5 +9,7 @@
 - `#/editor` – エディタ
 - `#/qr-code` – QR表示
 - `#/loading-screen` – ローディング画面エディタ
+- `#/viewer` – 公開済み project.json を読み込む汎用ビューア
+- `#/usage-guide` – 使い方ガイド
 
 新規ルートを追加した場合は、ここに追記してください。

@@ -1,12 +1,14 @@
 import os from 'os';
 
+const DEBUG = process.env.DEBUG === '1' || process.env.VERBOSE === '1';
+
 // サーバーのネットワークIPアドレスを動的に取得
 export function getServerNetworkIP() {
   const networkInterfaces = os.networkInterfaces();
 
   const preferredInterfaces = ['wlan0', 'wlp3s0', 'WiFi', 'Wi-Fi', 'eth0', 'en0', 'en1'];
 
-  console.log('🔍 利用可能なネットワークインターfaces:', Object.keys(networkInterfaces));
+  if (DEBUG) console.log('🔍 利用可能なネットワークインターfaces:', Object.keys(networkInterfaces));
 
   // 優先インターフェースから検索
   for (const interfaceName of preferredInterfaces) {
@@ -14,7 +16,7 @@ export function getServerNetworkIP() {
     if (iface) {
       for (const config of iface) {
         if (config.family === 'IPv4' && !config.internal) {
-          console.log(`✅ 優先インターフェース ${interfaceName} からIP取得:`, config.address);
+          if (DEBUG) console.log(`✅ 優先インターフェース ${interfaceName} からIP取得:`, config.address);
           return config.address;
         }
       }
@@ -27,7 +29,7 @@ export function getServerNetworkIP() {
     if (lower.includes('wifi') || lower.includes('wlan') || lower.includes('eth') || lower.includes('en')) {
       for (const config of configs) {
         if (config.family === 'IPv4' && !config.internal) {
-          console.log(`✅ インターフェース ${interfaceName} からIP取得:`, config.address);
+          if (DEBUG) console.log(`✅ インターフェース ${interfaceName} からIP取得:`, config.address);
           return config.address;
         }
       }
@@ -38,13 +40,12 @@ export function getServerNetworkIP() {
   for (const [interfaceName, configs] of Object.entries(networkInterfaces)) {
     for (const config of configs) {
       if (config.family === 'IPv4' && !config.internal) {
-        console.log(`⚠️ フォールバック - インターフェース ${interfaceName} からIP取得:`, config.address);
+        if (DEBUG) console.log(`⚠️ フォールバック - インターフェース ${interfaceName} からIP取得:`, config.address);
         return config.address;
       }
     }
   }
 
-  console.warn('❌ ネットワークIP検出失敗 - localhostを使用');
+  if (DEBUG) console.warn('❌ ネットワークIP検出失敗 - localhostを使用');
   return 'localhost';
 }
-

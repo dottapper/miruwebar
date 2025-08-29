@@ -64,16 +64,26 @@ function readFile(filePath) {
   });
 }
 
-// POSTデータを解析する関数
+// POSTデータを解析する関数（サイズ上限あり）
 function parsePostData(req) {
+  const MAX_BODY_BYTES = 150 * 1024 * 1024; // 150MB 安全上限
   return new Promise((resolve, reject) => {
+    let size = 0;
     let body = '';
     req.on('data', chunk => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        const err = new Error('Payload Too Large');
+        err.status = 413;
+        reject(err);
+        req.destroy();
+        return;
+      }
       body += chunk.toString();
     });
     req.on('end', () => {
       try {
-        resolve(JSON.parse(body));
+        resolve(JSON.parse(body || '{}'));
       } catch (error) {
         reject(error);
       }
@@ -92,6 +102,19 @@ function parseMultipartData(req) {
       resolve({ buffer, contentType: req.headers['content-type'] });
     });
   });
+}
+
+// ベースディレクトリ内に収まるよう安全に結合
+function safeJoin(base, target) {
+  const sanitized = String(target || '').replace(/^\/+/, '');
+  const resolved = path.resolve(base, sanitized);
+  const baseResolved = path.resolve(base);
+  if (!resolved.startsWith(baseResolved)) {
+    const err = new Error('Invalid path');
+    err.status = 400;
+    throw err;
+  }
+  return resolved;
 }
 
 // サーバーを作成
@@ -134,7 +157,17 @@ const server = http.createServer(async (req, res) => {
     
     // プロジェクト保存
     if (pathname === '/api/projects' && req.method === 'POST') {
-      const projectData = await parsePostData(req);
+      let projectData;
+      try {
+        projectData = await parsePostData(req);
+      } catch (e) {
+        if (e && e.status === 413) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
+        throw e;
+      }
       const projects = loadProjects();
       
       // プロジェクトIDの生成
@@ -263,6 +296,11 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: true, viewerUrl, projectUrl: `${scheme}://${host}/projects/${id}/project.json` }));
       } catch (e) {
+        if (e && e.status === 413) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'payload too large' }));
+          return;
+        }
         console.error('publish-project エラー:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'publish failed', message: e.message }));
@@ -321,7 +359,14 @@ const server = http.createServer(async (req, res) => {
 
     // アップロードファイルの配信
     if (pathname.startsWith('/uploads/')) {
-      const filePath = path.join(uploadsDir, pathname.replace('/uploads/', ''));
+      let filePath;
+      try {
+        filePath = safeJoin(uploadsDir, pathname.replace('/uploads/', ''));
+      } catch (e) {
+        res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid path' }));
+        return;
+      }
       if (fs.existsSync(filePath)) {
         const ext = path.extname(filePath);
         const contentType = mimeTypes[ext] || 'application/octet-stream';
@@ -334,7 +379,14 @@ const server = http.createServer(async (req, res) => {
 
     // /projects 配下の静的配信（uploads/projects をマッピング）
     if (pathname.startsWith('/projects/')) {
-      const filePath = path.join(uploadsDir, 'projects', pathname.replace('/projects/', ''));
+      let filePath;
+      try {
+        filePath = safeJoin(path.join(uploadsDir, 'projects'), pathname.replace('/projects/', ''));
+      } catch (e) {
+        res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid path' }));
+        return;
+      }
       if (fs.existsSync(filePath)) {
         const ext = path.extname(filePath);
         const contentType = mimeTypes[ext] || 'application/octet-stream';

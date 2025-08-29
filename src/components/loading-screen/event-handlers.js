@@ -16,7 +16,7 @@ import {
   CAPACITY_UTILS,
   ACCEPT_ATTRIBUTES
 } from './constants.js';
-import { settingsAPI, defaultSettings, validateAndFixColor } from './settings.js';
+import { settingsAPI, defaultSettings, validateAndFixColor, syncLastUsedTemplateId } from './settings.js';
 import { 
   saveLoadingScreenTemplate, 
   getLoadingScreenTemplate, 
@@ -1084,6 +1084,8 @@ export function setupButtons() {
           
           // 最後に使用したテンプレートIDを記録
           localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+        syncLastUsedTemplateId(savedTemplate.id);
+          syncLastUsedTemplateId(savedTemplate.id);
           
           // URLを更新して編集モードに切り替え
           window.location.hash = `#/loading-screen?template=${savedTemplate.id}`;
@@ -1112,6 +1114,8 @@ export function setupButtons() {
               
               // 最後に使用したテンプレートIDを記録
               localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+        syncLastUsedTemplateId(savedTemplate.id);
+          syncLastUsedTemplateId(savedTemplate.id);
             } else {
               // テンプレートが見つからない場合は通常保存
               await settingsAPI.saveSettings(settings);
@@ -1420,6 +1424,7 @@ function showSaveConfirmDialog(onNavigate) {
         
         // 最後に使用したテンプレートIDを記録
         localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+        syncLastUsedTemplateId(savedTemplate.id);
       } else {
         // 既存テンプレートの更新または通常の設定保存
         const templateId = urlParams.get('template');
@@ -1436,6 +1441,8 @@ function showSaveConfirmDialog(onNavigate) {
             
             console.log('💾 テンプレートを更新しました:', template.name);
             localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
+        syncLastUsedTemplateId(savedTemplate.id);
+          syncLastUsedTemplateId(savedTemplate.id);
           } else {
             // テンプレートが見つからない場合は通常保存
             await settingsAPI.saveSettings(settings);

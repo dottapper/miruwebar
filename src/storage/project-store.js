@@ -1,8 +1,11 @@
 // src/storage/project-store.js
 // プロジェクト設定の localStorage 管理（軽量データのみ）
+const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
+const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 const STORAGE_KEY = 'miruwebAR_projects';
 const PROJECT_SETTINGS_KEY = 'miruwebAR_project_settings';
+const CROSS_IP_SYNC_KEY = 'miruwebAR_cross_ip_sync'; // IP間データ同期用
 const MAX_SETTINGS_SIZE_KB = 500; // 設定JSONの最大サイズ制限
 
 /**
@@ -12,16 +15,19 @@ const MAX_SETTINGS_SIZE_KB = 500; // 設定JSONの最大サイズ制限
  */
 export function saveProjectSettings(settings) {
   try {
-    console.log('🔄 プロジェクト設定保存開始:', settings);
+    dlog('🔄 プロジェクト設定保存開始:', settings);
 
     // 軽量化された設定データを作成（モデルデータを除外）
     const lightweightSettings = createLightweightSettings(settings);
+    
+    // IP間同期用にデータをコピー
+    saveCrossIPSync(lightweightSettings);
 
     // サイズチェック
     const settingsJson = JSON.stringify(lightweightSettings);
     const sizeKB = Math.round(settingsJson.length / 1024);
 
-    console.log('📊 設定データサイズ:', {
+    dlog('📊 設定データサイズ:', {
       characters: settingsJson.length,
       sizeKB,
       maxSizeKB: MAX_SETTINGS_SIZE_KB
@@ -35,7 +41,7 @@ export function saveProjectSettings(settings) {
     // localStorage に保存
     localStorage.setItem(PROJECT_SETTINGS_KEY, settingsJson);
 
-    console.log('✅ プロジェクト設定保存完了:', {
+    dlog('✅ プロジェクト設定保存完了:', {
       sizeKB,
       settingsCount: Object.keys(lightweightSettings).length
     });
@@ -53,18 +59,18 @@ export function saveProjectSettings(settings) {
  */
 export function loadProjectSettings() {
   try {
-    console.log('🔄 プロジェクト設定読み込み開始');
+    dlog('🔄 プロジェクト設定読み込み開始');
 
     const settingsJson = localStorage.getItem(PROJECT_SETTINGS_KEY);
     
     if (!settingsJson) {
-      console.log('ℹ️ プロジェクト設定が見つかりません');
+      dlog('ℹ️ プロジェクト設定が見つかりません');
       return null;
     }
 
     const settings = JSON.parse(settingsJson);
     
-    console.log('✅ プロジェクト設定読み込み完了:', {
+    dlog('✅ プロジェクト設定読み込み完了:', {
       settingsCount: Object.keys(settings).length,
       sizeKB: Math.round(settingsJson.length / 1024)
     });
@@ -117,7 +123,7 @@ function createLightweightItem(item) {
   for (const [key, value] of Object.entries(item)) {
     // Base64データを除外
     if (key === 'modelData' && typeof value === 'string' && value.startsWith('data:')) {
-      console.log(`⚠️ Base64データを除外: ${key} (サイズ: ${Math.round(value.length / 1024)}KB)`);
+      dlog(`⚠️ Base64データを除外: ${key} (サイズ: ${Math.round(value.length / 1024)}KB)`);
       continue; // Base64データは保存しない
     }
 
@@ -153,7 +159,7 @@ export function getProjects() {
  */
 export function saveProject(projectData) {
   try {
-    console.log('🔄 プロジェクト保存開始:', projectData);
+    dlog('🔄 プロジェクト保存開始:', projectData);
 
     const projects = getProjects();
     
@@ -167,17 +173,17 @@ export function saveProject(projectData) {
       // 既存の作成日時を保持
       lightweightProject.created = projects[existingIndex].created;
       projects[existingIndex] = lightweightProject;
-      console.log('✅ 既存プロジェクトを更新');
+      dlog('✅ 既存プロジェクトを更新');
     } else {
       projects.push(lightweightProject);
-      console.log('✅ 新規プロジェクトを追加');
+      dlog('✅ 新規プロジェクトを追加');
     }
 
     // サイズチェック
     const projectsJson = JSON.stringify(projects);
     const sizeKB = Math.round(projectsJson.length / 1024);
 
-    console.log('📊 プロジェクト一覧サイズ:', {
+    dlog('📊 プロジェクト一覧サイズ:', {
       projectCount: projects.length,
       sizeKB,
       maxSizeKB: MAX_SETTINGS_SIZE_KB
@@ -193,7 +199,7 @@ export function saveProject(projectData) {
       const reducedJson = JSON.stringify(keepProjects);
       const reducedSizeKB = Math.round(reducedJson.length / 1024);
       
-      console.log(`🧹 古いプロジェクトを削除: ${projects.length} → ${keepProjects.length} (${sizeKB}KB → ${reducedSizeKB}KB)`);
+      dlog(`🧹 古いプロジェクトを削除: ${projects.length} → ${keepProjects.length} (${sizeKB}KB → ${reducedSizeKB}KB)`);
       
       localStorage.setItem(STORAGE_KEY, reducedJson);
       return lightweightProject;
@@ -202,7 +208,7 @@ export function saveProject(projectData) {
     // localStorage に保存
     localStorage.setItem(STORAGE_KEY, projectsJson);
 
-    console.log('✅ プロジェクト保存完了:', {
+    dlog('✅ プロジェクト保存完了:', {
       id: lightweightProject.id,
       name: lightweightProject.name,
       modelCount: lightweightProject.modelCount || 0
@@ -247,8 +253,18 @@ function createLightweightProject(projectData) {
       textColor: projectData.loadingScreen.textColor || '#ffffff',
       // 互換: accentColor or progressColor
       progressColor: projectData.loadingScreen.progressColor || projectData.loadingScreen.accentColor || '#4CAF50',
-      message: projectData.loadingScreen.message || 'ARコンテンツを準備中...',
+      // 表示テキスト
+      loadingMessage: projectData.loadingScreen.loadingMessage || projectData.loadingScreen.message || '読み込み中...',
+      brandName: projectData.loadingScreen.brandName || null,
+      subTitle: projectData.loadingScreen.subTitle || null,
+      fontScale: projectData.loadingScreen.fontScale || 1.0,
+      // 進捗の表示有無
       showProgress: projectData.loadingScreen.showProgress !== false,
+      // ロゴ関連
+      logoType: projectData.loadingScreen.logoType || 'none',
+      logoPosition: projectData.loadingScreen.logoPosition || null,
+      logoSize: projectData.loadingScreen.logoSize || null,
+      // 画像（Base64、小容量想定）
       logoImage: projectData.loadingScreen.logoImage || null
     } : { selectedScreenId: 'none' },
     
@@ -338,10 +354,69 @@ export function deleteProject(id) {
     
     localStorage.setItem(STORAGE_KEY, JSON.stringify(filteredProjects));
     
-    console.log('✅ プロジェクト削除完了:', id);
+    dlog('✅ プロジェクト削除完了:', id);
     return true;
   } catch (error) {
     console.error('❌ プロジェクト削除エラー:', error);
     return false;
+  }
+}
+
+/**
+ * IP間データ同期：現在のIPアドレス情報を含めてデータを保存
+ * @param {Object} data - 同期するデータ
+ */
+function saveCrossIPSync(data) {
+  try {
+    const currentHost = window.location.hostname;
+    const currentPort = window.location.port;
+    const syncData = {
+      timestamp: Date.now(),
+      host: currentHost,
+      port: currentPort,
+      origin: window.location.origin,
+      data: data
+    };
+    
+    // 複数IPからのデータを履歴として保存
+    const existingSync = JSON.parse(localStorage.getItem(CROSS_IP_SYNC_KEY) || '[]');
+    existingSync.unshift(syncData);
+    
+    // 最新5件のみ保持
+    const recentSync = existingSync.slice(0, 5);
+    localStorage.setItem(CROSS_IP_SYNC_KEY, JSON.stringify(recentSync));
+    
+    dlog('🌐 IP間同期データ保存:', { host: currentHost, port: currentPort });
+  } catch (error) {
+    console.warn('⚠️ IP間同期データ保存エラー:', error);
+  }
+}
+
+/**
+ * IP間データ同期：他のIPからのデータを復元
+ * @returns {Object|null} 復元されたデータまたはnull
+ */
+export function loadCrossIPSync() {
+  try {
+    const syncHistory = JSON.parse(localStorage.getItem(CROSS_IP_SYNC_KEY) || '[]');
+    if (syncHistory.length === 0) return null;
+    
+    const currentOrigin = window.location.origin;
+    
+    // 現在のオリジン以外から最新のデータを探す
+    const externalData = syncHistory.find(sync => sync.origin !== currentOrigin);
+    
+    if (externalData) {
+      dlog('🌐 IP間同期データ復元:', {
+        from: externalData.origin,
+        timestamp: new Date(externalData.timestamp).toLocaleString()
+      });
+      return externalData.data;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('⚠️ IP間同期データ復元エラー:', error);
+    return null;
   }
 }
