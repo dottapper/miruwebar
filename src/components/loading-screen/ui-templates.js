@@ -499,9 +499,20 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
             <h1 id="editor-title">ローディング画面エディタ</h1>
             <span class="template-name-badge" id="template-name-badge" style="display: none;"></span>
           </div>
-          <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
-            ← プロジェクト一覧に戻る
-          </button>
+          <div class="content-header-actions">
+            <div class="loading-screen-editor__import-export-actions">
+              <input type="file" id="import-settings-input" accept=".json" style="display: none;">
+              <button class="loading-screen-editor__button loading-screen-editor__button--outline loading-screen-editor__button--small" id="import-settings-button" title="JSONファイルから設定を読み込み">
+                📥 インポート
+              </button>
+              <button class="loading-screen-editor__button loading-screen-editor__button--outline loading-screen-editor__button--small" id="export-settings-button" title="設定をJSONファイルで保存">
+                📤 エクスポート
+              </button>
+            </div>
+            <button class="loading-screen-editor__button loading-screen-editor__button--back" id="back-to-projects-button">
+              ← プロジェクト一覧に戻る
+            </button>
+          </div>
         </div>
         
         <!-- 固定位置のストレージ使用量表示 -->

@@ -15,7 +15,8 @@ import {
   setupButtons,
   setupLogoTypeHandlers,
   setupSidebarMenuHandlers,
-  setupStorageUsageDisplay
+  setupStorageUsageDisplay,
+  setupImportExportHandlers
 } from '../components/loading-screen/event-handlers.js';
 import { updatePreview } from '../components/loading-screen/preview.js';
 // DEBUG ログ制御
@@ -381,6 +382,7 @@ export default function showLoadingScreenEditor(container) {
         setupLogoTypeHandlers();
         setupSidebarMenuHandlers();
         setupStorageUsageDisplay();
+        setupImportExportHandlers();
         
         // ヘッダーにテンプレート名を表示
         updateEditorTitle(mode, templateName, templateId);

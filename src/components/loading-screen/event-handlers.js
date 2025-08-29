@@ -16,7 +16,7 @@ import {
   CAPACITY_UTILS,
   ACCEPT_ATTRIBUTES
 } from './constants.js';
-import { settingsAPI, defaultSettings, validateAndFixColor, syncLastUsedTemplateId } from './settings.js';
+import { settingsAPI, defaultSettings, validateAndFixColor, syncLastUsedTemplateId, importExportAPI } from './settings.js';
 import { 
   saveLoadingScreenTemplate, 
   getLoadingScreenTemplate, 
@@ -2071,5 +2071,109 @@ function resetLoadingTextSettings() {
   } catch (error) {
     console.error('❌ ローディング画面テキスト設定リセット中にエラー:', error);
     throw error;
+  }
+}
+
+/**
+ * エクスポート/インポートボタンのイベントハンドラーを設定
+ */
+export function setupImportExportHandlers() {
+  try {
+    console.log('🔄 エクスポート/インポートハンドラーを設定中...');
+    
+    // エクスポートボタンのイベントリスナー
+    const exportButton = document.getElementById('export-settings-button');
+    if (exportButton) {
+      exportButton.addEventListener('click', async () => {
+        try {
+          console.log('📤 エクスポートボタンがクリックされました');
+          
+          // 現在の設定を取得
+          const currentSettings = getCurrentSettingsFromDOM();
+          console.log('📋 エクスポート対象の設定:', currentSettings);
+          
+          // エクスポート実行
+          importExportAPI.exportSettings(currentSettings);
+          
+          // 成功メッセージ（簡潔に）
+          console.log('✅ エクスポートが完了しました');
+          
+        } catch (error) {
+          console.error('❌ エクスポートエラー:', error);
+          alert(`エクスポートに失敗しました: ${error.message}`);
+        }
+      });
+      console.log('✅ エクスポートボタンのイベントリスナーを設定');
+    } else {
+      console.warn('⚠️ エクスポートボタンが見つかりません');
+    }
+    
+    // インポートボタンのイベントリスナー
+    const importButton = document.getElementById('import-settings-button');
+    const importInput = document.getElementById('import-settings-input');
+    
+    if (importButton && importInput) {
+      // インポートボタンをクリックした時にファイル選択を開く
+      importButton.addEventListener('click', () => {
+        console.log('📥 インポートボタンがクリックされました');
+        importInput.click();
+      });
+      
+      // ファイルが選択された時の処理
+      importInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          console.log('ℹ️ ファイルが選択されていません');
+          return;
+        }
+        
+        try {
+          console.log('📥 インポート処理を開始:', file.name);
+          
+          // ファイルを読み込み
+          const importResult = await importExportAPI.importSettings(file);
+          console.log('📋 インポートしたデータ:', importResult);
+          
+          // 確認ダイアログ
+          const confirmMessage = `以下の設定をインポートしますか？\n\n` +
+            `ファイル: ${file.name}\n` +
+            `エクスポート日時: ${importResult.metadata.exportedAt ? new Date(importResult.metadata.exportedAt).toLocaleString() : '不明'}\n` +
+            `バージョン: ${importResult.metadata.version || '不明'}\n\n` +
+            `※現在の設定は上書きされます`;
+          
+          if (!confirm(confirmMessage)) {
+            console.log('ℹ️ ユーザーがインポートをキャンセルしました');
+            // input値をクリア
+            importInput.value = '';
+            return;
+          }
+          
+          // 設定を適用
+          await importExportAPI.applyImportedSettings(importResult);
+          
+          // 成功メッセージ
+          alert('設定をインポートしました。ページをリロードして設定を反映します。');
+          
+          // UIに反映（ページをリロードして確実に反映）
+          console.log('🔄 設定を反映するためページをリロードします');
+          window.location.reload();
+          
+        } catch (error) {
+          console.error('❌ インポートエラー:', error);
+          alert(`インポートに失敗しました: ${error.message}`);
+        } finally {
+          // input値をクリア
+          importInput.value = '';
+        }
+      });
+      
+      console.log('✅ インポートボタンのイベントリスナーを設定');
+    } else {
+      console.warn('⚠️ インポートボタンまたは入力要素が見つかりません');
+    }
+    
+    console.log('✅ エクスポート/インポートハンドラー設定完了');
+  } catch (error) {
+    console.error('❌ エクスポート/インポートハンドラー設定エラー:', error);
   }
 } 

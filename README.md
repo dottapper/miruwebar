@@ -77,3 +77,82 @@ npm run dev
 
 詳細な貢献ルールは `CONTRIBUTING.md` を参照してください。
 
+## データ保存仕様
+
+### プロジェクトデータ（3Dモデル・AR設定）
+
+**保存場所:**
+- **開発中**: IndexedDB（ブラウザ内蔵DB）+ localStorage（軽量設定のみ）
+- **公開時**: `/public/projects/<id>/project.json` + GLBファイル
+
+**保存データの種類:**
+1. **重量データ（IndexedDB）**: 3DモデルファイルのBase64データ
+2. **軽量データ（localStorage）**: プロジェクト設定、変換パラメータ、メタデータ
+3. **公開データ**: QR配布用のJSON + GLBファイル（物理ファイル）
+
+**データ同期:**
+- IP間同期機能により、同一ブラウザ・同一localStorage内で異なるIPアドレスからアクセスしても同じデータを利用可能
+- ブラウザが異なる場合や端末が異なる場合はエクスポート/インポート機能を使用
+
+### ローディング画面設定
+
+**保存場所:**
+- **通常**: localStorage（`loadingScreenSettings` キー）
+- **IP間同期**: localStorage（`loadingScreenSettings_cross_ip_sync` キー）
+- **テンプレート履歴**: localStorage（`lastUsedTemplateId` + 同期キー）
+
+**データ構造:**
+```json
+{
+  "version": "1.0",
+  "timestamp": 1693276800000,
+  "exportedAt": "2023-08-29T12:00:00.000Z",
+  "source": "miruwebAR-loading-screen-editor",
+  "settings": {
+    "startScreen": { "title": "...", "backgroundColor": "#..." },
+    "loadingScreen": { "brandName": "...", "loadingMessage": "..." },
+    "guideScreen": { "mode": "surface", "title": "..." }
+  }
+}
+```
+
+### エクスポート/インポート機能
+
+**エクスポート:**
+- ファイル名: `loading-screen-settings-YYYY-MM-DD.json`
+- 形式: JSON（メタデータ含む）
+- 内容: 全画面設定、画像データ（Base64）、バージョン情報
+
+**インポート:**
+- 対応形式: `.json` ファイルのみ
+- バリデーション: 必須フィールドの存在確認
+- 適用方法: デフォルト値とマージ後、localStorage保存 → ページリロード
+
+**使用シナリオ:**
+1. **バックアップ**: 設定をJSONファイルとして保存
+2. **端末間移行**: PC → スマホ、異なるブラウザ間での設定共有
+3. **チーム共有**: 設定ファイルをSSD/USBで持ち運び、出先での作業
+
+### データ容量制限
+
+**ローディング画面設定:**
+- 個別画像: 2MB以内（自動圧縮）
+- 全体設定: 3MB以内
+- 超過時: 画像なしで保存、段階的圧縮適用
+
+**プロジェクトデータ:**
+- IndexedDB使用量に依存（通常数GB利用可能）
+- 大容量モデルはGLB最適化推奨
+
+### トラブルシューティング
+
+**データが見つからない場合:**
+1. IP間同期による自動復元を確認
+2. エクスポートファイルからのインポートを実行
+3. ブラウザのlocalStorage/IndexedDBクリアを避ける
+
+**容量エラーの場合:**
+1. 画像を手動で圧縮してから再アップロード
+2. 不要なプロジェクトデータを削除
+3. ブラウザストレージクリーンアップの実行
+

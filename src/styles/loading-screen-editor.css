@@ -261,6 +261,24 @@ aside[class*="side"],
   flex-wrap: wrap;
 }
 
+.content-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.loading-screen-editor__import-export-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.loading-screen-editor__button--small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  min-width: auto;
+}
+
 .template-name-badge {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   color: white;

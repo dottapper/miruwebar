@@ -918,5 +918,124 @@ export function convertToHexColor(color) {
   return ctx.fillStyle;
 }
 
+// エクスポート/インポート機能
+export const importExportAPI = {
+  // 設定をJSONファイルとしてエクスポート
+  exportSettings(settings, filename = null) {
+    try {
+      const exportData = {
+        version: '1.0',
+        timestamp: Date.now(),
+        exportedAt: new Date().toISOString(),
+        source: 'miruwebAR-loading-screen-editor',
+        settings: settings || settingsAPI.getSettings()
+      };
+      
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      const defaultFilename = `loading-screen-settings-${new Date().toISOString().split('T')[0]}.json`;
+      const finalFilename = filename || defaultFilename;
+      
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = finalFilename;
+      link.style.display = 'none';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // メモリリークを防ぐためURLを解放
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      
+      console.log('✅ ローディング画面設定をエクスポートしました:', finalFilename);
+      return true;
+    } catch (error) {
+      console.error('❌ エクスポートエラー:', error);
+      throw new Error(`設定のエクスポートに失敗しました: ${error.message}`);
+    }
+  },
+  
+  // JSONファイルから設定をインポート
+  importSettings(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error('ファイルが選択されていません'));
+        return;
+      }
+      
+      if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
+        reject(new Error('JSONファイルを選択してください'));
+        return;
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = async (e) => {
+        try {
+          const jsonStr = e.target.result;
+          const importData = JSON.parse(jsonStr);
+          
+          // バリデーション
+          if (!importData.settings) {
+            reject(new Error('無効なファイル形式です。設定データが見つかりません。'));
+            return;
+          }
+          
+          if (importData.source && importData.source !== 'miruwebAR-loading-screen-editor') {
+            console.warn('⚠️ 異なるソースからの設定ファイルです:', importData.source);
+          }
+          
+          // 設定をマージしてデフォルト値で補完
+          const mergedSettings = settingsAPI.mergeWithDefaults(importData.settings);
+          
+          console.log('📥 設定をインポートしました:', {
+            version: importData.version,
+            exportedAt: importData.exportedAt,
+            screens: Object.keys(mergedSettings)
+          });
+          
+          resolve({
+            settings: mergedSettings,
+            metadata: {
+              version: importData.version,
+              timestamp: importData.timestamp,
+              exportedAt: importData.exportedAt,
+              source: importData.source
+            }
+          });
+        } catch (error) {
+          console.error('❌ インポートエラー:', error);
+          reject(new Error(`設定の読み込みに失敗しました: ${error.message}`));
+        }
+      };
+      
+      reader.onerror = () => {
+        reject(new Error('ファイルの読み込みに失敗しました'));
+      };
+      
+      reader.readAsText(file);
+    });
+  },
+  
+  // インポートした設定を適用（UI更新含む）
+  async applyImportedSettings(importResult) {
+    try {
+      const { settings } = importResult;
+      
+      // 設定を保存
+      await settingsAPI.saveSettings(settings);
+      
+      console.log('✅ インポートした設定を適用しました');
+      return settings;
+    } catch (error) {
+      console.error('❌ 設定適用エラー:', error);
+      throw new Error(`設定の適用に失敗しました: ${error.message}`);
+    }
+  }
+};
+
 // IP間同期関数をエクスポート
 export { loadLastUsedTemplateId, syncLastUsedTemplateId }; 
