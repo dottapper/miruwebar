@@ -487,18 +487,45 @@ export function saveLoadingScreenTemplate(templateData) {
     
     // 容量制限をチェック（3MB）
     const maxSize = TOTAL_IMAGES_MAX_BYTES;
+    // 画像を含めるとlocalStorageの容量に達しやすいため、
+    // テンプレート保存時は画像データを除去した軽量設定を保存する
+    const sanitized = JSON.parse(JSON.stringify(settings));
+    try {
+      if (sanitized.startScreen) {
+        delete sanitized.startScreen.logo;
+        delete sanitized.startScreen.thumbnail;
+      }
+      if (sanitized.loadingScreen) {
+        delete sanitized.loadingScreen.logo;
+      }
+      if (sanitized.guideScreen) {
+        if (sanitized.guideScreen.surfaceDetection) delete sanitized.guideScreen.surfaceDetection.guideImage;
+        if (sanitized.guideScreen.worldTracking) delete sanitized.guideScreen.worldTracking.guideImage;
+      }
+      // editorSettings が入っている場合も同様に画像を除去
+      if (sanitized.loadingScreen?.editorSettings) {
+        const le = sanitized.loadingScreen.editorSettings;
+        if (le.startScreen) { delete le.startScreen.logo; delete le.startScreen.thumbnail; }
+        if (le.loadingScreen) { delete le.loadingScreen.logo; }
+        if (le.guideScreen) {
+          if (le.guideScreen.surfaceDetection) delete le.guideScreen.surfaceDetection.guideImage;
+          if (le.guideScreen.worldTracking) delete le.guideScreen.worldTracking.guideImage;
+        }
+      }
+    } catch (_) {}
+
     const newTemplate = {
       id: `template_${Date.now()}`,
       name: templateData.name || `テンプレート ${templates.length + 1}`,
       createdAt: new Date().toLocaleDateString('ja-JP'),
       updatedAt: new Date().toLocaleDateString('ja-JP'),
-      settings: templateData.settings
+      settings: sanitized
     };
     
     // 新しいテンプレートを追加
     templates.push(newTemplate);
     
-    // 容量チェック
+    // 容量チェック（画像を含まないため、3MB以内に収まる想定）
     const templatesJson = JSON.stringify(templates);
     if (templatesJson.length > maxSize) {
       console.warn('⚠️ テンプレート容量制限に近づいています。古いテンプレートを削除します。');

@@ -193,6 +193,10 @@ function updateLoadingPreview(previewScreen, settings) {
     logoSrc = loadingLogoImg?.src || '';
   }
 
+  // テキスト位置（ブランド名/サブタイトル）の取得（スライダー優先）
+  const textPositionSlider = document.getElementById('loadingScreen-textPosition');
+  const textPosition = textPositionSlider?.value || screen.textPosition || defaultSettings.loadingScreen.textPosition;
+
   previewScreen.innerHTML = `
     <div class="loading-screen-preview ${animationType !== 'none' ? `loading-animation-${animationType}` : ''}" style="
       background-color: ${screen.backgroundColor || defaultSettings.loadingScreen.backgroundColor};
@@ -226,23 +230,31 @@ function updateLoadingPreview(previewScreen, settings) {
           " alt="ロゴ">
         </div>
       ` : ''}
-      
-      <div class="brand-name" style="
-        font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 20}px;
-        font-weight: bold;
-        margin-bottom: 8px;
+      <div class="text-group" style="
+        position: absolute;
+        top: ${textPosition}%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         text-align: center;
       ">
-        ${screen.brandName !== undefined ? screen.brandName : defaultSettings.loadingScreen.brandName}
-      </div>
-      
-      <div class="sub-title" style="
-        font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 14}px;
-        margin-bottom: 30px;
-        opacity: 0.8;
-        text-align: center;
-      ">
-        ${screen.subTitle !== undefined ? screen.subTitle : defaultSettings.loadingScreen.subTitle}
+        <div class="brand-name" style="
+          font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 20}px;
+          font-weight: bold;
+          margin-bottom: 8px;
+        ">
+          ${screen.brandName !== undefined ? screen.brandName : defaultSettings.loadingScreen.brandName}
+        </div>
+        <div class="sub-title" style="
+          font-size: ${(screen.fontScale || defaultSettings.loadingScreen.fontScale) * 14}px;
+          margin-bottom: 30px;
+          opacity: 0.8;
+        ">
+          ${screen.subTitle !== undefined ? screen.subTitle : defaultSettings.loadingScreen.subTitle}
+        </div>
       </div>
       
       <div class="progress-container" style="

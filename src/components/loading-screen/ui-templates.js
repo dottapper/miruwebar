@@ -260,6 +260,13 @@ export function createTextTabContent(currentSettings = defaultSettings) {
           <span class="loading-screen-editor__value-display" id="fontScale-value">${currentSettings.loadingScreen.fontScale}x</span>
         </div>
       </div>
+      <div class="loading-screen-editor__form-group">
+        <label class="loading-screen-editor__label">テキスト位置（上から）</label>
+        <div class="loading-screen-editor__slider-with-value">
+          <input type="range" class="loading-screen-editor__slider" id="loadingScreen-textPosition" min="20" max="80" step="1" value="${currentSettings.loadingScreen.textPosition || defaultSettings.loadingScreen.textPosition}">
+          <span class="loading-screen-editor__value-display" id="loadingScreen-textPosition-value">${currentSettings.loadingScreen.textPosition || defaultSettings.loadingScreen.textPosition}%</span>
+        </div>
+      </div>
     </div>
   `;
 }

@@ -70,7 +70,7 @@ export function projectsApiPlugin() {
         try {
           const body = await readRequestBody(req);
           const parsed = JSON.parse(body || '{}');
-          const { id: rawId, type = 'markerless', loadingScreen = null, models = [] } = parsed;
+          const { id: rawId, type = 'markerless', loadingScreen = null, startScreen = null, models = [] } = parsed;
           const id = sanitizeId(rawId);
           if (!id) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -123,7 +123,7 @@ export function projectsApiPlugin() {
             console.warn('⚠️ ロゴ画像の書き出し失敗（継続）:', e.message);
           }
 
-          const projectJson = { id, type, loadingScreen: lsOut, models: modelEntries };
+          const projectJson = { id, type, startScreen: startScreen || null, loadingScreen: lsOut, models: modelEntries };
           await fs.writeJson(path.join(dir, 'project.json'), projectJson, { spaces: 2 });
 
           // 実際にリッスン中のポート/スキームを推定

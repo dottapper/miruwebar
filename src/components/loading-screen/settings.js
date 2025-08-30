@@ -41,6 +41,8 @@ export const defaultSettings = {
     logo: null, // カスタムロゴのファイルデータ
     logoPosition: 20,
     logoSize: 1.5,
+    // ローディング画面のテキスト（ブランド名/サブタイトル）ブロックの縦位置（%）
+    textPosition: 40,
     brandName: 'あなたのブランド',
     subTitle: 'AR体験',
     loadingMessage: '読み込み中...',
@@ -301,12 +303,24 @@ export const settingsAPI = {
       // IP間同期用にデータをコピー
       saveCrossIPSync(merged);
       
-      // 保存前のバックアップを作成
-      const backupKey = `loadingScreenSettings_backup_${Date.now()}`;
+      // 古いバックアップをクリーンアップしてから新しいバックアップを作成
+      this.cleanupBackups();
+      
+      // 保存前のバックアップを作成（容量制限付き・より厳格に）
       const currentSettings = localStorage.getItem('loadingScreenSettings');
       if (currentSettings) {
-        localStorage.setItem(backupKey, currentSettings);
-        console.log('🔄 保存前バックアップを作成:', backupKey);
+        try {
+          const backupKey = `loadingScreenSettings_backup_${Date.now()}`;
+          // バックアップサイズが300KB以下の場合のみ保存（容量圧迫を防止）
+          if (currentSettings.length <= 300 * 1024) {
+            localStorage.setItem(backupKey, currentSettings);
+            console.log('🔄 保存前バックアップを作成:', backupKey);
+          } else {
+            console.warn('⚠️ バックアップサイズが大きすぎるためスキップ:', (currentSettings.length / 1024).toFixed(2) + 'KB');
+          }
+        } catch (backupError) {
+          console.warn('⚠️ バックアップ作成に失敗（継続）:', backupError.message);
+        }
       }
       
       // まず画像圧縮を試行
@@ -388,15 +402,33 @@ export const settingsAPI = {
       } catch (storageError) {
         // localStorageの容量不足の場合
         if (storageError.name === 'QuotaExceededError') {
-          // 古いデータを削除して再試行
+          console.log('🚨 容量エラー発生、段階的クリーンアップを実行');
+          
+          // 段階的クリーンアップ
+          // 1. 通常のクリーンアップ
           this.cleanupOldData();
+          
           try {
             localStorage.setItem('loadingScreenSettings', settingsJson);
-            console.log('✅ データクリーンアップ後に保存成功');
+            console.log('✅ 通常クリーンアップ後に保存成功');
           } catch (secondError) {
-            const storageError = new Error('ローカルストレージの容量が不足しています。\n\n他のサイトのデータを削除するか、ブラウザのキャッシュをクリアしてください。');
-            storageError.type = ERROR_TYPES.STORAGE_QUOTA;
-            throw storageError;
+            // 2. 緊急クリーンアップ
+            console.log('🚨 通常クリーンアップでも失敗、緊急クリーンアップを実行');
+            const cleanedCount = this.emergencyCleanup();
+            
+            try {
+              localStorage.setItem('loadingScreenSettings', settingsJson);
+              console.log('✅ 緊急クリーンアップ後に保存成功');
+              
+              // ユーザーに警告通知
+              const warningMessage = new Error(`ストレージ容量が不足したため、${cleanedCount}個の古いデータを削除しました。`);
+              warningMessage.type = ERROR_TYPES.WARNING;
+              throw warningMessage;
+            } catch (thirdError) {
+              const storageError = new Error('ローカルストレージの容量が不足しています。\n\n他のサイトのデータを削除するか、ブラウザのキャッシュをクリアしてください。');
+              storageError.type = ERROR_TYPES.STORAGE_QUOTA;
+              throw storageError;
+            }
           }
         } else {
           throw storageError;
@@ -614,6 +646,63 @@ export const settingsAPI = {
       console.log('🧹 古いデータをクリーンアップしました:', keysToClean.length, 'items');
     } catch (error) {
       console.warn('クリーンアップ中にエラー:', error);
+    }
+  },
+
+  // 緊急時の強制クリーンアップ（容量エラー時に使用）
+  emergencyCleanup() {
+    try {
+      let cleanedCount = 0;
+      
+      // 1. すべてのバックアップを削除
+      const backupKeys = [];
+      for (let key in localStorage) {
+        if (key.includes('backup_') || key.includes('_backup')) {
+          backupKeys.push(key);
+        }
+      }
+      backupKeys.forEach(key => {
+        localStorage.removeItem(key);
+        cleanedCount++;
+      });
+      
+      // 2. 古いテンプレートを削除（最新5個以外）
+      const templateKeys = [];
+      for (let key in localStorage) {
+        if (key.startsWith('loadingScreenTemplate_')) {
+          templateKeys.push({
+            key: key,
+            timestamp: parseInt(key.split('_').pop()) || 0
+          });
+        }
+      }
+      
+      // タイムスタンプでソートして古いものを削除
+      templateKeys.sort((a, b) => b.timestamp - a.timestamp);
+      if (templateKeys.length > 5) {
+        templateKeys.slice(5).forEach(template => {
+          localStorage.removeItem(template.key);
+          cleanedCount++;
+        });
+      }
+      
+      // 3. IP間同期データも古いものを削除
+      const syncKeys = [];
+      for (let key in localStorage) {
+        if (key.includes('_cross_ip_sync') && !key.includes('loadingScreenSettings_cross_ip_sync')) {
+          syncKeys.push(key);
+        }
+      }
+      syncKeys.forEach(key => {
+        localStorage.removeItem(key);
+        cleanedCount++;
+      });
+      
+      console.log('🚨 緊急クリーンアップ完了:', cleanedCount, 'items削除');
+      return cleanedCount;
+    } catch (error) {
+      console.error('緊急クリーンアップ中にエラー:', error);
+      return 0;
     }
   },
   

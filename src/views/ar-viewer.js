@@ -49,15 +49,25 @@ export default function showARViewer(container) {
   // 統合ARビューアのHTML構造
   container.innerHTML = `
     <div class="integrated-ar-viewer">
+      <!-- スタート画面（開始→ローディング→ガイドの順） -->
+      <div id="ar-start-screen" class="ar-start-screen" style="display: none;">
+        <div class="start-content">
+          <img id="ar-start-logo" alt="start logo" style="display:none;max-width:160px;max-height:80px;margin-bottom:12px;" />
+          <h1 id="ar-start-title">AR体験を開始</h1>
+          <button id="ar-start-cta" class="btn-primary" style="margin-top: 12px;">開始</button>
+        </div>
+      </div>
       <!-- ローディング画面 -->
       <div id="ar-loading-screen" class="ar-loading-screen">
         <div class="loading-content">
           <img id="ar-loading-logo" alt="brand logo" style="display:none;max-width:160px;max-height:80px;margin-bottom:12px;" />
-          <h2 id="ar-loading-title">ARプロジェクトを読み込み中...</h2>
+          <div id="ar-loading-text-group" class="loading-text-group">
+            <h2 id="ar-loading-title">ARプロジェクトを読み込み中...</h2>
+            <p id="ar-loading-message">システムを初期化しています...</p>
+          </div>
           <div class="loading-progress">
             <div id="ar-loading-bar" class="loading-bar"></div>
           </div>
-          <p id="ar-loading-message">システムを初期化しています...</p>
         </div>
       </div>
       <div id="ar-host" class="ar-host"></div>
@@ -112,7 +122,22 @@ export default function showARViewer(container) {
       z-index: 1;
       overflow: hidden;
     }
-    
+
+    .ar-start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+    }
+    .start-content { text-align: center; padding: 2rem; position: relative; }
+    .start-content h1 { color: #fff; font-size: 1.6rem; margin: 0.5rem 0 0; }
+
     .ar-loading-screen {
       position: absolute;
       top: 0;
@@ -129,12 +154,21 @@ export default function showARViewer(container) {
     .loading-content {
       text-align: center;
       padding: 2rem;
+      position: relative;
     }
     
     .loading-content h2 {
       color: #ffffff;
       margin-bottom: 1rem;
       font-size: 1.5rem;
+    }
+
+    .loading-text-group {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: calc(100% - 40px);
     }
     
     .loading-progress {
@@ -326,6 +360,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   const loadingProgressWrap = container.querySelector('.loading-progress');
   const loadingMessage = container.querySelector('#ar-loading-message');
   const loadingLogo = container.querySelector('#ar-loading-logo');
+  const loadingTextGroup = container.querySelector('#ar-loading-text-group');
+  const startScreen = container.querySelector('#ar-start-screen');
+  const startLogo = container.querySelector('#ar-start-logo');
+  const startTitle = container.querySelector('#ar-start-title');
+  const startCTA = container.querySelector('#ar-start-cta');
   const arHost = container.querySelector('#ar-host');
   const statusText = container.querySelector('#ar-status-text');
   const instruction = container.querySelector('#ar-instruction');
@@ -380,8 +419,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     dlog('📁 読み込まれたプロジェクト:', currentProject);
     dlog('🔍 プロジェクトのloadingScreen:', currentProject.loadingScreen);
 
-    // ローディング画面のカスタマイズ（プロジェクトファイルから直接取得）
-    let ls = currentProject.loadingScreen;
+    // 画面設定（ローディング/スタート）の取得
+    let ls = currentProject.loadingScreen || {};
+    // エディター保存形式のフォールバック（project.loadingScreen.editorSettings.*）
+    const editorSettings = ls.editorSettings || null;
+    const ss = currentProject.startScreen || (editorSettings?.startScreen || {});
     
     if (ls) {
       dlog('🎨 プロジェクトファイルからローディング画面設定を取得:', ls);
@@ -413,12 +455,41 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const loadingTitle = container.querySelector('#ar-loading-title');
       const loadingMessage = container.querySelector('#ar-loading-message');
 
-      // メッセージ適用
-      if (ls.loadingMessage && loadingTitle) {
-        loadingTitle.textContent = ls.loadingMessage;
+      // editorSettings.loadingScreen から不足項目を補完
+      try {
+        if (editorSettings?.loadingScreen) {
+          const le = editorSettings.loadingScreen;
+          ls = {
+            ...le,
+            ...ls,
+            // 優先順位: 明示的に指定された ls が勝つが、なければ le を使う
+            backgroundColor: ls.backgroundColor || le.backgroundColor,
+            textColor: ls.textColor || le.textColor,
+            progressColor: ls.progressColor || ls.accentColor || le.progressColor || le.accentColor,
+            accentColor: ls.accentColor || le.accentColor,
+            loadingMessage: ls.loadingMessage || ls.message || le.loadingMessage || le.message,
+            brandName: ls.brandName || le.brandName,
+            subTitle: ls.subTitle || le.subTitle,
+            fontScale: ls.fontScale || le.fontScale,
+            showProgress: (ls.showProgress !== undefined) ? ls.showProgress : (le.showProgress !== undefined ? le.showProgress : true),
+            logoType: ls.logoType || le.logoType,
+            logo: ls.logo || le.logo,
+            logoPosition: (ls.logoPosition !== undefined) ? ls.logoPosition : le.logoPosition,
+            logoSize: (ls.logoSize !== undefined) ? ls.logoSize : le.logoSize,
+            textPosition: (ls.textPosition !== undefined) ? ls.textPosition : le.textPosition
+          };
+          dlog('🔄 editorSettings から不足項目を補完:', ls);
+        }
+      } catch (e) {
+        console.warn('⚠️ editorSettings の補完に失敗（継続）:', e);
+      }
+
+      // メッセージ適用（小さめの説明文）
+      if (ls.loadingMessage && loadingMessage) {
+        loadingMessage.textContent = ls.loadingMessage;
         dlog('📝 メッセージ適用:', ls.loadingMessage);
-      } else if (ls.message && loadingTitle) {
-        loadingTitle.textContent = ls.message;
+      } else if (ls.message && loadingMessage) {
+        loadingMessage.textContent = ls.message;
         dlog('📝 メッセージ適用（旧形式）:', ls.message);
       }
 
@@ -430,8 +501,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       }
 
       // テキスト色適用
-      if (ls.textColor && loadingTitle) {
-        loadingTitle.style.color = ls.textColor;
+      if (ls.textColor) {
+        if (loadingTitle) loadingTitle.style.color = ls.textColor;
         if (loadingMessage) loadingMessage.style.color = ls.textColor;
         dlog('📝 テキスト色適用:', ls.textColor);
       }
@@ -454,12 +525,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         }
       }
 
-      // ブランド名適用
-      if (ls.brandName && loadingMessage) {
-        loadingMessage.textContent = ls.brandName;
+      // ブランド/サブタイトル適用（大きめの見出し）
+      if (ls.brandName && loadingTitle) {
+        loadingTitle.textContent = ls.brandName;
         dlog('🏢 ブランド名適用:', ls.brandName);
-      } else if (ls.subTitle && loadingMessage) {
-        loadingMessage.textContent = ls.subTitle;
+      } else if (ls.subTitle && loadingTitle) {
+        loadingTitle.textContent = ls.subTitle;
         dlog('🏢 サブタイトル適用:', ls.subTitle);
       }
 
@@ -471,26 +542,38 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         dlog('🔤 フォントスケール適用:', scale);
       }
 
-      // ロゴ適用（機能フラグ有効時のみ表示）
-      if (enableLSFlag && ls.logo && loadingLogo) {
-        try {
-          loadingLogo.src = ls.logo;
+      // ロゴ適用（logoTypeに応じて startScreen.logo または loadingScreen.logo を使用）
+      try {
+        let logoSrc = '';
+        const logoType = ls.logoType || 'none';
+        if (logoType === 'useStartLogo' && ss.logo) {
+          logoSrc = ss.logo;
+        } else if (logoType === 'custom' && ls.logo) {
+          logoSrc = ls.logo;
+        }
+        if (logoSrc && loadingLogo) {
+          loadingLogo.src = logoSrc;
           loadingLogo.style.display = 'inline-block';
           // 位置とサイズ（%/倍率ベース）
-          if (typeof ls.logoPosition === 'number') {
-            loadingLogo.style.position = 'relative';
-            loadingLogo.style.top = `${Math.max(5, Math.min(90, ls.logoPosition))}%`;
-          }
-          if (typeof ls.logoSize === 'number') {
-            const px = Math.round(Math.max(0.5, Math.min(2.5, ls.logoSize)) * 80);
-            loadingLogo.style.maxWidth = `${px}px`;
-            loadingLogo.style.maxHeight = `${Math.round(px * 0.5)}px`;
-          }
-          dlog('🏷️ ロゴ表示: enabled');
-        } catch (e) {
-          console.warn('⚠️ ロゴ適用失敗:', e);
+          const pos = (typeof ls.logoPosition === 'number') ? Math.max(5, Math.min(90, ls.logoPosition)) : 20;
+          const px = (typeof ls.logoSize === 'number') ? Math.round(Math.max(0.5, Math.min(2.5, ls.logoSize)) * 80) : 120;
+          loadingLogo.style.position = 'absolute';
+          loadingLogo.style.left = '50%';
+          loadingLogo.style.transform = 'translateX(-50%)';
+          loadingLogo.style.top = `${pos}%`;
+          loadingLogo.style.maxWidth = `${px}px`;
+          loadingLogo.style.maxHeight = `${Math.round(px * 0.5)}px`;
+          dlog('🏷️ ロゴ表示:', { logoType, pos, px });
         }
+      } catch (e) {
+        console.warn('⚠️ ロゴ適用失敗:', e);
       }
+
+      // テキスト位置（上から%）
+      try {
+        const textPos = (typeof ls.textPosition === 'number') ? Math.max(5, Math.min(90, ls.textPosition)) : 40;
+        if (loadingTextGroup) loadingTextGroup.style.top = `${textPos}%`;
+      } catch (_) {}
     } else {
       dlog('⚠️ ローディング画面設定が見つかりません');
     }
@@ -513,10 +596,48 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     updateProgress(100, '読み込み完了');
 
-    // ローディングは開始ボタン押下まで維持（ユーザー操作でカメラ起動）
-    const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
-    updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
-    startBtn.style.display = 'inline-block';
+    // スタート画面表示（保存されたStartScreen設定を反映）
+    try {
+      const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
+      if (startScreen) startScreen.style.display = 'flex';
+      // 背景
+      if (ss.backgroundColor && startScreen) startScreen.style.background = ss.backgroundColor;
+      // タイトル
+      if (ss.title && startTitle) startTitle.textContent = ss.title; else if (startTitle) startTitle.textContent = safeName;
+      if (ss.textColor && startTitle) startTitle.style.color = ss.textColor;
+      // ロゴ
+      if (ss.logo && startLogo) {
+        startLogo.src = ss.logo;
+        startLogo.style.display = 'inline-block';
+        const pos = (typeof ss.logoPosition === 'number') ? Math.max(5, Math.min(90, ss.logoPosition)) : 20;
+        const px = (typeof ss.logoSize === 'number') ? Math.round(Math.max(0.8, Math.min(2.5, ss.logoSize)) * 80) : 120;
+        startLogo.style.position = 'absolute';
+        startLogo.style.left = '50%';
+        startLogo.style.transform = 'translateX(-50%)';
+        startLogo.style.top = `${pos}%`;
+        startLogo.style.maxWidth = `${px}px`;
+        startLogo.style.maxHeight = `${Math.round(px * 0.5)}px`;
+      }
+      // CTA
+      if (ss.buttonText && startCTA) startCTA.textContent = ss.buttonText;
+      if (ss.buttonColor && startCTA) startCTA.style.background = ss.buttonColor;
+      if (ss.buttonTextColor && startCTA) startCTA.style.color = ss.buttonTextColor;
+      // ローディングは開始押下まで非表示
+      if (loadingScreen) loadingScreen.style.display = 'none';
+      // 既存の開始ボタンは隠す（CTAから委譲）
+      startBtn.style.display = 'none';
+      if (startCTA) startCTA.onclick = () => {
+        if (startScreen) startScreen.style.display = 'none';
+        if (loadingScreen) loadingScreen.style.display = 'flex';
+        startBtn.click();
+      };
+      updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>「開始」を押して体験を始めてください`);
+    } catch (e) {
+      // フォールバック（従来）
+      const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
+      updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
+      startBtn.style.display = 'inline-block';
+    }
 
   } catch (error) {
     updateStatus(`❌ エラー: ${error.message}`, 'error');

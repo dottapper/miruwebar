@@ -53,6 +53,14 @@ export default function showLoadingScreenEditor(container) {
     isTemplateMode: !!templateId
   });
 
+  // ローディング画面エディター起動時に古いバックアップをクリーンアップ
+  try {
+    settingsAPI.cleanupBackups();
+    dlog('🧹 起動時バックアップクリーンアップ完了');
+  } catch (cleanupError) {
+    console.warn('⚠️ 起動時バックアップクリーンアップに失敗:', cleanupError);
+  }
+
   // 現在の設定を保持
   let currentSettings;
   
@@ -83,27 +91,32 @@ export default function showLoadingScreenEditor(container) {
       dlog('⚠️ デフォルト設定使用:', currentSettings);
     }
   } else {
-    // 通常モード: 最後に使用したテンプレートまたは保存済み設定を読み込み
+    // 通常モード: 保存済み設定を最優先で読み込み、無い場合のみ最終テンプレートを使用
     try {
-      // 最後に使用したテンプレートIDを確認（IP間同期機能付き）
-      const lastTemplateId = loadLastUsedTemplateId();
-      if (lastTemplateId) {
-        dlog('💾 最後に使用したテンプレートを読み込み:', lastTemplateId);
-        const template = getLoadingScreenTemplate(lastTemplateId);
-        if (template && template.settings) {
-          currentSettings = JSON.parse(JSON.stringify(template.settings));
-          dlog('💾 テンプレートからの設定読み込み完了:', template.name);
-          dlog('💾 使用する設定:', currentSettings);
-        } else {
-          // テンプレートが見つからない場合は通常の設定を読み込み
-          currentSettings = settingsAPI.getSettings();
-          dlog('💾 テンプレートが見つからないため通常設定を読み込み');
-        }
+      const savedRaw = localStorage.getItem('loadingScreenSettings');
+      if (savedRaw) {
+        const savedSettings = settingsAPI.getSettings();
+        currentSettings = settingsAPI.mergeWithDefaults(savedSettings);
+        dlog('💾 通常モード: 保存済み設定を優先して読み込み');
       } else {
-        // 最後のテンプレートIDがない場合は通常の設定を読み込み
-        currentSettings = settingsAPI.getSettings();
-        dlog('💾 通常モード: 保存済み設定を読み込み');
-        dlog('💾 使用する設定:', currentSettings);
+        const lastTemplateId = loadLastUsedTemplateId();
+        if (lastTemplateId) {
+          dlog('💾 最後に使用したテンプレートを読み込み:', lastTemplateId);
+          const template = getLoadingScreenTemplate(lastTemplateId);
+          if (template && template.settings) {
+            currentSettings = JSON.parse(JSON.stringify(template.settings));
+            dlog('💾 テンプレートからの設定読み込み完了:', template.name);
+            dlog('💾 使用する設定:', currentSettings);
+          } else {
+            const savedSettings = settingsAPI.getSettings();
+            currentSettings = settingsAPI.mergeWithDefaults(savedSettings);
+            dlog('💾 テンプレート未検出のため通常設定を読み込み');
+          }
+        } else {
+          const savedSettings = settingsAPI.getSettings();
+          currentSettings = settingsAPI.mergeWithDefaults(savedSettings);
+          dlog('💾 通常モード: 保存済み設定/デフォルトを読み込み');
+        }
       }
     } catch (error) {
       console.error('設定の読み込みに失敗:', error);
@@ -407,20 +420,23 @@ export default function showLoadingScreenEditor(container) {
             if (firstTab) firstTab.click();
           }
         } else {
-          // 通常モード: 保存済み設定を読み込み
-          loadSettings().then(() => {
-            dlog('設定の読み込みが完了しました');
-            
-            // 初期タブの表示を強制
-            const initialTab = document.querySelector('.loading-screen-editor__main-tab--active');
-            if (initialTab) {
-              initialTab.click();
-            } else {
-              // アクティブなタブがない場合は最初のタブをクリック
-              const firstTab = document.querySelector('.loading-screen-editor__main-tab');
-              if (firstTab) firstTab.click();
-            }
-          });
+          // 通常モード: 既に設定は読み込み済み（112行目）なのでUIに反映のみ
+          dlog('💾 設定読み込み完了、UIを更新中...');
+          
+          // 設定をUIに反映
+          applySettingsToForm(currentSettings);
+          
+          // 初期タブの表示を強制
+          const initialTab = document.querySelector('.loading-screen-editor__main-tab--active');
+          if (initialTab) {
+            initialTab.click();
+          } else {
+            // アクティブなタブがない場合は最初のタブをクリック
+            const firstTab = document.querySelector('.loading-screen-editor__main-tab');
+            if (firstTab) firstTab.click();
+          }
+          
+          dlog('✅ 通常モード初期化完了');
         }
           
         // レイアウト検証を実行
@@ -431,7 +447,7 @@ export default function showLoadingScreenEditor(container) {
     }, 50);
   }
 
-  // 設定の読み込み
+  // 設定の読み込み（非推奨：通常モードでは使用しない）
   async function loadSettings() {
     try {
       // ローディング状態を表示
@@ -440,7 +456,10 @@ export default function showLoadingScreenEditor(container) {
         editor.classList.add('loading-screen-editor--loading');
       }
       
-      // デフォルト値で初期化
+      // 警告：この関数は設定をデフォルトで初期化するため通常モードでは使用しない
+      console.warn('⚠️ loadSettings()が呼ばれました。通常モードでは設定リセットの原因となります');
+      
+      // デフォルト値で初期化（これが問題の原因）
       currentSettings = JSON.parse(JSON.stringify(defaultSettings));
       
       // 保存された設定を読み込んでマージ

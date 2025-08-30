@@ -5,6 +5,7 @@ import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 
 import { saveProject, getProject, loadProjectWithModels } from '../api/projects-new.js'; // 新しいIndexedDB 対応 API をインポート
 import { exportProjectBundleById } from '../api/projects.js'; // エクスポート機能は従来版を使用
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
+import { settingsAPI } from '../components/loading-screen/settings.js';
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -695,6 +696,17 @@ export function showEditor(container) {
       if (project.loadingScreen) {
         loadLoadingSettingsToUI(project.loadingScreen);
         
+        // プロジェクトにローディング画面エディターの詳細設定が含まれている場合は復元
+        if (project.loadingScreen.editorSettings) {
+          try {
+            dlog('🔄 ローディング画面エディターの詳細設定を復元中...');
+            await settingsAPI.saveSettings(project.loadingScreen.editorSettings);
+            dlog('✅ ローディング画面エディターの詳細設定を復元完了');
+          } catch (error) {
+            console.warn('⚠️ ローディング画面エディターの詳細設定復元に失敗:', error);
+          }
+        }
+        
         // セレクトボックスの復元が確実に行われるよう、少し遅延を入れて再度チェック
         setTimeout(() => {
           const loadingScreenSelect = document.getElementById('loading-screen-select');
@@ -1072,11 +1084,26 @@ export function showEditor(container) {
     // 編集ボタン
     const editLoadingScreenBtn = document.getElementById('edit-loading-screen');
     if (editLoadingScreenBtn) {
-      editLoadingScreenBtn.addEventListener('click', (e) => {
+      editLoadingScreenBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         const selectedTemplateId = loadingScreenSelect?.value;
         if (selectedTemplateId && selectedTemplateId !== 'none') {
           dlog('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
+          
+          // 現在のプロジェクトのローディング画面設定を取得
+          const currentProjectId = new URLSearchParams(window.location.hash.split('?')[1] || '').get('id');
+          if (currentProjectId) {
+            try {
+              const project = getProject(currentProjectId);
+              if (project?.loadingScreen?.editorSettings) {
+                // プロジェクトに詳細設定がある場合はローディング画面エディターに復元
+                await settingsAPI.saveSettings(project.loadingScreen.editorSettings);
+                dlog('✅ プロジェクトの詳細設定をローディング画面エディターに復元');
+              }
+            } catch (error) {
+              console.warn('⚠️ プロジェクト設定のローディング画面エディター復元に失敗:', error);
+            }
+          }
           
           // 直接ローディング画面エディターを開く（編集モード）
           window.location.hash = `#/loading-screen?template=${selectedTemplateId}`;
@@ -2242,7 +2269,7 @@ export function showEditor(container) {
     dlog('ローディング画面をプレビュー表示しました');
   };
 
-  // 現在のローディング設定を取得
+  // 現在のローディング設定を取得（ローディング画面エディターの詳細設定含む）
   const getCurrentLoadingSettings = () => {
     // ローディング画面選択ドロップダウンの値を取得
     const loadingScreenSelect = document.getElementById('loading-screen-select');
@@ -2264,20 +2291,19 @@ export function showEditor(container) {
       savedSelectedScreenId = selectedScreenId;
     }
     
-    dlog('🔄 現在のローディング設定を取得:', {
-      selectedScreenId,
-      selectElementExists: !!loadingScreenSelect,
-      selectValue: loadingScreenSelect?.value,
-      savedSelectedScreenId,
-      finalSelectedScreenId: selectedScreenId,
-      enabled: loadingEnabled?.checked,
-      template: loadingTemplate?.value,
-      syncDirection: 'DOM -> savedSelectedScreenId'
-    });
+    // ローディング画面エディターで作成された詳細設定を取得
+    let detailedLoadingSettings = null;
+    try {
+      detailedLoadingSettings = settingsAPI.getSettings();
+      dlog('📋 ローディング画面エディターの詳細設定を取得:', detailedLoadingSettings);
+    } catch (error) {
+      console.warn('⚠️ ローディング画面エディターの設定取得に失敗:', error);
+    }
     
-    return {
+    // 基本設定とエディター詳細設定を統合
+    const baseSettings = {
       enabled: loadingEnabled?.checked ?? true,
-      selectedScreenId: selectedScreenId, // ローディング画面選択を追加
+      selectedScreenId: selectedScreenId,
       template: loadingTemplate?.value ?? 'default',
       backgroundColor: loadingBgColor?.value ?? '#1a1a1a',
       textColor: loadingTextColor?.value ?? '#ffffff',
@@ -2286,6 +2312,37 @@ export function showEditor(container) {
       message: loadingMessage?.value ?? 'ARコンテンツを準備中...',
       showProgress: loadingShowProgress?.checked ?? true
     };
+    
+    // 詳細設定がある場合は統合
+    if (detailedLoadingSettings) {
+      return {
+        ...baseSettings,
+        // ローディング画面エディターの全設定を含める
+        editorSettings: detailedLoadingSettings,
+        // 後方互換のため基本設定は維持しつつ、エディター設定で上書き
+        backgroundColor: detailedLoadingSettings.loadingScreen?.backgroundColor || baseSettings.backgroundColor,
+        textColor: detailedLoadingSettings.loadingScreen?.textColor || baseSettings.textColor,
+        progressColor: detailedLoadingSettings.loadingScreen?.progressColor || 
+                       detailedLoadingSettings.loadingScreen?.accentColor || 
+                       baseSettings.progressColor,
+        message: detailedLoadingSettings.loadingScreen?.loadingMessage || baseSettings.message,
+        showProgress: detailedLoadingSettings.loadingScreen?.showProgress ?? baseSettings.showProgress
+      };
+    }
+    
+    dlog('🔄 現在のローディング設定を取得:', {
+      selectedScreenId,
+      hasDetailedSettings: !!detailedLoadingSettings,
+      selectElementExists: !!loadingScreenSelect,
+      selectValue: loadingScreenSelect?.value,
+      savedSelectedScreenId,
+      finalSelectedScreenId: selectedScreenId,
+      enabled: baseSettings.enabled,
+      template: baseSettings.template,
+      syncDirection: 'DOM -> savedSelectedScreenId'
+    });
+    
+    return baseSettings;
   };
 
   const handleQRCodeButtonClick = async () => {

@@ -1229,20 +1229,39 @@ export function setupButtons() {
   }
 }
 
+// ネストされたオブジェクトから値を取得するヘルパー関数
+function getNestedValue(obj, path) {
+  if (!obj || !path) return undefined;
+  return path.split('.').reduce((current, key) => current && current[key], obj);
+}
+
 // 未保存の変更があるかチェックする関数
 function checkForUnsavedChanges() {
   try {
-    // 簡易版：フォーム要素の値をチェック
-    const inputs = document.querySelectorAll('.loading-screen-editor__input, .loading-screen-editor__slider');
+    // 改善版：実際の保存済み設定と現在のDOM状態を比較
+    const currentDOMSettings = getCurrentSettingsFromDOM();
+    const savedSettings = settingsAPI.getSettings();
     
-    for (const input of inputs) {
-      try {
-        if (input.value !== input.defaultValue) {
-          return true;
-        }
-      } catch (inputError) {
-        console.warn('入力要素チェック中にエラー:', input.id, inputError);
-        // 個別の入力要素でエラーが発生しても継続
+    // 簡単な設定比較（メイン項目のみ）
+    const fieldsToCheck = [
+      'startScreen.backgroundColor',
+      'startScreen.textColor', 
+      'startScreen.title',
+      'loadingScreen.backgroundColor',
+      'loadingScreen.textColor',
+      'loadingScreen.brandName',
+      'loadingScreen.loadingMessage',
+      'guideScreen.title',
+      'guideScreen.instructionText'
+    ];
+    
+    for (const field of fieldsToCheck) {
+      const currentValue = getNestedValue(currentDOMSettings, field);
+      const savedValue = getNestedValue(savedSettings, field);
+      
+      if (currentValue !== savedValue) {
+        console.log(`🔍 変更検出: ${field}`, { current: currentValue, saved: savedValue });
+        return true;
       }
     }
     
@@ -2058,6 +2077,16 @@ function resetLoadingTextSettings() {
       const valueDisplay = document.getElementById('fontScale-value');
       if (valueDisplay) {
         valueDisplay.textContent = defaultSettings.loadingScreen.fontScale + 'x';
+      }
+    }
+
+    // テキスト位置（上から）をリセット
+    const textPositionSlider = document.getElementById('loadingScreen-textPosition');
+    if (textPositionSlider) {
+      textPositionSlider.value = defaultSettings.loadingScreen.textPosition;
+      const valueDisplay = document.getElementById('loadingScreen-textPosition-value');
+      if (valueDisplay) {
+        valueDisplay.textContent = defaultSettings.loadingScreen.textPosition + '%';
       }
     }
     

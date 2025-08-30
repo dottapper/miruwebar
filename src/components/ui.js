@@ -2,6 +2,8 @@
 
 import { showMarkerUpload } from '../views/marker-upload.js';
 import { getProject, loadProjectWithModels } from '../api/projects-new.js';
+import { exportProjectBundleById } from '../api/projects.js';
+import { settingsAPI } from './loading-screen/settings.js';
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
@@ -152,6 +154,7 @@ export function showNewProjectModal() {
     menu.innerHTML = `
       <div class="menu-item" data-action="edit">編集</div>
       <div class="menu-item" data-action="duplicate">複製</div>
+      <div class="menu-item" data-action="export">エクスポート</div>
       <div class="menu-item" data-action="share">共有</div>
       <div class="menu-item danger" data-action="delete">削除</div>
     `;
@@ -168,6 +171,9 @@ export function showNewProjectModal() {
           window.location.hash = `#/editor?id=${project.id}`;
         } else if (action === 'duplicate') {
           alert(`「${project.title}」を複製します`);
+        } else if (action === 'export') {
+          // プロジェクトエクスポート機能
+          exportProject(project);
         } else if (action === 'share') {
           alert(`「${project.title}」を共有します`);
         } else if (action === 'delete') {
@@ -448,6 +454,47 @@ export function showNewProjectModal() {
     
     // 実際にはこれは推測なので、WebRTCが失敗した場合のみ使用
     return null;
+  }
+
+  /**
+   * プロジェクトエクスポート機能
+   * @param {Object} project - エクスポートするプロジェクト
+   */
+  async function exportProject(project) {
+    try {
+      dlog('📦 プロジェクトエクスポート開始:', project);
+      
+      // プロジェクトをZIPバンドルとしてエクスポート
+      const zipBlob = await exportProjectBundleById(project.id);
+      
+      // ファイル名を生成（日本語文字をサニタイズ）
+      const safeName = (project.name || project.title || 'project')
+        .replace(/[^a-zA-Z0-9\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_')
+        .substring(0, 50);
+      const fileName = `${safeName}_${new Date().toISOString().slice(0, 10)}.zip`;
+      
+      // ダウンロードリンクを作成
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = fileName;
+      a.style.display = 'none';
+      
+      // ダウンロード実行
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // クリーンアップ
+      URL.revokeObjectURL(downloadUrl);
+      
+      dlog('✅ プロジェクトエクスポート完了:', fileName);
+      alert(`プロジェクト「${project.name || project.title}」をエクスポートしました。\n\nファイル名: ${fileName}\n\n※このZIPファイルにはローディング画面設定も含まれています。`);
+      
+    } catch (error) {
+      console.error('❌ プロジェクトエクスポート失敗:', error);
+      alert(`エクスポートに失敗しました: ${error.message}`);
+    }
   }
 
 export async function showQRCodeModal(options = {}) {
@@ -790,10 +837,36 @@ export async function showQRCodeModal(options = {}) {
           }
         }
 
+        // ローディング画面エディターの詳細設定を取得し、公開用データに含める
+        let editorSettings = null;
+        try {
+          editorSettings = settingsAPI.getSettings();
+        } catch (_) {}
+
+        // 送信するローディング画面設定
+        const lsPayload = { ...(project.loadingScreen || {}) };
+        if (editorSettings) {
+          lsPayload.editorSettings = editorSettings;
+          // ロゴがBase64で保持されている場合、API側でアセットとして書き出せるようにlogoImageに入れる
+          const le = editorSettings.loadingScreen || {};
+          if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
+            lsPayload.logoImage = le.logo;
+          }
+        }
+
+        // Start Screen をトップレベルに含める（Viewerが直接参照）
+        const startScreenPayload = editorSettings?.startScreen || null;
+
         const resp = await fetch('/api/publish-project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: projectId, type: project.type || 'markerless', loadingScreen: project.loadingScreen || null, models: modelPayload })
+          body: JSON.stringify({
+            id: projectId,
+            type: project.type || 'markerless',
+            loadingScreen: lsPayload,
+            startScreen: startScreenPayload,
+            models: modelPayload
+          })
         });
         if (resp.ok) {
           const data = await resp.json();
