@@ -207,6 +207,9 @@ async function createProjectDataWithIDB(data, viewerInstance) {
       // ローディング画面設定
       loadingScreen: data.loadingScreen || null,
       
+      // スタート画面設定（新規追加）
+      startScreen: data.startScreen || null,
+      
       created: data.created || Date.now(),
       updated: Date.now(),
       
@@ -282,7 +285,10 @@ export async function loadProjectWithModels(project) {
       dlog('ℹ️ 復元対象のモデルがありません');
       return {
         ...project,
-        modelData: []
+        modelData: [],
+        // 設定が確実に含まれるようにする
+        loadingScreen: project.loadingScreen || null,
+        startScreen: project.startScreen || null
       };
     }
     
@@ -338,7 +344,10 @@ export async function loadProjectWithModels(project) {
     
     return {
       ...project,
-      modelData: restoredModels
+      modelData: restoredModels,
+      // 設定が確実に含まれるようにする
+      loadingScreen: project.loadingScreen || null,
+      startScreen: project.startScreen || null
     };
   } catch (error) {
     console.error('❌ プロジェクトモデル復元エラー:', error);

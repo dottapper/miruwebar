@@ -1,6 +1,6 @@
 // src/views/ar-viewer.js
 // 統合ARビューア - QRコードからプロジェクトデータを読み込んでAR表示
-import { MarkerAR } from '../components/ar/marker-ar.js';
+import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
@@ -421,9 +421,27 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     // 画面設定（ローディング/スタート）の取得
     let ls = currentProject.loadingScreen || {};
-    // エディター保存形式のフォールバック（project.loadingScreen.editorSettings.*）
-    const editorSettings = ls.editorSettings || null;
-    const ss = currentProject.startScreen || (editorSettings?.startScreen || {});
+    let ss = currentProject.startScreen || {};
+    
+    // ビューア専用の状態管理を使用して設定を適用
+    try {
+      const { applyProjectLoadingSettings } = await import('../utils/loading-screen-state.js');
+      const { mergeLoadingSettings } = await import('../utils/unified-loading-screen.js');
+      
+      const viewerSettings = applyProjectLoadingSettings(currentProject);
+      const mergedSettings = mergeLoadingSettings(currentProject, viewerSettings);
+      
+      // プロジェクト設定とビューア設定をマージ
+      ls = { ...mergedSettings.loadingScreen, ...ls };
+      ss = { ...mergedSettings.startScreen, ...ss };
+      
+      dlog('🎨 統合システムでローディング画面設定を適用:', { ls, ss, merged: mergedSettings });
+    } catch (error) {
+      console.warn('統合システムの適用に失敗、従来の方法を使用:', error);
+      // フォールバック: エディター保存形式の処理
+      const editorSettings = ls.editorSettings || null;
+      ss = currentProject.startScreen || (editorSettings?.startScreen || {});
+    }
     
     if (ls) {
       dlog('🎨 プロジェクトファイルからローディング画面設定を取得:', ls);

@@ -1,0 +1,37 @@
+{
+  "hash": "60a22dfc",
+  "configHash": "1732d227",
+  "lockfileHash": "f1933b72",
+  "browserHash": "a41f840c",
+  "optimized": {
+    "uuid": {
+      "src": "../../node_modules/uuid/dist/esm-browser/index.js",
+      "file": "uuid.js",
+      "fileHash": "fa4500a4",
+      "needsInterop": false
+    },
+    "idb-keyval": {
+      "src": "../../node_modules/idb-keyval/dist/index.js",
+      "file": "idb-keyval.js",
+      "fileHash": "1bfddf12",
+      "needsInterop": false
+    },
+    "qrcode": {
+      "src": "../../node_modules/qrcode/lib/browser.js",
+      "file": "qrcode.js",
+      "fileHash": "d2977190",
+      "needsInterop": true
+    },
+    "jszip": {
+      "src": "../../node_modules/jszip/dist/jszip.min.js",
+      "file": "jszip.js",
+      "fileHash": "13886e25",
+      "needsInterop": true
+    }
+  },
+  "chunks": {
+    "chunk-VUNV25KB": {
+      "file": "chunk-VUNV25KB.js"
+    }
+  }
+}

@@ -1,6 +1,10 @@
 // src/storage/indexeddb-storage.js
 // IndexedDB を使った 3D モデルデータの保存・取得
 import { get, set, del, keys } from 'idb-keyval';
+import { createLogger } from '../utils/logger.js';
+
+// ストレージ専用ロガーを作成
+const storageLogger = createLogger('Storage');
 
 export const MODEL_KEY_PREFIX = 'model:';
 const META_KEY_PREFIX = 'meta:';
@@ -14,7 +18,7 @@ const META_KEY_PREFIX = 'meta:';
  */
 export async function saveModelToIDB(modelId, data, meta = {}) {
   try {
-    console.log('🔄 IndexedDB へモデル保存開始:', {
+    storageLogger.loading('IndexedDB へモデル保存開始', {
       modelId,
       dataType: data?.constructor?.name,
       dataSize: data?.size || data?.byteLength || 0,
@@ -45,7 +49,7 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
       set(`${META_KEY_PREFIX}${modelId}`, enhancedMeta)
     ]);
 
-    console.log('✅ IndexedDB モデル保存完了:', {
+    storageLogger.success('IndexedDB モデル保存完了', {
       modelId,
       size: blobData.size,
       sizeKB: Math.round(blobData.size / 1024),
@@ -54,7 +58,7 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
 
     return modelId;
   } catch (error) {
-    console.error('❌ IndexedDB モデル保存エラー:', error);
+    storageLogger.error('IndexedDB モデル保存エラー', error);
     throw new Error(`モデルの保存に失敗しました: ${error.message}`);
   }
 }
@@ -66,12 +70,12 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
  */
 export async function loadModelBlob(modelId) {
   try {
-    console.log('🔄 IndexedDB からモデル Blob 取得:', modelId);
+    storageLogger.loading('IndexedDB からモデル Blob 取得', { modelId });
     
     const blob = await get(`${MODEL_KEY_PREFIX}${modelId}`);
     
     if (!blob) {
-      console.warn('⚠️ モデル Blob が見つかりません:', {
+      storageLogger.warn('モデル Blob が見つかりません', {
         modelId,
         searchKey: `${MODEL_KEY_PREFIX}${modelId}`,
         timestamp: new Date().toISOString()
@@ -79,7 +83,7 @@ export async function loadModelBlob(modelId) {
       return null;
     }
 
-    console.log('✅ モデル Blob 取得完了:', {
+    storageLogger.success('モデル Blob 取得完了', {
       modelId,
       size: blob.size,
       type: blob.type
@@ -87,7 +91,7 @@ export async function loadModelBlob(modelId) {
 
     return blob;
   } catch (error) {
-    console.error('❌ モデル Blob 取得エラー:', {
+    storageLogger.error('モデル Blob 取得エラー', {
       modelId,
       searchKey: `${MODEL_KEY_PREFIX}${modelId}`,
       error: error.message,

@@ -13,30 +13,27 @@ import './styles/ar-viewer.css'; // ARビューアー用のスタイルをイン
 // HMRクライアントをインポート
 import hmrClient from './utils/hmr-client.js';
 
-// QRCode ライブラリを遅延読み込みに変更
-// import QRCode from 'qrcode'
+// 統一されたロガーをインポート
+import { logger, createLogger } from './utils/logger.js';
 
 // IndexedDB マイグレーション機能をインポート
 import { initializeMigration } from './storage/migrate.js';
 
+// メインロガーを作成
+const mainLogger = createLogger('Main');
+
 // デバッグモードの設定
 const DEBUG_MODE = import.meta.env.DEV || window.location.search.includes('debug=true');
-// 他モジュールから参照できるように DEBUG フラグを公開
+
+// 他モジュールから参照できるように DEBUG フラグを公開（必要最小限）
 if (typeof window !== 'undefined') {
   window.DEBUG = Boolean(DEBUG_MODE);
-}
-
-// デバッグ用ログ関数
-function debugLog(message, ...args) {
-  if (DEBUG_MODE) {
-    console.log(message, ...args);
-  }
 }
 
 // HMRの設定
 if (import.meta.hot) {
   import.meta.hot.accept((newModule) => {
-    debugLog('🔄 HMR更新を検知しました');
+    mainLogger.loading('HMR更新を検知しました');
     // ページをリロードしてHMRを確実に適用
     window.location.reload();
   });
@@ -54,12 +51,12 @@ window.addEventListener('error', (event) => {
     return;
   }
   
-  console.error('❌ グローバルエラー:', event.error);
-  console.error('エラー詳細:', {
+  mainLogger.error('グローバルエラーが発生しました', {
     message: event.message,
     filename: event.filename,
     lineno: event.lineno,
-    colno: event.colno
+    colno: event.colno,
+    error: event.error
   });
 });
 
@@ -69,7 +66,7 @@ window.addEventListener('unhandledrejection', (event) => {
     return;
   }
   
-  console.error('❌ 未処理のPromise拒否:', event.reason);
+  mainLogger.error('未処理のPromise拒否が発生しました', event.reason);
 });
 
 // QRCodeライブラリの遅延読み込み
@@ -87,12 +84,11 @@ async function loadQRCode() {
   return QRCode;
 }
 
-// グローバルにQRCodeを設定（他のモジュールから使用可能）
-window.loadQRCode = loadQRCode;
+// QRCode専用モジュールを使用するため、グローバル公開は不要
 
 // アプリケーション初期化時にマイグレーションを実行
 initializeMigration().catch((error) => {
-  console.error('❌ マイグレーション初期化エラー:', error);
+  mainLogger.error('マイグレーション初期化エラー', error);
 });
 
 // 動的インポート用のビュー関数マッパー
@@ -110,7 +106,7 @@ const viewModules = {
 // アプリケーションのメインコンテナ
 const app = document.getElementById('app');
 if (!app) {
-  console.error('❌ アプリケーションコンテナが見つかりません');
+  mainLogger.error('アプリケーションコンテナが見つかりません');
   // エラーを表示するためのフォールバック
   document.body.innerHTML = `
     <div style="
@@ -132,20 +128,20 @@ if (!app) {
   throw new Error('アプリケーションコンテナが見つかりません');
 }
 
-debugLog('✅ アプリケーションコンテナ取得成功:', app);
+mainLogger.success('アプリケーションコンテナ取得成功', { appId: app.id });
 
 // 現在のビューのクリーンアップ関数
 let currentCleanup = null;
 
 // ルーティング処理
 async function render() {
-  debugLog('🔥 render関数開始');
+  mainLogger.debug('render関数開始');
   try {
-    debugLog('🔄 ルーティング処理開始');
+    mainLogger.debug('ルーティング処理開始');
     
     // 現在のビューをクリーンアップ
     if (typeof currentCleanup === 'function') {
-      debugLog('🧹 現在のビューをクリーンアップ');
+      mainLogger.debug('現在のビューをクリーンアップ');
       currentCleanup();
       currentCleanup = null;
     }
@@ -154,51 +150,57 @@ async function render() {
     while (app.firstChild) {
       app.removeChild(app.firstChild);
     }
-    debugLog('🧹 DOMクリア完了');
+    mainLogger.debug('DOMクリア完了');
 
     // 現在のハッシュを取得
     let hash = window.location.hash || '#/login';
-    debugLog('📍 現在のハッシュ:', hash);
+    mainLogger.debug('現在のハッシュ', { hash });
     
     // デバッグ用：usage-guideルートの特別確認
     if (hash === '#/usage-guide') {
-      debugLog('🎯 usage-guideルートが検出されました！');
+      mainLogger.debug('usage-guideルートが検出されました');
     }
     
     // ハッシュにクエリパラメータがある場合は分離
     const [baseHash] = hash.split('?');
-    debugLog('📍 ベースハッシュ:', baseHash);
+    mainLogger.debug('ベースハッシュ', { baseHash });
     
     // 対応するビューモジュールを取得
     const viewModule = viewModules[baseHash];
-    debugLog('📍 対応するビューモジュール:', baseHash, !!viewModule);
+    mainLogger.debug('対応するビューモジュール', { baseHash, hasModule: !!viewModule });
     
     if (viewModule) {
-      debugLog(`✅ ルート "${baseHash}" のビューを動的読み込みします`);
+      mainLogger.info(`ルート "${baseHash}" のビューを動的読み込みします`);
       try {
-        debugLog('🔄 動的インポート開始...');
+        mainLogger.debug('動的インポート開始');
         // 動的インポートでビューを読み込み
         const module = await viewModule();
-        debugLog('🔍 読み込まれたモジュール:', module);
-        debugLog('🔍 module.default:', module.default);
-        debugLog('🔍 module.default の型:', typeof module.default);
+        mainLogger.debug('読み込まれたモジュール', { 
+          hasDefault: !!module.default,
+          hasShowEditor: !!module.showEditor,
+          moduleType: typeof module
+        });
         
         const view = module.default || module.showEditor || module;
-        debugLog('🔍 最終的なview:', view);
-        debugLog('🔍 view の型:', typeof view);
+        mainLogger.debug('最終的なview', { 
+          viewType: typeof view,
+          isFunction: typeof view === 'function'
+        });
         
         if (typeof view === 'function') {
-          debugLog('🎯 ビュー関数を実行します');
+          mainLogger.debug('ビュー関数を実行します');
           currentCleanup = view(app);
-          debugLog('✅ ビュー表示完了');
+          mainLogger.success('ビュー表示完了');
         } else {
-          console.error('❌ ビュー関数が見つかりません。view:', view);
+          mainLogger.error('ビュー関数が見つかりません', { view });
           throw new Error('ビュー関数が見つかりません');
         }
       } catch (viewError) {
-        console.error('❌ ビュー表示中にエラー:', viewError);
-        console.error('❌ エラースタック:', viewError.stack);
-        console.error('❌ エラー詳細:', viewError.message);
+        mainLogger.error('ビュー表示中にエラーが発生しました', {
+          error: viewError.message,
+          stack: viewError.stack
+        });
+        
         // エラー時のフォールバック表示
         app.innerHTML = `
           <div style="
@@ -228,13 +230,15 @@ async function render() {
         `;
       }
     } else {
-      console.warn(`⚠️ 未定義のルート: ${baseHash}`);
-      debugLog('📍 利用可能なルート:', Object.keys(viewModules));
+      mainLogger.warn(`未定義のルート: ${baseHash}`);
+      mainLogger.debug('利用可能なルート', { routes: Object.keys(viewModules) });
       window.location.hash = '#/login';
     }
   } catch (error) {
-    console.error('❌ ビューのレンダリング中にエラーが発生しました:', error);
-    console.error('エラースタック:', error.stack);
+    mainLogger.error('ビューのレンダリング中にエラーが発生しました', {
+      error: error.message,
+      stack: error.stack
+    });
     
     // エラー時のフォールバック表示
     app.innerHTML = `
@@ -268,16 +272,16 @@ async function render() {
 
 // ハッシュ変更時のルーティング
 window.addEventListener('hashchange', () => {
-  debugLog('🔄 ハッシュ変更検知');
+  mainLogger.debug('ハッシュ変更検知');
   render().catch((error) => {
-    console.error('❌ ハッシュ変更時のエラー:', error);
+    mainLogger.error('ハッシュ変更時のエラー', error);
   });
 });
 
 // 初期表示
-debugLog('🚀 初期表示開始');
+mainLogger.info('初期表示開始');
 render().then(() => {
-  debugLog('✅ 初期表示完了');
+  mainLogger.success('初期表示完了');
 }).catch((error) => {
-  console.error('❌ 初期表示エラー:', error);
+  mainLogger.error('初期表示エラー', error);
 });

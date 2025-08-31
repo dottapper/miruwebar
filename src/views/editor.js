@@ -2229,14 +2229,14 @@ export function showEditor(container) {
   };
 
   // ローディング画面のプレビュー機能
-  const showLoadingPreview = () => {
+  const showLoadingPreview = async () => {
     if (!viewerInstance?.controls) {
       alert('ARビューアが初期化されていません。');
       return;
     }
 
     // 現在の設定を取得
-    const settings = getCurrentLoadingSettings();
+    const settings = await getCurrentLoadingSettings();
     
     // プレビュー用のローディング画面を表示
     const previewId = viewerInstance.controls.showLoadingScreen();
@@ -2270,7 +2270,7 @@ export function showEditor(container) {
   };
 
   // 現在のローディング設定を取得（ローディング画面エディターの詳細設定含む）
-  const getCurrentLoadingSettings = () => {
+  const getCurrentLoadingSettings = async () => {
     // ローディング画面選択ドロップダウンの値を取得
     const loadingScreenSelect = document.getElementById('loading-screen-select');
     
@@ -2294,10 +2294,17 @@ export function showEditor(container) {
     // ローディング画面エディターで作成された詳細設定を取得
     let detailedLoadingSettings = null;
     try {
-      detailedLoadingSettings = settingsAPI.getSettings();
+      // 分離された状態管理を使用
+      const { getEditorLoadingScreenState } = await import('../utils/loading-screen-state.js');
+      const editorState = getEditorLoadingScreenState();
+      detailedLoadingSettings = editorState.getSettings();
       dlog('📋 ローディング画面エディターの詳細設定を取得:', detailedLoadingSettings);
     } catch (error) {
       console.warn('⚠️ ローディング画面エディターの設定取得に失敗:', error);
+      // フォールバック: 従来のsettingsAPI
+      try {
+        detailedLoadingSettings = settingsAPI.getSettings();
+      } catch (_) {}
     }
     
     // 基本設定とエディター詳細設定を統合
@@ -2484,7 +2491,7 @@ export function showEditor(container) {
           type: arType,
           markerImage: markerImageData,
           // ローディング設定を保存（現在のUI設定を反映）
-          loadingScreen: getCurrentLoadingSettings()
+          loadingScreen: await getCurrentLoadingSettings()
         };
 
         // ローディング画面の選択テンプレートを反映（完全な設定を保存）

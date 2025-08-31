@@ -228,6 +228,7 @@ export default function showLoadingScreenEditor(container) {
             const imgElement = document.createElement('img');
             imgElement.src = settings.startScreen.thumbnail;
             imgElement.alt = 'サムネイル';
+            imgElement.setAttribute('data-original-src', settings.startScreen.thumbnail);
             imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
             
             const fileName = 'サムネイル画像';
@@ -255,6 +256,7 @@ export default function showLoadingScreenEditor(container) {
             const imgElement = document.createElement('img');
             imgElement.src = settings.startScreen.logo;
             imgElement.alt = 'スタート画面ロゴ';
+            imgElement.setAttribute('data-original-src', settings.startScreen.logo);
             imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
             
             const fileName = 'スタート画面ロゴ';
@@ -282,6 +284,7 @@ export default function showLoadingScreenEditor(container) {
             const imgElement = document.createElement('img');
             imgElement.src = settings.loadingScreen.logo;
             imgElement.alt = 'ローディング画面ロゴ';
+            imgElement.setAttribute('data-original-src', settings.loadingScreen.logo);
             imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
             
             const fileName = 'ローディング画面ロゴ';
@@ -302,7 +305,24 @@ export default function showLoadingScreenEditor(container) {
       if (settings.guideScreen.surfaceDetection?.guideImage) {
         const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
         if (surfaceGuideDropzone) {
-          surfaceGuideDropzone.innerHTML = `<img src="${settings.guideScreen.surfaceDetection.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="平面検出ガイド画像">`;
+          const dropZone = surfaceGuideDropzone.querySelector('.loading-screen-editor__drop-zone');
+          const removeButton = surfaceGuideDropzone.querySelector('.loading-screen-editor__remove-button');
+          
+          if (dropZone) {
+            const imgElement = document.createElement('img');
+            imgElement.src = settings.guideScreen.surfaceDetection.guideImage;
+            imgElement.alt = '平面検出ガイド画像';
+            imgElement.setAttribute('data-original-src', settings.guideScreen.surfaceDetection.guideImage);
+            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+            
+            const fileName = '平面検出ガイド画像';
+            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+            dropZone.insertBefore(imgElement, dropZone.firstChild);
+            
+            if (removeButton) {
+              removeButton.style.display = 'block';
+            }
+          }
           dlog('🖼️ 平面検出ガイド画像を復元');
         } else {
           console.warn('🖼️ 平面検出ガイドDropzoneが見つかりません');
@@ -313,7 +333,24 @@ export default function showLoadingScreenEditor(container) {
       if (settings.guideScreen.worldTracking?.guideImage) {
         const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
         if (worldGuideDropzone) {
-          worldGuideDropzone.innerHTML = `<img src="${settings.guideScreen.worldTracking.guideImage}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="空間検出ガイド画像">`;
+          const dropZone = worldGuideDropzone.querySelector('.loading-screen-editor__drop-zone');
+          const removeButton = worldGuideDropzone.querySelector('.loading-screen-editor__remove-button');
+          
+          if (dropZone) {
+            const imgElement = document.createElement('img');
+            imgElement.src = settings.guideScreen.worldTracking.guideImage;
+            imgElement.alt = '空間検出ガイド画像';
+            imgElement.setAttribute('data-original-src', settings.guideScreen.worldTracking.guideImage);
+            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+            
+            const fileName = '空間検出ガイド画像';
+            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
+            dropZone.insertBefore(imgElement, dropZone.firstChild);
+            
+            if (removeButton) {
+              removeButton.style.display = 'block';
+            }
+          }
           dlog('🖼️ 空間検出ガイド画像を復元');
         } else {
           console.warn('🖼️ 空間検出ガイドDropzoneが見つかりません');

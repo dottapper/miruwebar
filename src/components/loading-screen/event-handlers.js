@@ -3,6 +3,9 @@
  */
 
 import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
+
+// 未保存チェック用の初期状態を保存
+let initialSettings = null;
 import {
   INDIVIDUAL_IMAGE_MAX_BYTES,
   INDIVIDUAL_IMAGE_MAX_MB,
@@ -924,18 +927,18 @@ function loadTemplateSettings(settings) {
     const restoreImage = (dropzoneId, imageSrc, altText) => {
       const dropzone = document.getElementById(dropzoneId);
       if (dropzone && imageSrc) {
+        const fileName = `復元された${altText}`;
         const dropZone = dropzone.querySelector('.loading-screen-editor__drop-zone');
+        const removeButton = dropzone.querySelector('.loading-screen-editor__remove-button');
+        
         if (dropZone) {
-          const imgElement = document.createElement('img');
-          imgElement.src = imageSrc;
-          imgElement.alt = altText;
-          imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
+          // 既存の内容をクリアして画像と名前を設定
+          dropZone.innerHTML = `
+            <img src="${imageSrc}" alt="${altText}" data-original-src="${imageSrc}" style="max-width: 100%; max-height: 100px; object-fit: contain;">
+            <div class="loading-screen-editor__file-name">${fileName}</div>
+          `;
           
-          const fileName = `復元された${altText}`;
-          dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
-          dropZone.insertBefore(imgElement, dropZone.firstChild);
-          
-          const removeButton = dropzone.querySelector('.loading-screen-editor__remove-button');
+          // 削除ボタンを表示
           if (removeButton) {
             removeButton.style.display = 'block';
           }
@@ -971,6 +974,11 @@ function loadTemplateSettings(settings) {
       const currentScreenType = getCurrentActiveScreenType();
       updatePreview(currentScreenType);
     }, 100);
+    
+    // 初期状態を保存（画像含む）
+    setTimeout(() => {
+      initialSettings = getCurrentSettingsFromDOM();
+    }, 150);
     
   } catch (error) {
     console.error('テンプレート設定の読み込みに失敗しました:', error);
@@ -1077,7 +1085,7 @@ export function setupButtons() {
             settings: settings
           };
           
-          const savedTemplate = saveLoadingScreenTemplate(templateData);
+          const savedTemplate = await saveLoadingScreenTemplate(templateData);
           showNotification(`テンプレート「${savedTemplate.name}」を保存しました`, 'success');
           // ストレージ使用量を更新
           updateStorageUsageDisplay();
@@ -1103,7 +1111,7 @@ export function setupButtons() {
             if (template) {
               // 既存のテンプレートを削除して新しいものを保存
               deleteLoadingScreenTemplate(templateId);
-              const savedTemplate = saveLoadingScreenTemplate({
+              const savedTemplate = await saveLoadingScreenTemplate({
                 name: template.name,
                 settings: settings
               });
@@ -1114,8 +1122,15 @@ export function setupButtons() {
               
               // 最後に使用したテンプレートIDを記録
               localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
-        syncLastUsedTemplateId(savedTemplate.id);
-          syncLastUsedTemplateId(savedTemplate.id);
+              syncLastUsedTemplateId(savedTemplate.id);
+              
+              // URLを新しいテンプレートIDに更新
+              window.location.hash = `#/loading-screen?template=${savedTemplate.id}`;
+              
+              // タイトル表示を再同期
+              setTimeout(() => {
+                updateEditorTitleFromUrl();
+              }, 100);
             } else {
               // テンプレートが見つからない場合は通常保存
               await settingsAPI.saveSettings(settings);
@@ -1235,32 +1250,44 @@ function getNestedValue(obj, path) {
   return path.split('.').reduce((current, key) => current && current[key], obj);
 }
 
-// 未保存の変更があるかチェックする関数
+// 未保存の変更があるかチェックする関数（画像変更含む）
 function checkForUnsavedChanges() {
   try {
-    // 改善版：実際の保存済み設定と現在のDOM状態を比較
-    const currentDOMSettings = getCurrentSettingsFromDOM();
-    const savedSettings = settingsAPI.getSettings();
-    
-    // 簡単な設定比較（メイン項目のみ）
-    const fieldsToCheck = [
-      'startScreen.backgroundColor',
-      'startScreen.textColor', 
-      'startScreen.title',
-      'loadingScreen.backgroundColor',
-      'loadingScreen.textColor',
-      'loadingScreen.brandName',
-      'loadingScreen.loadingMessage',
-      'guideScreen.title',
-      'guideScreen.instructionText'
+    // 各ドロップゾーンの画像変更をチェック
+    const dropzoneIds = [
+      'thumbnailDropzone',
+      'startLogoDropzone', 
+      'loadingLogoDropzone',
+      'surfaceGuideImageDropzone',
+      'worldGuideImageDropzone'
     ];
     
-    for (const field of fieldsToCheck) {
-      const currentValue = getNestedValue(currentDOMSettings, field);
-      const savedValue = getNestedValue(savedSettings, field);
+    for (const dropzoneId of dropzoneIds) {
+      const dropzone = document.getElementById(dropzoneId);
+      const img = dropzone?.querySelector('img');
       
-      if (currentValue !== savedValue) {
-        console.log(`🔍 変更検出: ${field}`, { current: currentValue, saved: savedValue });
+      if (img) {
+        const currentSrc = img.src || '';
+        const originalSrc = img.getAttribute('data-original-src') || '';
+        
+        // 画像が変更されている場合
+        if (currentSrc !== originalSrc) {
+          console.log(`🔍 画像変更を検出: ${dropzoneId}`, { 
+            current: currentSrc.substring(0, 50) + '...', 
+            original: originalSrc.substring(0, 50) + '...' 
+          });
+          return true;
+        }
+      }
+    }
+    
+    // フォームフィールドの変更もチェック
+    if (initialSettings) {
+      const currentSettings = getCurrentSettingsFromDOM();
+      const hasFormChanges = JSON.stringify(currentSettings) !== JSON.stringify(initialSettings);
+      
+      if (hasFormChanges) {
+        console.log('🔍 フォーム設定変更を検出');
         return true;
       }
     }
@@ -1268,8 +1295,6 @@ function checkForUnsavedChanges() {
     return false;
   } catch (error) {
     console.error('未保存変更チェック中にエラー:', error);
-    
-    // エラー時は安全のため変更ありとみなす
     return false;
   }
 }
@@ -1438,7 +1463,7 @@ function showSaveConfirmDialog(onNavigate) {
           settings: settings
         };
         
-        const savedTemplate = saveLoadingScreenTemplate(templateData);
+        const savedTemplate = await saveLoadingScreenTemplate(templateData);
         console.log('💾 新規テンプレートを保存しました:', savedTemplate.name);
         
         // 最後に使用したテンプレートIDを記録
@@ -1453,7 +1478,7 @@ function showSaveConfirmDialog(onNavigate) {
           if (template) {
             // 既存のテンプレートを削除して新しいものを保存
             deleteLoadingScreenTemplate(templateId);
-            const savedTemplate = saveLoadingScreenTemplate({
+            const savedTemplate = await saveLoadingScreenTemplate({
               name: template.name,
               settings: settings
             });

@@ -33,13 +33,20 @@ export default defineConfig({
   build: {
     // チャンクサイズの警告制限を調整（Three.jsを含むため）
     chunkSizeWarningLimit: 1000,
+    // ビルドの決定性を向上させる設定
+    target: 'es2020',
+    minify: 'esbuild', // terserの代わりにesbuildを使用
+    // ソースマップの生成（開発時のみ）
+    sourcemap: false,
+    // アセットの最適化
+    assetsInlineLimit: 4096, // 4KB以下のアセットはインライン化
     rollupOptions: {
       output: {
-        // ハッシュのみでキャッシュバスティング（再現性のため Date.now は使用しない）
-        entryFileNames: `assets/[name].[hash].js`,
-        chunkFileNames: `assets/[name].[hash].js`,
-        assetFileNames: `assets/[name].[hash].[ext]`,
-        // 手動チャンク分割の設定
+        // 決定性のあるファイル名生成（ハッシュのみ使用）
+        entryFileNames: 'assets/[name].[hash:8].js',
+        chunkFileNames: 'assets/[name].[hash:8].js',
+        assetFileNames: 'assets/[name].[hash:8].[ext]',
+        // 手動チャンク分割の設定（決定性を保つため固定）
         manualChunks: {
           // Three.jsを別チャンクに分離
           'three': ['three'],
@@ -53,13 +60,23 @@ export default defineConfig({
   },
   // ★★★ optimizeDeps の設定 ★★★
   optimizeDeps: {
-    exclude: ['three'] // Three.js を事前バンドル対象から除外（必要時のみ再ビルド）
+    exclude: ['three'], // Three.js を事前バンドル対象から除外（必要時のみ再ビルド）
+    // 依存関係の決定性を向上
+    include: [
+      'uuid',
+      'idb-keyval',
+      'qrcode'
+    ]
   },
-  // ★★★ キャッシュ無効化 ★★★
+  // ★★★ キャッシュ設定の最適化 ★★★
+  cacheDir: '.vite',
+  // ★★★ esbuild設定 ★★★
   esbuild: {
     loader: {
       '.js': 'js'
-    }
+    },
+    // 決定性のある出力を保証
+    target: 'es2020'
   },
   // ★★★ LocatorJS警告の抑制 ★★★
   define: {

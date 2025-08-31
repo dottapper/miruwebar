@@ -4,23 +4,11 @@ import { showMarkerUpload } from '../views/marker-upload.js';
 import { getProject, loadProjectWithModels } from '../api/projects-new.js';
 import { exportProjectBundleById } from '../api/projects.js';
 import { settingsAPI } from './loading-screen/settings.js';
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
-// QRCodeライブラリをトップレベルでインポート
-let QRCodeLib = null;
-async function loadQRCode() {
-  if (!QRCodeLib) {
-    try {
-      const module = await import('qrcode');
-      QRCodeLib = module.default || module;
-    } catch (error) {
-      console.error('QRCodeライブラリの読み込み失敗:', error);
-      throw error;
-    }
-  }
-  return QRCodeLib;
-}
+import { loadQRCode } from '../utils/qrcode-loader.js';
+import { createLogger } from '../utils/logger.js';
+
+// UI専用ロガーを作成
+const uiLogger = createLogger('UI');
 
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
@@ -208,7 +196,7 @@ export function showNewProjectModal() {
   export function showSaveProjectModal(options = {}, callback) {
     const { isEdit = false, projectId = null, currentName = '', currentDescription = '' } = options;
     
-    dlog('📝 showSaveProjectModal 呼び出し:', {
+    uiLogger.log('📝 showSaveProjectModal 呼び出し:', {
       isEdit,
       projectId,
       currentName,
@@ -244,7 +232,7 @@ export function showNewProjectModal() {
         </div>
     `;
     
-    dlog('🔍 生成されたHTML input value:', {
+    uiLogger.log('🔍 生成されたHTML input value:', {
       nameInputHTML: `<input type="text" id="project-name" value="${currentName}" placeholder="プロジェクト名を入力" required>`,
       descriptionHTML: `<textarea id="project-description" placeholder="プロジェクトの説明を入力">${currentDescription}</textarea>`
     });
@@ -255,7 +243,7 @@ export function showNewProjectModal() {
     // DOM追加後の実際の値を確認
     const nameInput = document.getElementById('project-name');
     const descriptionInput = document.getElementById('project-description');
-    dlog('🔍 DOM追加後の実際の値:', {
+    uiLogger.log('🔍 DOM追加後の実際の値:', {
       nameValue: nameInput?.value,
       descriptionValue: descriptionInput?.value
     });
@@ -313,37 +301,43 @@ export function showNewProjectModal() {
    * ローカルネットワークIP取得用関数（動的IP検出）
    */
   async function getLocalNetworkIP() {
-    dlog('🔍 IP検出開始 - 動的ネットワークIP取得');
+    uiLogger.log('🔍 IP検出開始 - 動的ネットワークIP取得');
     
     // 現在のhostnameがlocalhostでない場合はそれを使用
     if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-      dlog('🌐 現在のhostnameを使用:', window.location.hostname);
+      uiLogger.log('🌐 現在のhostnameを使用:', window.location.hostname);
       return window.location.hostname;
     }
     
     // Method 1: WebRTCでIP検出を試行（改良版）
     const webrtcIP = await getWebRTCIP();
     if (webrtcIP) {
-      dlog('✅ WebRTC IP検出成功:', webrtcIP);
+      uiLogger.log('✅ WebRTC IP検出成功:', webrtcIP);
       return webrtcIP;
     }
     
     // Method 2: Viteサーバー情報APIを試行
     const viteIP = await getViteNetworkIP();
     if (viteIP) {
-      dlog('✅ Vite Network IP検出成功:', viteIP);
+      uiLogger.log('✅ Vite Network IP検出成功:', viteIP);
       return viteIP;
     }
     
     // Method 3: 一般的なネットワーク範囲をチェック
     const commonIP = await detectCommonNetworkIP();
     if (commonIP) {
-      dlog('✅ 一般的なネットワークIP検出成功:', commonIP);
+      uiLogger.log('✅ 一般的なネットワークIP検出成功:', commonIP);
       return commonIP;
     }
     
-    // フォールバック: localhost
-    console.warn('⚠️ IP自動検出に失敗、localhostを使用');
+    // フォールバック: window.location.hostnameを使用してlocalhostを避ける
+    if (window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      uiLogger.log('✅ window.location.hostnameを使用:', window.location.hostname);
+      return window.location.hostname;
+    }
+    
+    // 最後のフォールバック: localhost（スマホからアクセス不可だが、他に選択肢がない場合）
+    console.warn('⚠️ IP自動検出に失敗、localhostを使用（スマホからアクセス不可）');
     return 'localhost';
   }
 
@@ -377,7 +371,7 @@ export function showNewProjectModal() {
               (ip.startsWith('172.') && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31)) {
             if (!detectedIPs.includes(ip)) {
               detectedIPs.push(ip);
-              dlog('🌐 WebRTC検出IP:', ip);
+              uiLogger.log('🌐 WebRTC検出IP:', ip);
               
               // 最初のローカルIPで即座に解決
               resolved = true;
@@ -419,7 +413,7 @@ export function showNewProjectModal() {
         }
       }
     } catch (error) {
-      dlog('📡 Vite Network API未対応 - スキップ');
+      uiLogger.warn('📡 Vite Network API未対応 - スキップ');
     }
     
     return null;
@@ -429,30 +423,48 @@ export function showNewProjectModal() {
    * 一般的なネットワーク範囲でのIP検出
    */
   async function detectCommonNetworkIP() {
-    const commonRanges = [
-      '192.168.1.0/24',
-      '192.168.0.0/24',
-      '192.168.11.0/24',
-      '10.0.0.0/24',
-      '172.16.0.0/24'
+    // よく利用されるプライベートネットワーク範囲の候補IP
+    const candidateIPs = [
+      // 192.168.1.x ネットワーク
+      '192.168.1.2', '192.168.1.10', '192.168.1.100',
+      // 192.168.0.x ネットワーク  
+      '192.168.0.2', '192.168.0.10', '192.168.0.100',
+      // 192.168.11.x ネットワーク (日本のルーターでよくある)
+      '192.168.11.2', '192.168.11.10', '192.168.11.100',
+      // 10.0.0.x ネットワーク
+      '10.0.0.2', '10.0.0.10', '10.0.0.100',
+      // 172.16.x.x ネットワーク
+      '172.16.0.2', '172.16.0.10', '172.16.0.100'
     ];
     
-    // WebRTCで検出できなかった場合の簡易チェック
-    const userAgent = navigator.userAgent;
-    if (userAgent.includes('Mobile') || userAgent.includes('Android') || userAgent.includes('iPhone')) {
-      // モバイルデバイスの場合はより保守的に
-      return null;
+    // 各IPアドレスへの到達可能性をテスト
+    for (const ip of candidateIPs) {
+      try {
+        // fetch APIを使って到達可能性をテスト
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1000); // 1秒でタイムアウト
+        
+        const response = await fetch(`http://${ip}:${window.location.port || 3000}/favicon.ico`, {
+          method: 'HEAD',
+          signal: controller.signal,
+          cache: 'no-cache'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // 200番台のレスポンスまたは404エラーでも到達可能と判断
+        if (response.status >= 200 && response.status < 500) {
+          uiLogger.log('✅ 到達可能なIP検出:', ip);
+          return ip;
+        }
+      } catch (error) {
+        // ネットワークエラーやタイムアウトは無視して次のIPを試行
+        continue;
+      }
     }
     
-    // デスクトップの場合は一般的なIPを推測
-    const networkHints = [
-      '192.168.1.100',
-      '192.168.0.100',
-      '192.168.11.100',
-      '10.0.0.100'
-    ];
-    
-    // 実際にはこれは推測なので、WebRTCが失敗した場合のみ使用
+    // 全てのIPで到達不可能な場合はnullを返す
+    uiLogger.warn('⚠️ 到達可能なIPが見つかりませんでした');
     return null;
   }
 
@@ -462,7 +474,7 @@ export function showNewProjectModal() {
    */
   async function exportProject(project) {
     try {
-      dlog('📦 プロジェクトエクスポート開始:', project);
+      uiLogger.log('📦 プロジェクトエクスポート開始:', project);
       
       // プロジェクトをZIPバンドルとしてエクスポート
       const zipBlob = await exportProjectBundleById(project.id);
@@ -488,7 +500,7 @@ export function showNewProjectModal() {
       // クリーンアップ
       URL.revokeObjectURL(downloadUrl);
       
-      dlog('✅ プロジェクトエクスポート完了:', fileName);
+      uiLogger.log('✅ プロジェクトエクスポート完了:', fileName);
       alert(`プロジェクト「${project.name || project.title}」をエクスポートしました。\n\nファイル名: ${fileName}\n\n※このZIPファイルにはローディング画面設定も含まれています。`);
       
     } catch (error) {
@@ -498,7 +510,7 @@ export function showNewProjectModal() {
   }
 
 export async function showQRCodeModal(options = {}) {
-    dlog('🚀 QRコードモーダル開始:', {
+    uiLogger.log('🚀 QRコードモーダル開始:', {
       timestamp: new Date().toISOString(),
       options,
       existingModals: document.querySelectorAll('.modal-overlay').length,
@@ -517,7 +529,7 @@ export async function showQRCodeModal(options = {}) {
     const localHost = `${localIP}:${currentPort}`;
     const scheme = (window.location.protocol === 'https:') ? 'https' : 'http';
     
-    dlog('🌐 ネットワーク情報:', {
+    uiLogger.log('🌐 ネットワーク情報:', {
       currentHost: window.location.host,
       detectedLocalIP: localIP,
       localHost: localHost,
@@ -529,7 +541,7 @@ export async function showQRCodeModal(options = {}) {
     const appOrigin = window.location.origin;
     const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${projectId}/project.json`;
     
-    dlog('🔗 QRコード用URL生成:', {
+    uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
       localHost,
       localUrl,
@@ -636,7 +648,7 @@ export async function showQRCodeModal(options = {}) {
         </div>
     `;
     
-    dlog('📱 QRコードモーダルを表示:', {
+    uiLogger.log('📱 QRコードモーダルを表示:', {
       projectId,
       localUrl,
       webUrl,
@@ -737,23 +749,23 @@ export async function showQRCodeModal(options = {}) {
     // QRコード生成
     const generateQRCode = async () => {
         try {
-            dlog('🔄 QRコード生成開始:', currentUrl);
+            uiLogger.log('🔄 QRコード生成開始:', currentUrl);
             const canvas = document.getElementById('qrcode-canvas');
             if (!canvas) {
                 throw new Error('Canvas element not found');
             }
-            dlog('✅ Canvas要素を取得:', canvas);
+            uiLogger.log('✅ Canvas要素を取得:', canvas);
 
             // QRCodeライブラリを取得
             const QRCode = await loadQRCode();
-            dlog('✅ QRCodeライブラリを取得:', typeof QRCode, QRCode);
+            uiLogger.log('✅ QRCodeライブラリを取得:', typeof QRCode, QRCode);
 
             if (!QRCode || typeof QRCode.toCanvas !== 'function') {
                 console.error('❌ QRCodeライブラリが無効:', QRCode);
                 throw new Error('QRCode library not available or toCanvas method missing');
             }
 
-            dlog('🎯 QRCode生成開始:', { currentUrl, canvas });
+            uiLogger.log('🎯 QRCode生成開始:', { currentUrl, canvas });
             await QRCode.toCanvas(canvas, currentUrl, {
                 width: 200,
                 margin: 1,
@@ -763,7 +775,7 @@ export async function showQRCodeModal(options = {}) {
                 }
             });
             
-            dlog('✅ QRコード生成完了:', {
+            uiLogger.log('✅ QRコード生成完了:', {
                 canvasWidth: canvas.width,
                 canvasHeight: canvas.height,
                 url: currentUrl,
@@ -840,8 +852,16 @@ export async function showQRCodeModal(options = {}) {
         // ローディング画面エディターの詳細設定を取得し、公開用データに含める
         let editorSettings = null;
         try {
-          editorSettings = settingsAPI.getSettings();
-        } catch (_) {}
+          // 分離された状態管理を使用してエディターとビューアの結合を解除
+          const { getLoadingSettingsForProject } = await import('../utils/loading-screen-state.js');
+          editorSettings = getLoadingSettingsForProject();
+        } catch (error) {
+          console.warn('ローディング画面設定の取得に失敗:', error);
+          // フォールバック: 従来のsettingsAPIを使用
+          try {
+            editorSettings = settingsAPI.getSettings();
+          } catch (_) {}
+        }
 
         // 送信するローディング画面設定
         const lsPayload = { ...(project.loadingScreen || {}) };
@@ -914,7 +934,7 @@ export async function showQRCodeModal(options = {}) {
 
     // 閉じるボタンイベント
     document.getElementById('close-qrcode-modal').addEventListener('click', () => {
-        dlog('🔄 QRコードモーダルを閉じる（閉じるボタン）');
+        uiLogger.log('🔄 QRコードモーダルを閉じる（閉じるボタン）');
         modalClosedByScript = true;
         document.body.removeChild = originalRemoveChild; // 元に戻す
         document.body.removeChild(modalOverlay);
@@ -923,7 +943,7 @@ export async function showQRCodeModal(options = {}) {
     // モーダル背景をクリックした時にも閉じる
     modalOverlay.addEventListener('click', (e) => {
         if (e.target === modalOverlay) {
-            dlog('🔄 QRコードモーダルを閉じる（背景クリック）');
+            uiLogger.log('🔄 QRコードモーダルを閉じる（背景クリック）');
             modalClosedByScript = true;
             document.body.removeChild = originalRemoveChild; // 元に戻す
             document.body.removeChild(modalOverlay);
@@ -935,7 +955,7 @@ export async function showQRCodeModal(options = {}) {
    * ARプレビュー機能 - スマホ向けレスポンシブ表示
    */
   function showARPreview(arUrl, modelId) {
-    dlog('📱 ARプレビュー開始:', { arUrl, modelId });
+    uiLogger.log('📱 ARプレビュー開始:', { arUrl, modelId });
     
     // プレビューモーダルを作成
     const previewOverlay = document.createElement('div');
@@ -1045,7 +1065,7 @@ export async function showQRCodeModal(options = {}) {
     // iframe読み込み完了ログ
     const iframe = previewOverlay.querySelector('#preview-iframe');
     iframe.addEventListener('load', () => {
-      dlog('✅ ARプレビュー読み込み完了');
+      uiLogger.log('✅ ARプレビュー読み込み完了');
     });
     
     iframe.addEventListener('error', (e) => {

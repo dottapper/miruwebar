@@ -2,160 +2,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import { showEditorLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
+
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
-// ローディング画面の管理クラス
-class LoadingManager {
-  constructor() {
-    this.activeLoaders = new Map();
-    this.loaderId = 0;
-  }
-
-  showLoadingScreen(options = {}) {
-    const id = `loader-${++this.loaderId}`;
-    const { message = 'モデルを読み込んでいます...', container = document.body } = options;
-    
-    // ローディング要素を作成
-    const loadingElement = document.createElement('div');
-    loadingElement.className = 'loading-screen';
-    loadingElement.id = id;
-    loadingElement.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      color: white;
-      font-family: Arial, sans-serif;
-    `;
-    
-    loadingElement.innerHTML = `
-      <div class="loading-spinner" style="
-        width: 40px;
-        height: 40px;
-        border: 4px solid rgba(255, 255, 255, 0.3);
-        border-top: 4px solid white;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 16px;
-      "></div>
-      <div class="loading-message" style="font-size: 14px; text-align: center;">${message}</div>
-      <div class="loading-progress" style="
-        width: 200px;
-        height: 4px;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 2px;
-        margin-top: 12px;
-        overflow: hidden;
-      ">
-        <div class="progress-bar" style="
-          width: 0%;
-          height: 100%;
-          background: #4CAF50;
-          border-radius: 2px;
-          transition: width 0.3s ease;
-        "></div>
-      </div>
-    `;
-    
-    // スピン アニメーションのCSSを追加
-    if (!document.getElementById('loading-styles')) {
-      const style = document.createElement('style');
-      style.id = 'loading-styles';
-      style.textContent = `
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    // コンテナに追加
-    const targetContainer = typeof container === 'string' 
-      ? document.getElementById(container) 
-      : container;
-    
-    if (targetContainer) {
-      targetContainer.style.position = targetContainer.style.position || 'relative';
-      targetContainer.appendChild(loadingElement);
-    }
-    
-    this.activeLoaders.set(id, {
-      element: loadingElement,
-      container: targetContainer
-    });
-    
-    return id;
-  }
-
-  hideLoadingScreen(id, delay = 0) {
-    const hideLoader = () => {
-      const loader = this.activeLoaders.get(id);
-      if (loader && loader.element && loader.element.parentNode) {
-        loader.element.style.transition = 'opacity 0.3s ease';
-        loader.element.style.opacity = '0';
-        
-        setTimeout(() => {
-          if (loader.element && loader.element.parentNode) {
-            loader.element.parentNode.removeChild(loader.element);
-          }
-          this.activeLoaders.delete(id);
-        }, 300);
-      }
-    };
-    
-    if (delay > 0) {
-      setTimeout(hideLoader, delay);
-    } else {
-      hideLoader();
-    }
-  }
-
-  updateProgress(id, percent, message) {
-    const loader = this.activeLoaders.get(id);
-    if (!loader) return;
-    
-    const progressBar = loader.element.querySelector('.progress-bar');
-    const messageElement = loader.element.querySelector('.loading-message');
-    
-    if (progressBar) {
-      progressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
-    }
-    
-    if (messageElement && message) {
-      messageElement.textContent = message;
-    }
-  }
-
-  cleanup() {
-    this.activeLoaders.forEach((loader, id) => {
-      this.hideLoadingScreen(id);
-    });
-    this.activeLoaders.clear();
-  }
-
-  getLoadingState() {
-    return this.activeLoaders.size > 0 ? 'active' : 'hidden';
-  }
-}
-
-// グローバルローディングマネージャーのインスタンス
-const globalLoadingManager = new LoadingManager();
-
-// エクスポートする関数
-const showLoading = (options) => globalLoadingManager.showLoadingScreen(options);
-const hideLoading = (id, delay) => globalLoadingManager.hideLoadingScreen(id, delay);
-const updateLoadingProgress = (id, percent, message) => globalLoadingManager.updateProgress(id, percent, message);
-const cleanupLoading = () => globalLoadingManager.cleanup();
+// エクスポートする関数（統一システムを使用）
+const showLoading = async (options) => await showEditorLoadingScreen(options);
+const hideLoading = (id, delay) => unifiedLoading.hide(id, delay);
+const updateLoadingProgress = (id, percent, message) => unifiedLoading.updateProgress(id, percent, message);
+const cleanupLoading = () => unifiedLoading.cleanup();
 
 export async function initARViewer(containerId, options = {}) {
   dlog('🎯 initARViewer開始:', { 
@@ -197,12 +54,12 @@ export async function initARViewer(containerId, options = {}) {
   
   dlog('設定:', config);
 
-  // ローディングマネージャーの初期化（コンテナIDを渡す）
+  // ローディングマネージャーの初期化（統一システムを使用）
   const loadingManager = {
-    showLoadingScreen: (message) => showLoading({ message, container }),
+    showLoadingScreen: async (message) => await showLoading({ message, container }),
     hideLoadingScreen: hideLoading,
     updateProgress: updateLoadingProgress,
-    getLoadingState: () => globalLoadingManager.getLoadingState()
+    getLoadingState: () => unifiedLoading.isActive() ? 'active' : 'hidden'
   };
 
   // Three.jsのローディングマネージャーを作成
@@ -641,7 +498,7 @@ export async function initARViewer(containerId, options = {}) {
   // IndexedDB対応モデル読み込み関数
   async function loadModel(modelUrl, fileName = 'model.glb', fileSize = 0, sourceFile = null) {
     let createdObjectUrl = null;
-    const loaderId = loadingManager.showLoadingScreen(`モデル "${fileName}" を読み込んでいます...`);
+    const loaderId = await loadingManager.showLoadingScreen(`モデル "${fileName}" を読み込んでいます...`);
     
     try {
       let storedModelBlob = null;
@@ -1213,7 +1070,7 @@ export async function initARViewer(containerId, options = {}) {
           fileSize,
           hasSourceFile: !!sourceFile
         });
-        loadingManager.showLoadingScreen();
+        await loadingManager.showLoadingScreen();
         const index = await loadModel(modelSource, fileName, fileSize, sourceFile);
         setActiveModel(index);
         return index;
@@ -1571,7 +1428,7 @@ export async function initARViewer(containerId, options = {}) {
       }
     },
     // ローディング画面の手動制御用関数を追加
-    showLoadingScreen: () => loadingManager.showLoadingScreen(),
+    showLoadingScreen: async () => await loadingManager.showLoadingScreen(),
     hideLoadingScreen: () => loadingManager.hideLoadingScreen(),
     updateLoadingProgress: (percent, message) => loadingManager.updateProgress(percent, message),
     // アクティブモデルデータ取得関数を追加

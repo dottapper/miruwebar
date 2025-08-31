@@ -11,12 +11,16 @@ import {
 } from '../storage/indexeddb-storage.js';
 
 import { exportProjectBundle } from '../utils/publish.js';
+import { createLogger } from '../utils/logger.js';
+
+// プロジェクトAPI専用ロガーを作成
+const projectLogger = createLogger('Projects');
 
 const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
 
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
+const dlog = (...args) => { if (IS_DEBUG) projectLogger.debug(...args); };
 
 /**
  * プロジェクトデータの構造を生成（IndexedDB対応）

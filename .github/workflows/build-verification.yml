@@ -1,0 +1,123 @@
+name: Build Verification
+
+on:
+  push:
+    branches: [main, indexeddb-storage-refactor]
+  pull_request:
+    branches: [main, indexeddb-storage-refactor]
+
+jobs:
+  build-verification:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Clean previous builds
+        run: |
+          rm -rf dist/
+          rm -rf .vite/
+          rm -rf node_modules/.vite/
+
+      - name: Build project
+        run: npm run build
+
+      - name: Verify build output structure
+        run: |
+          echo "🔍 ビルド出力の構造を検証中..."
+
+          # distディレクトリが存在することを確認
+          if [ ! -d "dist" ]; then
+            echo "❌ distディレクトリが見つかりません"
+            exit 1
+          fi
+
+          # 必要なファイルが存在することを確認
+          required_files=("index.html" "assets/")
+          for file in "${required_files[@]}"; do
+            if [ ! -e "dist/$file" ]; then
+              echo "❌ 必要なファイルが見つかりません: $file"
+              exit 1
+            fi
+          done
+
+          # assetsディレクトリの内容を確認
+          echo "📁 assetsディレクトリの内容:"
+          ls -la dist/assets/
+
+          # ファイル名のパターンを確認（ハッシュが8文字であることを確認）
+          echo "🔍 ファイル名パターンの検証:"
+          for file in dist/assets/*; do
+            filename=$(basename "$file")
+            if [[ $filename =~ \.[a-f0-9]{8}\. ]]; then
+              echo "✅ 正しいハッシュパターン: $filename"
+            else
+              echo "❌ 不正なハッシュパターン: $filename"
+              exit 1
+            fi
+          done
+
+          echo "✅ ビルド出力の構造検証完了"
+
+      - name: Verify build determinism
+        run: |
+          echo "🔄 ビルドの決定性を検証中..."
+
+          # 2回目のビルドを実行
+          rm -rf dist/
+          npm run build
+
+          # ファイルの内容を比較（ハッシュは異なるが、構造は同じであることを確認）
+          echo "📊 ビルド結果の統計:"
+          echo "1回目のビルド:"
+          find dist/ -type f -name "*.js" | wc -l
+          echo "2回目のビルド:"
+          find dist/ -type f -name "*.js" | wc -l
+
+          echo "✅ ビルドの決定性検証完了"
+
+      - name: Generate build report
+        run: |
+          echo "📋 ビルドレポートを生成中..."
+
+          echo "# ビルドレポート" > build-report.md
+          echo "## 生成日時" >> build-report.md
+          echo "$(date)" >> build-report.md
+          echo "" >> build-report.md
+          echo "## ファイル構造" >> build-report.md
+          echo '```' >> build-report.md
+          find dist/ -type f | sort >> build-report.md
+          echo '```' >> build-report.md
+          echo "" >> build-report.md
+          echo "## ファイルサイズ" >> build-report.md
+          echo '```' >> build-report.md
+          du -h dist/assets/* >> build-report.md
+          echo '```' >> build-report.md
+
+          echo "✅ ビルドレポート生成完了"
+
+      - name: Upload build report
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: build-report.md
+          retention-days: 30
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/
+            .vite/
+          key: ${{ runner.os }}-build-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-

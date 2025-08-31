@@ -480,46 +480,88 @@ function handleKeyPress(e) {
 /**
  * テンプレートを保存（ローディング画面エディタから呼び出される）
  */
-export function saveLoadingScreenTemplate(templateData) {
+export async function saveLoadingScreenTemplate(templateData) {
   try {
+    const { settingsAPI } = await import('./loading-screen/settings.js');
+    
     const settings = templateData.settings;
     const templates = getStoredTemplates();
     
-    // 容量制限をチェック（3MB）
+    // 容量制限をチェック（3MB）  
     const maxSize = TOTAL_IMAGES_MAX_BYTES;
-    // 画像を含めるとlocalStorageの容量に達しやすいため、
-    // テンプレート保存時は画像データを除去した軽量設定を保存する
-    const sanitized = JSON.parse(JSON.stringify(settings));
+    
+    // settingsAPIの圧縮機能を使用して画像を圧縮
+    let compressedSettings;
     try {
-      if (sanitized.startScreen) {
-        delete sanitized.startScreen.logo;
-        delete sanitized.startScreen.thumbnail;
-      }
-      if (sanitized.loadingScreen) {
-        delete sanitized.loadingScreen.logo;
-      }
-      if (sanitized.guideScreen) {
-        if (sanitized.guideScreen.surfaceDetection) delete sanitized.guideScreen.surfaceDetection.guideImage;
-        if (sanitized.guideScreen.worldTracking) delete sanitized.guideScreen.worldTracking.guideImage;
-      }
-      // editorSettings が入っている場合も同様に画像を除去
-      if (sanitized.loadingScreen?.editorSettings) {
-        const le = sanitized.loadingScreen.editorSettings;
-        if (le.startScreen) { delete le.startScreen.logo; delete le.startScreen.thumbnail; }
-        if (le.loadingScreen) { delete le.loadingScreen.logo; }
-        if (le.guideScreen) {
-          if (le.guideScreen.surfaceDetection) delete le.guideScreen.surfaceDetection.guideImage;
-          if (le.guideScreen.worldTracking) delete le.guideScreen.worldTracking.guideImage;
+      // 画像データを最適化
+      compressedSettings = await settingsAPI.optimizeImageData(settings);
+      
+      // さらにBase64画像を圧縮
+      const imageFields = [
+        'startScreen.logo',
+        'startScreen.thumbnail', 
+        'loadingScreen.logo',
+        'guideScreen.surfaceDetection.guideImage',
+        'guideScreen.worldTracking.guideImage'
+      ];
+      
+      for (const field of imageFields) {
+        const keys = field.split('.');
+        let current = compressedSettings;
+        
+        // ネストされたオブジェクトまで辿る
+        for (let i = 0; i < keys.length - 1; i++) {
+          if (!current[keys[i]]) break;
+          current = current[keys[i]];
+        }
+        
+        const lastKey = keys[keys.length - 1];
+        if (current && current[lastKey] && current[lastKey].startsWith('data:image/')) {
+          try {
+            current[lastKey] = await settingsAPI.compressBase64Image(current[lastKey]);
+          } catch (compressError) {
+            console.warn(`⚠️ ${field}の圧縮失敗:`, compressError);
+          }
         }
       }
-    } catch (_) {}
+      
+      console.log('🗜️ テンプレート保存時に画像圧縮完了');
+    } catch (compressionError) {
+      console.warn('⚠️ 画像圧縮失敗、画像を除去して保存:', compressionError);
+      
+      // 圧縮失敗時は画像を除去（フォールバック）
+      const sanitized = JSON.parse(JSON.stringify(settings));
+      try {
+        if (sanitized.startScreen) {
+          delete sanitized.startScreen.logo;
+          delete sanitized.startScreen.thumbnail;
+        }
+        if (sanitized.loadingScreen) {
+          delete sanitized.loadingScreen.logo;
+        }
+        if (sanitized.guideScreen) {
+          if (sanitized.guideScreen.surfaceDetection) delete sanitized.guideScreen.surfaceDetection.guideImage;
+          if (sanitized.guideScreen.worldTracking) delete sanitized.guideScreen.worldTracking.guideImage;
+        }
+        if (sanitized.loadingScreen?.editorSettings) {
+          const le = sanitized.loadingScreen.editorSettings;
+          if (le.startScreen) { delete le.startScreen.logo; delete le.startScreen.thumbnail; }
+          if (le.loadingScreen) { delete le.loadingScreen.logo; }
+          if (le.guideScreen) {
+            if (le.guideScreen.surfaceDetection) delete le.guideScreen.surfaceDetection.guideImage;
+            if (le.guideScreen.worldTracking) delete le.guideScreen.worldTracking.guideImage;
+          }
+        }
+      } catch (_) {}
+      compressedSettings = sanitized;
+    }
 
     const newTemplate = {
       id: `template_${Date.now()}`,
       name: templateData.name || `テンプレート ${templates.length + 1}`,
       createdAt: new Date().toLocaleDateString('ja-JP'),
       updatedAt: new Date().toLocaleDateString('ja-JP'),
-      settings: sanitized
+      settings: compressedSettings
     };
     
     // 新しいテンプレートを追加

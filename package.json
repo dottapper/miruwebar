@@ -7,14 +7,26 @@
     "dev": "vite",
     "dev:fresh": "vite --force",
     "build": "vite build",
+    "build:clean": "rm -rf dist/ && npm run build",
+    "build:verify": "npm run build:clean && npm run build:check",
+    "build:check": "node scripts/verify-build.js",
     "preview": "vite preview",
     "server": "node server/simple-server.js",
     "dev:server": "node server/simple-server.js",
-    "start": "npm run build && node server/simple-server.js"
+    "start": "npm run build && node server/simple-server.js",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.1.0",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^2.1.8",
+    "@vitest/ui": "^2.1.8",
+    "@vitest/coverage-v8": "^2.1.8",
+    "jsdom": "^25.0.1",
+    "happy-dom": "^14.10.1"
   },
   "dependencies": {
     "cors": "^2.8.5",
