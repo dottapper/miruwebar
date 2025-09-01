@@ -109,19 +109,19 @@ export async function loadModelBlob(modelId) {
  */
 export async function loadModelMeta(modelId) {
   try {
-    console.log('🔄 IndexedDB からモデルメタ情報取得:', modelId);
+    storageLogger.debug('IndexedDB からモデルメタ情報取得:', modelId);
     
     const meta = await get(`${META_KEY_PREFIX}${modelId}`);
     
     if (!meta) {
-      console.warn('⚠️ モデルメタ情報が見つかりません:', modelId);
+      storageLogger.warn('⚠️ モデルメタ情報が見つかりません:', modelId);
       return null;
     }
 
-    console.log('✅ モデルメタ情報取得完了:', meta);
+    storageLogger.success('モデルメタ情報取得完了:', meta);
     return meta;
   } catch (error) {
-    console.error('❌ モデルメタ情報取得エラー:', error);
+    storageLogger.error('❌ モデルメタ情報取得エラー:', error);
     throw new Error(`モデルメタ情報の取得に失敗しました: ${error.message}`);
   }
 }
@@ -133,17 +133,17 @@ export async function loadModelMeta(modelId) {
  */
 export async function removeModel(modelId) {
   try {
-    console.log('🔄 IndexedDB からモデル削除:', modelId);
+    storageLogger.debug('IndexedDB からモデル削除:', modelId);
     
     await Promise.all([
       del(`${MODEL_KEY_PREFIX}${modelId}`),
       del(`${META_KEY_PREFIX}${modelId}`)
     ]);
 
-    console.log('✅ モデル削除完了:', modelId);
+    storageLogger.success('モデル削除完了:', modelId);
     return true;
   } catch (error) {
-    console.error('❌ モデル削除エラー:', error);
+    storageLogger.error('❌ モデル削除エラー:', error);
     throw new Error(`モデルの削除に失敗しました: ${error.message}`);
   }
 }
@@ -154,21 +154,21 @@ export async function removeModel(modelId) {
  */
 export async function getAllModelIds() {
   try {
-    console.log('🔄 すべてのモデル ID 取得開始');
+    storageLogger.debug('すべてのモデル ID 取得開始');
     
     const allKeys = await keys();
     const modelIds = allKeys
       .filter(key => typeof key === 'string' && key.startsWith(MODEL_KEY_PREFIX))
       .map(key => key.replace(MODEL_KEY_PREFIX, ''));
 
-    console.log('✅ モデル ID 取得完了:', {
+    storageLogger.success('モデル ID 取得完了:', {
       count: modelIds.length,
       ids: modelIds
     });
 
     return modelIds;
   } catch (error) {
-    console.error('❌ モデル ID 取得エラー:', error);
+    storageLogger.error('❌ モデル ID 取得エラー:', error);
     throw new Error(`モデル ID の取得に失敗しました: ${error.message}`);
   }
 }
@@ -179,7 +179,7 @@ export async function getAllModelIds() {
  */
 export async function getStorageInfo() {
   try {
-    console.log('🔄 ストレージ情報取得開始');
+    storageLogger.debug('ストレージ情報取得開始');
     
     const modelIds = await getAllModelIds();
     let totalSize = 0;
@@ -201,10 +201,10 @@ export async function getStorageInfo() {
       modelSizes
     };
 
-    console.log('✅ ストレージ情報取得完了:', storageInfo);
+    storageLogger.success('ストレージ情報取得完了:', storageInfo);
     return storageInfo;
   } catch (error) {
-    console.error('❌ ストレージ情報取得エラー:', error);
+    storageLogger.error('❌ ストレージ情報取得エラー:', error);
     throw new Error(`ストレージ情報の取得に失敗しました: ${error.message}`);
   }
 }
@@ -215,7 +215,7 @@ export async function getStorageInfo() {
  */
 export async function clearAllModels() {
   try {
-    console.log('🔄 すべてのモデル削除開始');
+    storageLogger.debug('すべてのモデル削除開始');
     
     const modelIds = await getAllModelIds();
     
@@ -223,13 +223,13 @@ export async function clearAllModels() {
       await removeModel(modelId);
     }
 
-    console.log('✅ すべてのモデル削除完了:', {
+    storageLogger.success('すべてのモデル削除完了:', {
       deletedCount: modelIds.length
     });
 
     return true;
   } catch (error) {
-    console.error('❌ モデル全削除エラー:', error);
+    storageLogger.error('❌ モデル全削除エラー:', error);
     throw new Error(`モデルの全削除に失敗しました: ${error.message}`);
   }
 }

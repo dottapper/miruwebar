@@ -64,6 +64,85 @@ npm run build:verify
 npm run build:check
 ```
 
+## ログ制御
+
+### 環境変数によるログレベル制御
+
+本番環境でのログノイズを削減するため、環境変数によるログレベル制御を実装しています。
+
+#### ログレベル
+
+- `DEBUG`: デバッグ情報（開発環境のみ）
+- `INFO`: 一般情報
+- `WARN`: 警告
+- `ERROR`: エラー
+
+#### 使用方法
+
+```bash
+# 開発環境（デバッグログ有効）
+npm run dev:debug
+
+# 開発環境（情報ログのみ）
+npm run dev:info
+
+# 本番環境（警告・エラーのみ）
+npm run dev:warn
+npm run dev:error
+
+# 本番ビルド（警告・エラーのみ）
+npm run build:prod
+```
+
+#### 環境変数設定
+
+```bash
+# .env ファイル
+VITE_LOG_LEVEL=INFO  # クライアント側
+LOG_LEVEL=WARN       # サーバー側
+```
+
+### 統一ロガーシステム
+
+- `src/utils/logger.js`: クライアント側統一ロガー
+- `server/utils/logger.js`: サーバー側統一ロガー
+- モジュール別ロガー作成機能
+- 本番環境での自動ログ制御
+
+## モジュール形式の統一
+
+### ESM形式への移行
+プロジェクト全体をESM（ECMAScript Modules）形式に統一し、CommonJSとESMの混在による実行時エラーを解決しました。
+
+#### 修正内容
+- **`server/controllers/settingsController.js`**: `require`/`module.exports` → `import`/`export`
+- **`server/models/LoadingScreenSettings.js`**: `module.exports` → `export default`
+- **`server/routes/api.js`**: `require`/`module.exports` → `import`/`export`
+- **`server/utils/logger.js`**: `module.exports` → `export`
+
+#### 動的インポート対応
+- **`server/utils/module-loader.js`**: ESM形式での動的インポートを適切に処理
+- **条件付きインポート**: 存在しないモジュールの安全な処理
+- **並行インポート**: 複数モジュールの効率的な読み込み
+
+#### 使用方法
+```javascript
+// 動的インポート
+import { loadController, loadMiddleware } from '../utils/module-loader.js';
+
+// コントローラーの読み込み
+const controller = await loadController('settingsController');
+
+// 条件付きインポート
+const middleware = await conditionalImport('../middleware/auth.js', false);
+```
+
+#### 外部依存関係の対応
+- **Sequelize**: ESM形式に対応済み
+- **Express**: ESM形式に対応済み
+- **Multer**: ESM形式に対応済み
+- **その他**: 必要に応じて`createRequire`を使用
+
 ### 初回起動時の注意事項
 
 **現在の既知の問題があるため、以下の手順を推奨します：**

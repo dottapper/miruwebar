@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs-extra';
 import dotenv from 'dotenv';
+import { createLogger } from './utils/logger.js';
 
 // ES Modules対応
 const __filename = fileURLToPath(import.meta.url);
@@ -14,6 +15,8 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const serverLogger = createLogger('ServerApp');
 
 // 基本的なミドルウェア
 app.use(cors());
@@ -97,9 +100,9 @@ app.post('/api/projects/:projectId/save', async (req, res) => {
     const projectFilePath = path.join(projectDir, 'project.json');
     await fs.writeJson(projectFilePath, viewerProject, { spaces: 2 });
     
-    console.log(`✅ プロジェクトファイル保存完了: ${projectFilePath}`);
-    console.log(`📁 プロジェクトディレクトリ: ${projectDir}`);
-    console.log(`🔗 アクセスURL: http://localhost:3000/projects/${projectId}/project.json`);
+    serverLogger.success(`プロジェクトファイル保存完了: ${projectFilePath}`);
+    serverLogger.info(`プロジェクトディレクトリ: ${projectDir}`);
+    serverLogger.info(`アクセスURL: http://localhost:3000/projects/${projectId}/project.json`);
     
     res.json({ 
       success: true, 
@@ -181,8 +184,8 @@ app.use((err, req, res, next) => {
 
 // サーバー起動
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 サーバーが起動しました`);
-  console.log(`📱 ローカル: http://localhost:${PORT}`);
-  console.log(`🌐 ネットワーク: http://0.0.0.0:${PORT}`);
-  console.log(`💻 開発環境: ${process.env.NODE_ENV || 'development'}`);
+  serverLogger.success('サーバーが起動しました');
+  serverLogger.info(`ローカル: http://localhost:${PORT}`);
+  serverLogger.info(`ネットワーク: http://0.0.0.0:${PORT}`);
+  serverLogger.info(`開発環境: ${process.env.NODE_ENV || 'development'}`);
 }); 

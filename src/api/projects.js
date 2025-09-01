@@ -14,7 +14,7 @@ import { exportProjectBundle } from '../utils/publish.js';
 import { createLogger } from '../utils/logger.js';
 
 // プロジェクトAPI専用ロガーを作成
-const projectLogger = createLogger('Projects');
+const projectLogger = createLogger('ProjectsAPI');
 
 const PROJECTS_STORAGE_KEY = 'miruwebAR_projects';
 
@@ -117,14 +117,14 @@ async function createProjectData(data, viewerInstance, existingProject = null) {
                                 createdAt: Date.now()
                             });
                             
-                            console.log(`💾 新しいモデルをIndexedDBに保存: ${modelId}`);
+                            projectLogger.info(`新しいモデルをIndexedDBに保存: ${modelId}`);
                             
                         } catch (saveError) {
                             console.error(`❌ モデル${index} IndexedDB保存エラー:`, saveError);
                             // エラーでも処理を継続
                         }
                     } else if (isExistingModel) {
-                        console.log(`⏭️ 既存モデルのため保存スキップ: ${modelId}`);
+                        dlog(`⏭️ 既存モデルのため保存スキップ: ${modelId}`);
                     }
                     
                     savedModelIds.push(modelId);
@@ -370,7 +370,7 @@ export async function saveProject(data, viewerInstance) {
                 });
                 
                 const requestBody = { projectData: projectData };
-                console.log('📤 送信するボディ:', {
+                projectLogger.info('送信するボディ:', {
                     requestBodyType: typeof requestBody,
                     requestBodyKeys: Object.keys(requestBody),
                     projectDataInBody: requestBody.projectData,
@@ -387,7 +387,7 @@ export async function saveProject(data, viewerInstance) {
                 
                 if (response.ok) {
                     const result = await response.json();
-                    console.log('✅ project.jsonファイル保存成功:', result.url);
+                    projectLogger.success('project.jsonファイル保存成功:', result.url);
                 } else {
                     console.warn('⚠️ project.jsonファイル保存失敗:', response.statusText);
                 }
@@ -401,10 +401,10 @@ export async function saveProject(data, viewerInstance) {
             
             // 容量制限エラーの場合は自動的に古いデータを削除して再試行
             if (storageError.name === 'QuotaExceededError') {
-                console.log('🧹 容量制限エラーのため古いデータを削除中...');
+                projectLogger.warn('容量制限エラーのため古いデータを削除中...');
                 
                 // プロジェクトは削除せず、データを最適化
-                console.log('📦 プロジェクトデータを圧縮・最適化中...');
+                projectLogger.info('プロジェクトデータを圧縮・最適化中...');
                 await optimizeAllProjects();
                 
                 // 不要なlocalStorageデータのみ削除（プロジェクト以外）
@@ -424,7 +424,7 @@ export async function saveProject(data, viewerInstance) {
                     
                     const retryData = JSON.stringify(projects);
                     localStorage.setItem(PROJECTS_STORAGE_KEY, retryData);
-                    console.log('✅ クリーンアップ後の保存に成功しました');
+                    projectLogger.success('クリーンアップ後の保存に成功しました');
                     
                     // サーバーAPIも再試行
                     try {
@@ -438,7 +438,7 @@ export async function saveProject(data, viewerInstance) {
                         
                         if (response.ok) {
                             const result = await response.json();
-                            console.log('✅ project.jsonファイル保存成功（再試行）:', result.url);
+                            projectLogger.success('project.jsonファイル保存成功（再試行）:', result.url);
                         }
                     } catch (apiError) {
                         console.warn('⚠️ project.json API呼び出し失敗（再試行）:', apiError.message);
@@ -800,7 +800,7 @@ async function deduplicateProjects() {
         
         if (uniqueProjects.length < projects.length) {
             localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(uniqueProjects));
-            console.log(`🔄 重複統合: ${projects.length - uniqueProjects.length}個の重複プロジェクトを統合`);
+            projectLogger.info(`重複統合: ${projects.length - uniqueProjects.length}個の重複プロジェクトを統合`);
         }
         
     } catch (error) {
@@ -845,7 +845,7 @@ function cleanupNonEssentialData() {
             localStorage.removeItem(key);
         });
         
-        console.log(`🧹 不要データ削除完了: ${keysToRemove.length}個のアイテム、${(totalSizeFreed / 1024).toFixed(2)}KB解放`);
+        projectLogger.info(`不要データ削除完了: ${keysToRemove.length}個のアイテム、${(totalSizeFreed / 1024).toFixed(2)}KB解放`);
         
     } catch (error) {
         console.error('❌ 不要データクリーンアップエラー:', error);
@@ -889,7 +889,7 @@ export async function getProjectStorageInfo() {
  */
 async function saveProjectHybrid(projectData) {
     try {
-        console.log('💾 ハイブリッド保存開始:', projectData.id);
+        projectLogger.info('ハイブリッド保存開始:', projectData.id);
         
         // 大きなデータ（マーカー画像、ローディング画像など）をIndexedDBに保存
         const largeDataKeys = [];
@@ -919,7 +919,7 @@ async function saveProjectHybrid(projectData) {
         
         // 軽量化されたプロジェクトデータのサイズをチェック
         const lightweightSize = JSON.stringify(lightweightProject).length;
-        console.log(`📦 軽量化後サイズ: ${(lightweightSize / 1024).toFixed(2)}KB (大きなデータ: ${largeDataKeys.join(', ')})`);
+        projectLogger.info(`軽量化後サイズ: ${(lightweightSize / 1024).toFixed(2)}KB (大きなデータ: ${largeDataKeys.join(', ')})`);
         
         return lightweightProject;
         
@@ -1042,7 +1042,7 @@ export function emergencyCleanup(confirmDelete = false) {
         const afterSize = JSON.stringify(localStorage).length;
         const freedSize = beforeSize - afterSize;
         
-        console.log('🧹 緊急クリーンアップ完了:', {
+        projectLogger.info('緊急クリーンアップ完了:', {
             削除項目数: keysToRemove.length,
             解放容量: (freedSize / 1024).toFixed(2) + 'KB',
             残り容量: (afterSize / 1024).toFixed(2) + 'KB'

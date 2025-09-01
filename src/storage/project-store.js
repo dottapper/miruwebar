@@ -245,27 +245,18 @@ function createLightweightProject(projectData) {
       backgroundColor: projectData.settings?.backgroundColor || 0x222222
     },
 
-    // ローディング画面（主要プロパティを保存）
+    // ローディング画面（完全な設定を保存）
     loadingScreen: projectData.loadingScreen ? {
+      ...projectData.loadingScreen,
+      // デフォルト値で補完
       selectedScreenId: projectData.loadingScreen.selectedScreenId || 'none',
       template: projectData.loadingScreen.template || 'default',
       backgroundColor: projectData.loadingScreen.backgroundColor || '#1a1a1a',
       textColor: projectData.loadingScreen.textColor || '#ffffff',
-      // 互換: accentColor or progressColor
       progressColor: projectData.loadingScreen.progressColor || projectData.loadingScreen.accentColor || '#4CAF50',
-      // 表示テキスト
-      loadingMessage: projectData.loadingScreen.loadingMessage || projectData.loadingScreen.message || '読み込み中...',
-      brandName: projectData.loadingScreen.brandName || null,
-      subTitle: projectData.loadingScreen.subTitle || null,
-      fontScale: projectData.loadingScreen.fontScale || 1.0,
-      // 進捗の表示有無
       showProgress: projectData.loadingScreen.showProgress !== false,
-      // ロゴ関連
-      logoType: projectData.loadingScreen.logoType || 'none',
-      logoPosition: projectData.loadingScreen.logoPosition || null,
-      logoSize: projectData.loadingScreen.logoSize || null,
-      // 画像（Base64、小容量想定）
-      logoImage: projectData.loadingScreen.logoImage || null
+      // Base64画像データを除外（大容量の場合のみ）
+      logoImage: (projectData.loadingScreen.logoImage && projectData.loadingScreen.logoImage.length > 100000) ? null : projectData.loadingScreen.logoImage
     } : { selectedScreenId: 'none' },
     
     // マーカー画像データ（小さい場合のみ保存）

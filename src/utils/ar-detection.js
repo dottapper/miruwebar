@@ -1,12 +1,16 @@
 // src/utils/ar-detection.js
 // AR対応判定とブラウザサポート確認
 
+import { createLogger } from './logger.js';
+
+const arDetectionLogger = createLogger('ARDetection');
+
 /**
  * デバイス・ブラウザのAR対応状況を詳細チェック
  * @returns {Promise<Object>} AR対応情報
  */
 export async function checkARSupport() {
-  console.log('🔍 AR対応判定開始');
+  arDetectionLogger.info('🔍 AR対応判定開始');
   
   const support = {
     webxr: false,
@@ -35,11 +39,11 @@ export async function checkARSupport() {
   // カメラアクセス確認
   if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     support.camera = true;
-    console.log('✅ カメラアクセス: 対応');
+    arDetectionLogger.info('✅ カメラアクセス: 対応');
   } else {
     support.camera = false;
     support.errors.push('カメラアクセスに対応していません');
-    console.log('❌ カメラアクセス: 未対応');
+    arDetectionLogger.warn('❌ カメラアクセス: 未対応');
   }
 
   // WebXR対応確認
@@ -48,18 +52,18 @@ export async function checkARSupport() {
       // immersive-ar セッション対応確認
       support.webxr = await navigator.xr.isSessionSupported('immersive-ar');
       if (support.webxr) {
-        console.log('✅ WebXR: 対応 (immersive-ar)');
+        arDetectionLogger.info('✅ WebXR: 対応 (immersive-ar)');
       } else {
-        console.log('❌ WebXR: セッションサポート未対応');
+        arDetectionLogger.warn('❌ WebXR: セッションサポート未対応');
         support.errors.push('WebXR AR セッションに対応していません');
       }
     } catch (error) {
-      console.log('❌ WebXR: エラー発生', error.message);
+      arDetectionLogger.error('❌ WebXR: エラー発生', error.message);
       support.webxr = false;
       support.errors.push(`WebXR エラー: ${error.message}`);
     }
   } else {
-    console.log('❌ WebXR: 未対応ブラウザ');
+    arDetectionLogger.warn('❌ WebXR: 未対応ブラウザ');
     support.webxr = false;
     support.errors.push('WebXRに対応していないブラウザです');
   }
@@ -67,9 +71,9 @@ export async function checkARSupport() {
   // AR.js対応確認（カメラ + HTTPS があれば基本対応）
   support.arjs = support.camera && support.https;
   if (support.arjs) {
-    console.log('✅ AR.js: 対応');
+    arDetectionLogger.info('✅ AR.js: 対応');
   } else {
-    console.log('❌ AR.js: 未対応');
+    arDetectionLogger.warn('❌ AR.js: 未対応');
     if (!support.camera) support.errors.push('AR.jsにはカメラアクセスが必要です');
     if (!support.https) support.errors.push('AR.jsにはHTTPS接続が必要です');
   }
@@ -77,20 +81,20 @@ export async function checkARSupport() {
   // 推奨モード決定
   if (support.webxr && support.deviceInfo.android && support.deviceInfo.chrome) {
     support.recommended = 'webxr';
-    console.log('🌟 推奨モード: WebXR (マーカーレスAR)');
+    arDetectionLogger.info('🌟 推奨モード: WebXR (マーカーレスAR)');
   } else if (support.arjs) {
     support.recommended = 'marker';
-    console.log('🎯 推奨モード: AR.js (マーカーAR)');
+    arDetectionLogger.info('🎯 推奨モード: AR.js (マーカーAR)');
   } else {
     support.recommended = 'fallback';
-    console.log('🖥️ 推奨モード: 3Dビューア (フォールバック)');
+    arDetectionLogger.info('🖥️ 推奨モード: 3Dビューア (フォールバック)');
   }
 
   // デバイス別の詳細情報
   const deviceDetail = getDeviceDetails(support.deviceInfo);
   support.deviceDetail = deviceDetail;
 
-  console.log('🔍 AR対応判定完了:', {
+  arDetectionLogger.info('🔍 AR対応判定完了:', {
     webxr: support.webxr,
     arjs: support.arjs,
     recommended: support.recommended,
@@ -152,7 +156,7 @@ function getIOSVersion() {
  * @returns {Promise<Object>} テスト結果
  */
 export async function testARCapability(arType) {
-  console.log(`🧪 AR機能テスト開始: ${arType}`);
+  arDetectionLogger.info(`🧪 AR機能テスト開始: ${arType}`);
   
   const result = {
     success: false,
@@ -175,7 +179,7 @@ export async function testARCapability(arType) {
       }
 
       result.success = true;
-      console.log('✅ WebXRテスト成功');
+      arDetectionLogger.info('✅ WebXRテスト成功');
       
     } else if (arType === 'marker') {
       // カメラアクセステスト
@@ -185,16 +189,16 @@ export async function testARCapability(arType) {
 
       // 実際のカメラアクセスはせず、APIの存在確認のみ
       result.success = true;
-      console.log('✅ AR.jsテスト成功');
+      arDetectionLogger.info('✅ AR.jsテスト成功');
     }
 
   } catch (error) {
     result.error = error.message;
-    console.log(`❌ ${arType}テスト失敗:`, error.message);
+    arDetectionLogger.error(`❌ ${arType}テスト失敗:`, error.message);
   }
 
   result.duration = Date.now() - startTime;
-  console.log(`🧪 ${arType}テスト完了: ${result.duration}ms`);
+  arDetectionLogger.info(`🧪 ${arType}テスト完了: ${result.duration}ms`);
 
   return result;
 }
@@ -234,31 +238,31 @@ export function getARErrorMessages(support) {
 
 // デバッグ用: 対応状況をコンソールに詳細出力
 export async function logARSupportDetails() {
-  console.log('📋 =====  AR対応詳細情報  =====');
+  arDetectionLogger.info('📋 =====  AR対応詳細情報  =====');
   
   const support = await checkARSupport();
   
-  console.log('🌐 ブラウザ情報:');
-  console.log(`   User Agent: ${support.userAgent}`);
-  console.log(`   Platform: ${support.platform}`);
-  console.log(`   Device: ${support.deviceDetail.name}`);
+  arDetectionLogger.info('🌐 ブラウザ情報:');
+  arDetectionLogger.info(`   User Agent: ${support.userAgent}`);
+  arDetectionLogger.info(`   Platform: ${support.platform}`);
+  arDetectionLogger.info(`   Device: ${support.deviceDetail.name}`);
   
-  console.log('🔧 AR機能対応:');
-  console.log(`   WebXR: ${support.webxr ? '✅' : '❌'}`);
-  console.log(`   AR.js: ${support.arjs ? '✅' : '❌'}`);
-  console.log(`   Camera: ${support.camera ? '✅' : '❌'}`);
-  console.log(`   HTTPS: ${support.https ? '✅' : '❌'}`);
+  arDetectionLogger.info('🔧 AR機能対応:');
+  arDetectionLogger.info(`   WebXR: ${support.webxr ? '✅' : '❌'}`);
+  arDetectionLogger.info(`   AR.js: ${support.arjs ? '✅' : '❌'}`);
+  arDetectionLogger.info(`   Camera: ${support.camera ? '✅' : '❌'}`);
+  arDetectionLogger.info(`   HTTPS: ${support.https ? '✅' : '❌'}`);
   
-  console.log('💡 推奨設定:');
-  console.log(`   推奨モード: ${support.recommended}`);
-  console.log(`   デバイス能力: ${support.deviceDetail.arCapability}`);
+  arDetectionLogger.info('💡 推奨設定:');
+  arDetectionLogger.info(`   推奨モード: ${support.recommended}`);
+  arDetectionLogger.info(`   デバイス能力: ${support.deviceDetail.arCapability}`);
   
   if (support.errors.length > 0) {
-    console.log('⚠️ 制限事項:');
-    support.errors.forEach(error => console.log(`   - ${error}`));
+    arDetectionLogger.warn('制限事項:');
+    support.errors.forEach(error => arDetectionLogger.warn(`   - ${error}`));
   }
   
-  console.log('📋 ===========================');
+  arDetectionLogger.info('📋 ===========================');
   
   return support;
 }

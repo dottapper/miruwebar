@@ -2,6 +2,9 @@
 // IndexedDB から GLB モデルを読み込んで Three.js で使用可能な形式に変換
 
 import { loadModelBlob, loadModelMeta, getAllModelIds, MODEL_KEY_PREFIX } from '../storage/indexeddb-storage.js';
+import { createLogger } from '../utils/logger.js';
+
+const loaderLogger = createLogger('GLBLoader');
 
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
@@ -227,7 +230,7 @@ export async function validateModelBlob(blob) {
       validation.warnings.push('GLB ヘッダーの読み取りに失敗しました');
     }
 
-    console.log('✅ モデル Blob 妥当性チェック完了:', validation);
+    loaderLogger.success('モデル Blob 妥当性チェック完了:', validation);
     return validation;
   } catch (error) {
     console.error('❌ モデル Blob 妥当性チェックエラー:', error);

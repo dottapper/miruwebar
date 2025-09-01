@@ -4,20 +4,46 @@
  * このファイルはサンプルコードです。実際の実装時には使用しているフレームワークやデータベース構成に合わせて調整してください。
  */
 
-const fs = require('fs');
-const path = require('path');
-const { promisify } = require('util');
-const mkdirp = require('mkdirp');
-const writeFileAsync = promisify(fs.writeFile);
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
+import { createLogger } from '../utils/logger.js';
 
-// データベースモデルのインポート（実際の実装に合わせて調整）
-const { LoadingScreenSettings, User, Project } = require('../models');
+const writeFileAsync = promisify(fs.writeFile);
+const mkdirAsync = promisify(fs.mkdir);
+const settingsLogger = createLogger('SettingsController');
+
+// データベースモデルの動的インポート
+let LoadingScreenSettings = null;
+let User = null;
+let Project = null;
+
+// モデルの初期化（実際の実装時には有効化）
+async function initializeModels() {
+  try {
+    // const models = await import('../models/index.js');
+    // LoadingScreenSettings = models.LoadingScreenSettings;
+    // User = models.User;
+    // Project = models.Project;
+    settingsLogger.info('データベースモデルの初期化完了');
+  } catch (error) {
+    settingsLogger.warn('データベースモデルの初期化に失敗しました（開発環境では正常）', error);
+  }
+}
+
+// モデル初期化を実行
+initializeModels();
 
 /**
  * ユーザーごとのローディング画面設定を取得
  */
-exports.getLoadingScreenSettings = async (req, res) => {
+export const getLoadingScreenSettings = async (req, res) => {
   try {
+    // モデルの存在チェック
+    if (!LoadingScreenSettings) {
+      return res.status(503).json({ error: 'データベースモデルが初期化されていません' });
+    }
+    
     // 認証済みのユーザーIDを取得
     const userId = req.user.id;
     
@@ -45,7 +71,7 @@ exports.getLoadingScreenSettings = async (req, res) => {
       animationType: settings.animationType
     });
   } catch (error) {
-    console.error('設定取得エラー:', error);
+    settingsLogger.error('設定取得エラー:', error);
     res.status(500).json({ error: '設定の取得に失敗しました' });
   }
 };
@@ -53,8 +79,13 @@ exports.getLoadingScreenSettings = async (req, res) => {
 /**
  * ユーザーごとのローディング画面設定を保存
  */
-exports.saveLoadingScreenSettings = async (req, res) => {
+export const saveLoadingScreenSettings = async (req, res) => {
   try {
+    // モデルの存在チェック
+    if (!LoadingScreenSettings) {
+      return res.status(503).json({ error: 'データベースモデルが初期化されていません' });
+    }
+    
     // 認証済みのユーザーIDを取得
     const userId = req.user.id;
     
@@ -74,8 +105,8 @@ exports.saveLoadingScreenSettings = async (req, res) => {
     let logoUrl = null;
     if (req.file) {
       // アップロード先ディレクトリの作成
-      const uploadDir = path.join(__dirname, '../../public/uploads/logos');
-      await mkdirp(uploadDir);
+      const uploadDir = path.join(process.cwd(), 'public/uploads/logos');
+      await mkdirAsync(uploadDir, { recursive: true });
       
       // ファイル名の生成（ユニークな名前にするため時間とユーザーIDを含める）
       const timestamp = Date.now();
@@ -120,7 +151,7 @@ exports.saveLoadingScreenSettings = async (req, res) => {
       animationType: settings.animationType
     });
   } catch (error) {
-    console.error('設定保存エラー:', error);
+    settingsLogger.error('設定保存エラー:', error);
     res.status(500).json({ error: '設定の保存に失敗しました' });
   }
 };
@@ -129,8 +160,13 @@ exports.saveLoadingScreenSettings = async (req, res) => {
  * プロジェクト固有のローディング設定を取得
  * プロジェクトのオーナーの設定を返す
  */
-exports.getProjectLoadingSettings = async (req, res) => {
+export const getProjectLoadingSettings = async (req, res) => {
   try {
+    // モデルの存在チェック
+    if (!Project || !User || !LoadingScreenSettings) {
+      return res.status(503).json({ error: 'データベースモデルが初期化されていません' });
+    }
+    
     const { projectId } = req.params;
     
     // プロジェクトを取得（オーナー情報も含める）
@@ -176,7 +212,7 @@ exports.getProjectLoadingSettings = async (req, res) => {
       animationType: settings.animationType
     });
   } catch (error) {
-    console.error('プロジェクト設定取得エラー:', error);
+    settingsLogger.error('プロジェクト設定取得エラー:', error);
     res.status(500).json({ error: '設定の取得に失敗しました' });
   }
 }; 

@@ -4,7 +4,7 @@
  * このファイルはサンプルコードです。実際の実装時には使用しているORMやデータベース構成に合わせて調整してください。
  */
 
-module.exports = (sequelize, DataTypes) => {
+export default (sequelize, DataTypes) => {
   const LoadingScreenSettings = sequelize.define('LoadingScreenSettings', {
     // ユーザーID（設定の所有者）
     userId: {

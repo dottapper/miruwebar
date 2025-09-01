@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import { createLogger } from './utils/logger.js';
 
 // ES Modules対応
 const __filename = fileURLToPath(import.meta.url);
@@ -118,8 +119,10 @@ function safeJoin(base, target) {
 }
 
 // サーバーを作成
-const server = http.createServer(async (req, res) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  const simpleServerLogger = createLogger('SimpleServer');
+  
+  const server = http.createServer(async (req, res) => {
+   simpleServerLogger.debug(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -439,12 +442,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// サーバーを起動
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 サーバーが起動しました`);
-  console.log(`📱 ローカル: http://localhost:${PORT}`);
-  console.log(`🌐 ネットワーク: http://0.0.0.0:${PORT}`);
-  console.log(`💻 開発環境: development`);
-  console.log(`📁 データ保存先: ${dataDir}`);
-  console.log(`📂 アップロード先: ${uploadsDir}`);
+  // サーバーを起動
+  server.listen(PORT, '0.0.0.0', () => {
+   simpleServerLogger.success('サーバーが起動しました');
+  simpleServerLogger.info(`ローカル: http://localhost:${PORT}`);
+  simpleServerLogger.info(`ネットワーク: http://0.0.0.0:${PORT}`);
+  simpleServerLogger.info(`開発環境: development`);
+  simpleServerLogger.info(`データ保存先: ${dataDir}`);
+  simpleServerLogger.info(`アップロード先: ${uploadsDir}`);
 }); 

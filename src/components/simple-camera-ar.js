@@ -1,12 +1,15 @@
 // シンプルなカメラベースARの実装
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { createLogger } from '../utils/logger.js';
+
+const simpleCameraLogger = createLogger('SimpleCameraAR');
 
 /**
  * シンプルなカメラAR初期化
  */
 export async function initSimpleCameraAR(containerId, options = {}) {
-  console.log('🚀 initSimpleCameraAR 呼び出し開始:', { containerId, options });
+  simpleCameraLogger.info('initSimpleCameraAR 呼び出し開始:', { containerId, options });
   
   const container = document.getElementById(containerId);
   if (!container) {
@@ -14,7 +17,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
     throw new Error(`Container with id "${containerId}" not found`);
   }
 
-  console.log('📱 シンプルカメラAR初期化開始:', { 
+  simpleCameraLogger.info('シンプルカメラAR初期化開始:', { 
     options, 
     containerSize: { width: container.clientWidth, height: container.clientHeight }
   });
@@ -38,8 +41,8 @@ export async function initSimpleCameraAR(containerId, options = {}) {
     transform: scaleX(-1); /* 前面カメラの場合は反転 */
   `;
 
-  console.log('📹 カメラストリーム取得を開始...');
-  console.log('🌐 現在の環境情報:', {
+  simpleCameraLogger.info('カメラストリーム取得を開始...');
+  simpleCameraLogger.debug('現在の環境情報:', {
     hostname: location.hostname,
     protocol: location.protocol,
     isHTTPS: location.protocol === 'https:',
@@ -59,7 +62,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
       audio: false
     };
 
-    console.log('📷 カメラ許可を要求中...', {
+    simpleCameraLogger.info('カメラ許可を要求中...', {
       constraints,
       isLocalhost,
       protocol: location.protocol,
@@ -83,17 +86,17 @@ export async function initSimpleCameraAR(containerId, options = {}) {
     await video.play();
     
     container.appendChild(video);
-    console.log('✅ カメラストリーム取得成功');
+    simpleCameraLogger.success('カメラストリーム取得成功');
     
     // カメラが背面か前面かを確認
     const videoTrack = stream.getVideoTracks()[0];
     const settings = videoTrack.getSettings();
-    console.log('📱 カメラ設定:', settings);
+    simpleCameraLogger.debug('カメラ設定:', settings);
     
     if (settings.facingMode === 'user') {
-      console.log('🤳 前面カメラが使用されています');
+      simpleCameraLogger.info('前面カメラが使用されています');
     } else {
-      console.log('📷 背面カメラが使用されています');
+      simpleCameraLogger.info('背面カメラが使用されています');
       video.style.transform = 'scaleX(1)'; // 背面カメラは反転しない
     }
     
@@ -233,26 +236,26 @@ export async function initSimpleCameraAR(containerId, options = {}) {
 
     // 自動配置（最初の1体を中央に表示）
     try {
-      console.log('🎯 自動配置処理開始:', {
+      simpleCameraLogger.info('自動配置処理開始:', {
         hasPlacedModel: !!placedModel,
         modelsLength: models.length,
         arActive
       });
       
       if (!placedModel && models.length > 0) {
-        console.log('📦 モデルを自動配置中...');
+        simpleCameraLogger.info('モデルを自動配置中...');
         placedModel = models[0].clone();
         // より近い位置に配置（カメラから1.5m前方）
         placedModel.position.set(0, 0, -1.5);
         scene.add(placedModel);
-        console.log('✅ モデル自動配置完了:', {
+        simpleCameraLogger.success('モデル自動配置完了:', {
           position: placedModel.position,
           scale: placedModel.scale,
           inScene: scene.children.includes(placedModel)
         });
         showARFeedback('👋 モデルを仮配置しました（タップで再配置できます）', container);
       } else {
-        console.log('⚠️ 自動配置スキップ:', {
+        simpleCameraLogger.warn('自動配置スキップ:', {
           reason: placedModel ? 'already placed' : 'no models',
           modelsCount: models.length
         });
@@ -266,7 +269,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
     renderer.domElement.addEventListener('click', (event) => {
       if (!arActive) return;
 
-      console.log('👆 画面タップ - ARオブジェクト配置');
+      simpleCameraLogger.debug('画面タップ - ARオブジェクト配置');
 
       // 既存モデルを削除
       if (placedModel) {
@@ -290,7 +293,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
         scene.add(placedModel);
 
         showARFeedback('🎉 ARオブジェクトを配置しました！', container);
-        console.log('✅ ARオブジェクト配置成功', placedModel.position);
+        simpleCameraLogger.success('ARオブジェクト配置成功', placedModel.position);
       }
     });
 
@@ -324,7 +327,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
   // 戻り値としてコントロールを返す
   return {
     loadModel: async (url) => {
-      console.log('📦 3Dモデル読み込み開始:', {
+      simpleCameraLogger.info('3Dモデル読み込み開始:', {
         url,
         timestamp: new Date().toISOString(),
         userAgent: navigator.userAgent
@@ -335,7 +338,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
         loader.load(
           url,
           (gltf) => {
-            console.log('✅ GLTF読み込み成功:', {
+            simpleCameraLogger.success('GLTF読み込み成功:', {
               url,
               scene: !!gltf.scene,
               animations: gltf.animations?.length || 0,
@@ -362,7 +365,7 @@ export async function initSimpleCameraAR(containerId, options = {}) {
                 model.position.y -= box2.min.y;
               }
               
-              console.log('📏 モデルサイズ調整完了:', {
+              simpleCameraLogger.info('モデルサイズ調整完了:', {
                 originalSize: size,
                 targetSize,
                 finalScale: scale,
@@ -374,12 +377,12 @@ export async function initSimpleCameraAR(containerId, options = {}) {
             }
 
             models.push(model);
-            console.log('✅ ARモデル読み込み完了');
+            simpleCameraLogger.success('ARモデル読み込み完了');
             resolve(model);
           },
           (progress) => {
             const percent = Math.round((progress.loaded / progress.total) * 100);
-            console.log('📥 モデル読み込み中:', percent + '%');
+            simpleCameraLogger.debug('モデル読み込み中:', percent + '%');
           },
           (error) => {
             console.error('❌ ARモデル読み込みエラー:', error);

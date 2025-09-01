@@ -3,6 +3,10 @@
  * WebSocket接続の管理と再接続ロジックを提供
  */
 
+import { createLogger } from './logger.js';
+
+const hmrLogger = createLogger('HMRClient');
+
 class HMRClient {
   constructor() {
     this.wsReconnectTimer = null;
@@ -26,31 +30,31 @@ class HMRClient {
   setupHMRHandlers() {
     // 更新前のハンドラー
     import.meta.hot.on('vite:beforeUpdate', (data) => {
-      console.log('🔄 HMR更新を準備中...', data);
+      hmrLogger.debug('HMR更新を準備中...', data);
       this.notifyListeners('beforeUpdate', data);
     });
 
     // 更新後のハンドラー
     import.meta.hot.on('vite:afterUpdate', (data) => {
-      console.log('✅ HMR更新が完了しました', data);
+      hmrLogger.success('HMR更新が完了しました', data);
       this.notifyListeners('afterUpdate', data);
     });
 
     // エラーハンドラー
     import.meta.hot.on('error', (error) => {
-      console.warn('⚠️ HMRエラーが発生しました:', error);
+      hmrLogger.warn('HMRエラーが発生しました:', error);
       this.handleConnectionError(error);
     });
 
     // 接続が切断された場合のハンドラー
     window.addEventListener('offline', () => {
-      console.log('📡 ネットワーク接続が切断されました');
+      hmrLogger.warn('ネットワーク接続が切断されました');
       this.handleConnectionError(new Error('Network disconnected'));
     });
 
     // 接続が復帰した場合のハンドラー
     window.addEventListener('online', () => {
-      console.log('🌐 ネットワーク接続が復帰しました');
+      hmrLogger.info('ネットワーク接続が復帰しました');
       this.attemptReconnect();
     });
   }
@@ -72,7 +76,7 @@ class HMRClient {
 
   attemptReconnect() {
     if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-      console.error('❌ WebSocket接続の再試行回数上限に達しました');
+      hmrLogger.error('WebSocket接続の再試行回数上限に達しました');
       this.notifyListeners('reconnectFailed');
       return;
     }
@@ -80,7 +84,7 @@ class HMRClient {
     this.reconnectAttempts++;
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 10000);
 
-    console.log(`🔄 WebSocket再接続を試みます (${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
+    hmrLogger.warn(`WebSocket再接続を試みます (${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS})...`);
     this.notifyListeners('reconnecting', {
       attempt: this.reconnectAttempts,
       maxAttempts: this.MAX_RECONNECT_ATTEMPTS,
@@ -90,7 +94,7 @@ class HMRClient {
     this.wsReconnectTimer = setTimeout(() => {
       if (document.hidden) {
         // タブが非アクティブな場合は再接続を延期
-        console.log('📱 タブが非アクティブです。再接続を延期します');
+        hmrLogger.debug('タブが非アクティブです。再接続を延期します');
         return;
       }
 
@@ -105,7 +109,7 @@ class HMRClient {
       localStorage.setItem('hmr_reconnect_attempt', this.reconnectAttempts.toString());
       localStorage.setItem('hmr_last_reconnect', Date.now().toString());
     } catch (e) {
-      console.warn('ローカルストレージへの保存に失敗しました:', e);
+      hmrLogger.warn('ローカルストレージへの保存に失敗しました:', e);
     }
 
     // ページをリロード
@@ -123,7 +127,7 @@ class HMRClient {
       try {
         listener(event, data);
       } catch (error) {
-        console.error('リスナーの実行中にエラーが発生しました:', error);
+        hmrLogger.error('リスナーの実行中にエラーが発生しました:', error);
       }
     });
   }

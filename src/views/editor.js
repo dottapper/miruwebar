@@ -2322,7 +2322,7 @@ export function showEditor(container) {
     
     // 詳細設定がある場合は統合
     if (detailedLoadingSettings) {
-      return {
+      const mergedSettings = {
         ...baseSettings,
         // ローディング画面エディターの全設定を含める
         editorSettings: detailedLoadingSettings,
@@ -2333,11 +2333,65 @@ export function showEditor(container) {
                        detailedLoadingSettings.loadingScreen?.accentColor || 
                        baseSettings.progressColor,
         message: detailedLoadingSettings.loadingScreen?.loadingMessage || baseSettings.message,
-        showProgress: detailedLoadingSettings.loadingScreen?.showProgress ?? baseSettings.showProgress
+        showProgress: detailedLoadingSettings.loadingScreen?.showProgress ?? baseSettings.showProgress,
+        logoImage: detailedLoadingSettings.loadingScreen?.logo || baseSettings.logoImage,
+        logoSize: detailedLoadingSettings.loadingScreen?.logoSize || 1.0,
+        logoPosition: detailedLoadingSettings.loadingScreen?.logoPosition || 20,
+        fontScale: detailedLoadingSettings.loadingScreen?.fontScale || 1.0
       };
+      
+      dlog('🔄 詳細設定あり - 現在のローディング設定を取得:', {
+        selectedScreenId,
+        hasDetailedSettings: !!detailedLoadingSettings,
+        mergedSettings
+      });
+      
+      return mergedSettings;
     }
     
-    dlog('🔄 現在のローディング設定を取得:', {
+    // 詳細設定がない場合、selectedScreenIdに基づいてテンプレートから完全な設定を取得
+    if (selectedScreenId && selectedScreenId !== 'none') {
+      try {
+        const stored = localStorage.getItem('loadingScreenTemplates');
+        if (stored) {
+          const templates = JSON.parse(stored);
+          const template = templates.find(t => t.id === selectedScreenId);
+          if (template?.settings?.loadingScreen) {
+            const templateSettings = {
+              ...baseSettings,
+              // テンプレートの完全な設定を適用
+              backgroundColor: template.settings.loadingScreen.backgroundColor || baseSettings.backgroundColor,
+              textColor: template.settings.loadingScreen.textColor || baseSettings.textColor,
+              progressColor: template.settings.loadingScreen.progressColor || 
+                             template.settings.loadingScreen.accentColor || 
+                             baseSettings.progressColor,
+              message: template.settings.loadingScreen.loadingMessage || 
+                       template.settings.loadingScreen.message || 
+                       baseSettings.message,
+              showProgress: template.settings.loadingScreen.showProgress ?? baseSettings.showProgress,
+              logoImage: template.settings.loadingScreen.logo || baseSettings.logoImage,
+              logoSize: template.settings.loadingScreen.logoSize || 1.0,
+              logoPosition: template.settings.loadingScreen.logoPosition || 20,
+              fontScale: template.settings.loadingScreen.fontScale || 1.0,
+              // テンプレートの全設定をembedして保存
+              templateSettings: template.settings
+            };
+            
+            dlog('🔄 テンプレートから完全設定を復元:', {
+              selectedScreenId,
+              templateName: template.name,
+              templateSettings
+            });
+            
+            return templateSettings;
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ テンプレート設定の取得に失敗:', error);
+      }
+    }
+    
+    dlog('🔄 基本設定のみ - 現在のローディング設定を取得:', {
       selectedScreenId,
       hasDetailedSettings: !!detailedLoadingSettings,
       selectElementExists: !!loadingScreenSelect,
@@ -2494,51 +2548,7 @@ export function showEditor(container) {
           loadingScreen: await getCurrentLoadingSettings()
         };
 
-        // ローディング画面の選択テンプレートを反映（完全な設定を保存）
-        try {
-          const selectedId = saveData.loadingScreen?.selectedScreenId;
-          if (selectedId && selectedId !== 'none') {
-            const template = getLoadingScreenTemplate(selectedId);
-            if (template?.settings?.loadingScreen) {
-              const t = template.settings.loadingScreen;
-              dlog('🎨 テンプレート設定を完全統合:', template.name, t);
-              
-              // 完全なテンプレート設定を保存データに統合
-              saveData.loadingScreen = {
-                ...saveData.loadingScreen,
-                // 基本設定
-                backgroundColor: t.backgroundColor ?? saveData.loadingScreen.backgroundColor,
-                textColor: t.textColor ?? saveData.loadingScreen.textColor,
-                progressColor: t.progressColor ?? t.accentColor ?? saveData.loadingScreen.progressColor,
-                accentColor: t.accentColor ?? saveData.loadingScreen.accentColor,
-                
-                // メッセージ設定
-                message: t.loadingMessage ?? t.message ?? saveData.loadingScreen.message,
-                loadingMessage: t.loadingMessage ?? t.message ?? saveData.loadingScreen.loadingMessage,
-                brandName: t.brandName ?? saveData.loadingScreen.brandName,
-                subTitle: t.subTitle ?? saveData.loadingScreen.subTitle,
-                
-                // 表示設定
-                showProgress: t.showProgress ?? saveData.loadingScreen.showProgress,
-                fontScale: t.fontScale ?? saveData.loadingScreen.fontScale,
-                
-                // ロゴ設定
-                logo: t.logo ?? saveData.loadingScreen.logo,
-                logoType: t.logoType ?? saveData.loadingScreen.logoType,
-                logoPosition: t.logoPosition ?? saveData.loadingScreen.logoPosition,
-                logoSize: t.logoSize ?? saveData.loadingScreen.logoSize,
-                
-                // テンプレート情報も保持
-                selectedScreenId: selectedId,
-                templateName: template.name
-              };
-              
-              dlog('✅ 完全統合されたローディング設定:', saveData.loadingScreen);
-            }
-          }
-        } catch (e) {
-          console.warn('⚠️ ローディングテンプレート適用に失敗しました（保存は継続）:', e);
-        }
+        // getCurrentLoadingSettings()が既に完全な設定を返すため、追加の統合処理は不要
         
         dlog('💾 保存するローディング画面設定:', saveData.loadingScreen);
         dlog('🔍 保存データ詳細（保存前の完全なデータ）:', {

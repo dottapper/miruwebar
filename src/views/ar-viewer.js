@@ -1,9 +1,12 @@
 // src/views/ar-viewer.js
 // 統合ARビューア - QRコードからプロジェクトデータを読み込んでAR表示
 import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
+import { createLogger } from '../utils/logger.js';
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
+
+const arViewerLogger = createLogger('ARViewer');
 
 function navigateBackOrHome() {
   try {
@@ -353,7 +356,7 @@ export default function showARViewer(container) {
 
 // 統合ARビューアの初期化関数
 async function initIntegratedARViewer(container, projectSrc, options = {}) {
-  console.log('🚀 ARビューア初期化開始:', { projectSrc, options });
+  arViewerLogger.info('ARビューア初期化開始:', { projectSrc, options });
   const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false } = options;
   const loadingScreen = container.querySelector('#ar-loading-screen');
   const loadingBar = container.querySelector('#ar-loading-bar');
@@ -380,6 +383,106 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let arObjects = [];
   let loadedModels = [];
 
+  // ローディング画面とスタート画面をデフォルト状態にリセットする関数
+  function resetLoadingScreenStyles() {
+    dlog('🔄 ローディング画面・スタート画面スタイルをリセット');
+    
+    // ローディング画面のリセット
+    if (loadingScreen) {
+      loadingScreen.style.backgroundColor = '';
+      loadingScreen.style.background = '';
+      loadingScreen.style.color = '';
+      loadingScreen.style.display = 'flex';
+    }
+    
+    // ローディング画面内の要素をリセット
+    const loadingTitle = container.querySelector('#ar-loading-title');
+    if (loadingTitle) {
+      loadingTitle.style.color = '';
+      loadingTitle.style.fontSize = '';
+      loadingTitle.style.fontFamily = '';
+      loadingTitle.textContent = 'ARプロジェクトを読み込み中...';
+    }
+    
+    if (loadingMessage) {
+      loadingMessage.style.color = '';
+      loadingMessage.style.fontSize = '';
+      loadingMessage.style.fontFamily = '';
+      loadingMessage.textContent = 'システムを初期化しています...';
+    }
+    
+    if (loadingLogo) {
+      loadingLogo.style.display = 'none';
+      loadingLogo.src = '';
+      loadingLogo.style.width = '';
+      loadingLogo.style.height = '';
+      loadingLogo.style.maxWidth = '160px';
+      loadingLogo.style.maxHeight = '80px';
+      loadingLogo.style.position = '';
+      loadingLogo.style.top = '';
+      loadingLogo.style.left = '';
+      loadingLogo.style.transform = '';
+    }
+    
+    if (loadingTextGroup) {
+      loadingTextGroup.style.fontSize = '';
+      loadingTextGroup.style.position = '';
+      loadingTextGroup.style.top = '';
+      loadingTextGroup.style.left = '';
+      loadingTextGroup.style.transform = '';
+      loadingTextGroup.style.textAlign = '';
+    }
+    
+    // プログレスバーのリセット
+    if (loadingBar) {
+      loadingBar.style.backgroundColor = '';
+      loadingBar.style.background = '';
+      loadingBar.style.width = '0%';
+    }
+    
+    if (loadingProgressWrap) {
+      loadingProgressWrap.style.display = '';
+    }
+    
+    // スタート画面のリセット
+    if (startScreen) {
+      startScreen.style.backgroundColor = '';
+      startScreen.style.background = '';
+      startScreen.style.color = '';
+      startScreen.style.display = 'none';
+    }
+    
+    if (startTitle) {
+      startTitle.style.color = '';
+      startTitle.style.fontSize = '';
+      startTitle.style.fontFamily = '';
+      startTitle.textContent = 'AR体験を開始';
+    }
+    
+    if (startLogo) {
+      startLogo.style.display = 'none';
+      startLogo.src = '';
+      startLogo.style.width = '';
+      startLogo.style.height = '';
+      startLogo.style.maxWidth = '160px';
+      startLogo.style.maxHeight = '80px';
+      startLogo.style.position = '';
+      startLogo.style.top = '';
+      startLogo.style.left = '';
+      startLogo.style.transform = '';
+    }
+    
+    if (startCTA) {
+      startCTA.style.backgroundColor = '';
+      startCTA.style.background = '';
+      startCTA.style.color = '';
+      startCTA.textContent = '開始';
+      startCTA.onclick = null;
+    }
+    
+    dlog('✅ ローディング画面・スタート画面リセット完了');
+  }
+
   function updateStatus(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString();
     if (IS_DEBUG) console.log(`[${timestamp}] ${message}`);
@@ -401,6 +504,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   // 戻るボタンイベント
   backBtn.addEventListener('click', navigateBackOrHome);
+
+  // プロジェクト読み込み前に必ずスタイルをリセット
+  resetLoadingScreenStyles();
 
   try {
     updateStatus('📡 プロジェクトデータ取得中', 'info');
@@ -593,7 +699,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (loadingTextGroup) loadingTextGroup.style.top = `${textPos}%`;
       } catch (_) {}
     } else {
-      dlog('⚠️ ローディング画面設定が見つかりません');
+      dlog('ℹ️ ローディング画面設定が見つかりません - デフォルト状態を維持');
+      // リセット関数により既にデフォルト状態が設定されているので、追加の処理は不要
     }
 
     // マーカー型はMarkerAR側でモデルを読むため、事前ロードを省略
@@ -771,13 +878,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         await markerAR.init();
 
         // プロジェクトのモデルを順に読み込み
-        console.log('📂 プロジェクトモデル数:', currentProject.models?.length || 0);
+        arViewerLogger.info('プロジェクトモデル数:', currentProject.models?.length || 0);
         if (Array.isArray(currentProject.models)) {
           for (const m of currentProject.models) {
-            console.log('📂 モデル読み込み試行:', m.url);
+            arViewerLogger.debug('モデル読み込み試行:', m.url);
             try { 
               await markerAR.loadModel(m.url); 
-              console.log('✅ モデル読み込み成功:', m.url);
+              arViewerLogger.success('モデル読み込み成功:', m.url);
             } catch (e) {
               console.error('❌ モデル読み込み失敗:', m.url, e);
             };

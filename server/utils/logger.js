@@ -1,5 +1,5 @@
-// src/utils/logger.js
-// 統一されたログ機能
+// server/utils/logger.js
+// サーバー側用の統一ログ機能
 
 const LOG_LEVELS = {
   DEBUG: 0,
@@ -19,8 +19,7 @@ const LOG_PREFIXES = {
 
 // 環境変数によるログレベル制御
 const getLogLevelFromEnv = () => {
-  const envLevel = import.meta.env.VITE_LOG_LEVEL || 
-                  (typeof window !== 'undefined' && window.VITE_LOG_LEVEL);
+  const envLevel = process.env.LOG_LEVEL || process.env.NODE_ENV === 'production' ? 'WARN' : 'INFO';
   
   switch (envLevel?.toUpperCase()) {
     case 'DEBUG': return LOG_LEVELS.DEBUG;
@@ -31,13 +30,8 @@ const getLogLevelFromEnv = () => {
   }
 };
 
-// デバッグモードの設定
-const DEBUG_MODE = import.meta.env.DEV || 
-                  (typeof window !== 'undefined' && window.location.search.includes('debug=true'));
-
 // 本番環境でのログ制御
-const isProduction = import.meta.env.PROD || 
-                    (typeof window !== 'undefined' && !window.location.hostname.includes('localhost'));
+const isProduction = process.env.NODE_ENV === 'production';
 
 class Logger {
   constructor(options = {}) {
@@ -46,7 +40,7 @@ class Logger {
     this.enableStorage = options.enableStorage || false;
     this.maxLogs = options.maxLogs || 1000;
     this.logs = [];
-    this.moduleName = options.moduleName || 'App';
+    this.moduleName = options.moduleName || 'Server';
     
     // 本番環境ではデバッグログを無効化
     if (isProduction && this.level === LOG_LEVELS.DEBUG) {
@@ -158,23 +152,15 @@ class Logger {
 }
 
 // デフォルトロガーインスタンス
-export const logger = new Logger({
+const logger = new Logger({
   level: getLogLevelFromEnv(),
   enableConsole: true,
   enableStorage: true,
-  moduleName: 'App'
-});
-
-// テスト用ロガーインスタンス
-export const testLogger = new Logger({
-  level: LOG_LEVELS.DEBUG,
-  enableConsole: false,
-  enableStorage: true,
-  moduleName: 'Test'
+  moduleName: 'Server'
 });
 
 // 本番環境用ロガーインスタンス
-export const productionLogger = new Logger({
+const productionLogger = new Logger({
   level: LOG_LEVELS.WARN,
   enableConsole: true,
   enableStorage: false,
@@ -182,7 +168,7 @@ export const productionLogger = new Logger({
 });
 
 // モジュール別ロガーを作成するファクトリ関数
-export function createLogger(moduleName, options = {}) {
+function createLogger(moduleName, options = {}) {
   return new Logger({
     level: getLogLevelFromEnv(),
     enableConsole: true,
@@ -192,4 +178,11 @@ export function createLogger(moduleName, options = {}) {
   });
 }
 
-export { Logger, LOG_LEVELS, LOG_PREFIXES };
+export { 
+  Logger, 
+  LOG_LEVELS, 
+  LOG_PREFIXES, 
+  logger, 
+  productionLogger, 
+  createLogger 
+};
