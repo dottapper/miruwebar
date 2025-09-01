@@ -1,5 +1,5 @@
 import http from 'http';
-import fs from 'fs';
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,30 +15,68 @@ const PORT = 3000;
 const dataDir = path.join(__dirname, '../data');
 const uploadsDir = path.join(__dirname, '../uploads');
 
-// ディレクトリの作成
-[dataDir, uploadsDir, 
- path.join(uploadsDir, 'models'),
- path.join(uploadsDir, 'markers'),
- path.join(uploadsDir, 'logos')
-].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// ディレクトリの作成（非同期）
+async function ensureDirectories() {
+  const directories = [
+    dataDir, 
+    uploadsDir, 
+    path.join(uploadsDir, 'models'),
+    path.join(uploadsDir, 'markers'),
+    path.join(uploadsDir, 'logos')
+  ];
+  
+  for (const dir of directories) {
+    try {
+      await fs.access(dir);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        await fs.mkdir(dir, { recursive: true });
+        simpleServerLogger.info(`ディレクトリを作成しました: ${dir}`);
+      } else {
+        throw error;
+      }
+    }
   }
-});
+}
 
 // プロジェクトデータファイル
 const projectsFile = path.join(dataDir, 'projects.json');
 
-// プロジェクトデータの読み込み/保存
-function loadProjects() {
-  if (fs.existsSync(projectsFile)) {
-    return JSON.parse(fs.readFileSync(projectsFile, 'utf8'));
+// プロジェクトデータの読み込み/保存（非同期）
+async function loadProjects() {
+  try {
+    const data = await fs.readFile(projectsFile, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // ファイルが存在しない場合は空配列を返す
+      return [];
+    }
+    throw error;
   }
-  return [];
 }
 
-function saveProjects(projects) {
-  fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2));
+async function saveProjects(projects) {
+  try {
+    await fs.writeFile(projectsFile, JSON.stringify(projects, null, 2));
+    simpleServerLogger.debug('プロジェクトデータを保存しました');
+  } catch (error) {
+    simpleServerLogger.error('プロジェクトデータの保存に失敗しました', error);
+    throw error;
+  }
+}
+
+// ファイル存在確認（非同期）
+async function fileExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 // MIMEタイプの設定
@@ -55,14 +93,14 @@ const mimeTypes = {
   '.gltf': 'model/gltf+json'
 };
 
-// ファイルを読み込む関数
-function readFile(filePath) {
-  return new Promise((resolve, reject) => {
-    fs.readFile(filePath, (err, data) => {
-      if (err) reject(err);
-      else resolve(data);
-    });
-  });
+// ファイルを読み込む関数（非同期）
+async function readFile(filePath) {
+  try {
+    return await fs.readFile(filePath);
+  } catch (error) {
+    simpleServerLogger.error(`ファイル読み込みエラー: ${filePath}`, error);
+    throw error;
+  }
 }
 
 // POSTデータを解析する関数（サイズ上限あり）
@@ -119,11 +157,11 @@ function safeJoin(base, target) {
 }
 
 // サーバーを作成
-  const simpleServerLogger = createLogger('SimpleServer');
-  
-  const server = http.createServer(async (req, res) => {
-   simpleServerLogger.debug(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  
+const simpleServerLogger = createLogger('SimpleServer');
+
+const server = http.createServer(async (req, res) => {
+  simpleServerLogger.debug(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+
   // CORS設定
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -152,83 +190,108 @@ function safeJoin(base, target) {
     
     // プロジェクト一覧取得
     if (pathname === '/api/projects' && req.method === 'GET') {
-      const projects = loadProjects();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(projects));
+      try {
+        const projects = await loadProjects();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(projects));
+      } catch (error) {
+        simpleServerLogger.error('プロジェクト一覧取得エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'プロジェクト一覧の取得に失敗しました' }));
+      }
       return;
     }
     
     // プロジェクト保存
     if (pathname === '/api/projects' && req.method === 'POST') {
-      let projectData;
       try {
-        projectData = await parsePostData(req);
-      } catch (e) {
-        if (e && e.status === 413) {
-          res.writeHead(413, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'payload too large' }));
-          return;
+        let projectData;
+        try {
+          projectData = await parsePostData(req);
+        } catch (e) {
+          if (e && e.status === 413) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'payload too large' }));
+            return;
+          }
+          throw e;
         }
-        throw e;
+        
+        const projects = await loadProjects();
+        
+        // プロジェクトIDの生成
+        if (!projectData.id) {
+          projectData.id = uuidv4();
+        }
+        
+        // タイムスタンプの追加
+        const now = new Date().toISOString();
+        if (!projectData.created) {
+          projectData.created = now;
+        }
+        projectData.updated = now;
+        
+        // 既存プロジェクトの更新または新規追加
+        const existingIndex = projects.findIndex(p => p.id === projectData.id);
+        if (existingIndex >= 0) {
+          projects[existingIndex] = { ...projects[existingIndex], ...projectData };
+        } else {
+          projects.push(projectData);
+        }
+        
+        await saveProjects(projects);
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(projectData));
+      } catch (error) {
+        simpleServerLogger.error('プロジェクト保存エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'プロジェクトの保存に失敗しました' }));
       }
-      const projects = loadProjects();
-      
-      // プロジェクトIDの生成
-      if (!projectData.id) {
-        projectData.id = uuidv4();
-      }
-      
-      // タイムスタンプの追加
-      const now = new Date().toISOString();
-      if (!projectData.created) {
-        projectData.created = now;
-      }
-      projectData.updated = now;
-      
-      // 既存プロジェクトの更新または新規追加
-      const existingIndex = projects.findIndex(p => p.id === projectData.id);
-      if (existingIndex >= 0) {
-        projects[existingIndex] = { ...projects[existingIndex], ...projectData };
-      } else {
-        projects.push(projectData);
-      }
-      
-      saveProjects(projects);
-      
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(projectData));
       return;
     }
     
     // プロジェクト取得
     if (pathname.startsWith('/api/projects/') && req.method === 'GET') {
-      const projectId = pathname.split('/')[3];
-      const projects = loadProjects();
-      const project = projects.find(p => p.id === projectId);
-      
-      if (project) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(project));
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'プロジェクトが見つかりません' }));
+      try {
+        const projectId = pathname.split('/')[3];
+        const projects = await loadProjects();
+        const project = projects.find(p => p.id === projectId);
+        
+        if (project) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(project));
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'プロジェクトが見つかりません' }));
+        }
+      } catch (error) {
+        simpleServerLogger.error('プロジェクト取得エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'プロジェクトの取得に失敗しました' }));
       }
       return;
     }
     
     // プロジェクト削除
     if (pathname.startsWith('/api/projects/') && req.method === 'DELETE') {
-      const projectId = pathname.split('/')[3];
-      const projects = loadProjects();
-      const filteredProjects = projects.filter(p => p.id !== projectId);
-      
-      if (filteredProjects.length < projects.length) {
-        saveProjects(filteredProjects);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true }));
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'プロジェクトが見つかりません' }));
+      try {
+        const projectId = pathname.split('/')[3];
+        const projects = await loadProjects();
+        const filteredProjects = projects.filter(p => p.id !== projectId);
+        
+        if (filteredProjects.length < projects.length) {
+          await saveProjects(filteredProjects);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'プロジェクトが見つかりません' }));
+        }
+      } catch (error) {
+        simpleServerLogger.error('プロジェクト削除エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'プロジェクトの削除に失敗しました' }));
       }
       return;
     }
@@ -256,7 +319,7 @@ function safeJoin(base, target) {
 
         // 保存先: uploads/projects/<id>
         const projectDir = path.join(uploadsDir, 'projects', id);
-        if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
+        await fs.mkdir(projectDir, { recursive: true });
 
         const modelEntries = [];
         let totalBytes = 0;
@@ -272,14 +335,15 @@ function safeJoin(base, target) {
               totalBytes += buffer.length;
               if (totalBytes > MAX_TOTAL_BYTES) throw new Error('total size exceeded');
               const filePath = path.join(projectDir, fileName);
-              fs.writeFileSync(filePath, buffer);
+              await fs.writeFile(filePath, buffer);
               modelEntries.push({
                 url: `/projects/${id}/${fileName}`,
                 fileName,
                 fileSize: buffer.length
               });
+              simpleServerLogger.debug(`モデルファイルを保存しました: ${fileName}`);
             } catch (e) {
-              console.warn('モデル保存に失敗:', e);
+              simpleServerLogger.warn('モデル保存に失敗:', e);
             }
           }
         }
@@ -291,7 +355,7 @@ function safeJoin(base, target) {
           loadingScreen: loadingScreen || null,
           models: modelEntries
         };
-        fs.writeFileSync(path.join(projectDir, 'project.json'), JSON.stringify(projectJson, null, 2));
+        await fs.writeFile(path.join(projectDir, 'project.json'), JSON.stringify(projectJson, null, 2));
 
         const host = req.headers['x-forwarded-host'] || req.headers.host || `localhost:${PORT}`;
         const scheme = (req.headers['x-forwarded-proto'] || 'http');
@@ -304,7 +368,7 @@ function safeJoin(base, target) {
           res.end(JSON.stringify({ error: 'payload too large' }));
           return;
         }
-        console.error('publish-project エラー:', e);
+        simpleServerLogger.error('publish-project エラー:', e);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'publish failed', message: e.message }));
       }
@@ -362,92 +426,126 @@ function safeJoin(base, target) {
 
     // アップロードファイルの配信
     if (pathname.startsWith('/uploads/')) {
-      let filePath;
       try {
-        filePath = safeJoin(uploadsDir, pathname.replace('/uploads/', ''));
-      } catch (e) {
-        res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid path' }));
-        return;
-      }
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath);
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        const data = await readFile(filePath);
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
+        let filePath;
+        try {
+          filePath = safeJoin(uploadsDir, pathname.replace('/uploads/', ''));
+        } catch (e) {
+          res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid path' }));
+          return;
+        }
+        
+        if (await fileExists(filePath)) {
+          const ext = path.extname(filePath);
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          const data = await readFile(filePath);
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(data);
+          return;
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'File not found' }));
+          return;
+        }
+      } catch (error) {
+        simpleServerLogger.error('アップロードファイル配信エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'File read error' }));
         return;
       }
     }
 
     // /projects 配下の静的配信（uploads/projects をマッピング）
     if (pathname.startsWith('/projects/')) {
-      let filePath;
       try {
-        filePath = safeJoin(path.join(uploadsDir, 'projects'), pathname.replace('/projects/', ''));
-      } catch (e) {
-        res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid path' }));
-        return;
-      }
-      if (fs.existsSync(filePath)) {
-        const ext = path.extname(filePath);
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        const data = await readFile(filePath);
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(data);
-        return;
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found' }));
+        let filePath;
+        try {
+          filePath = safeJoin(path.join(uploadsDir, 'projects'), pathname.replace('/projects/', ''));
+        } catch (e) {
+          res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'invalid path' }));
+          return;
+        }
+        
+        if (await fileExists(filePath)) {
+          const ext = path.extname(filePath);
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          const data = await readFile(filePath);
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(data);
+          return;
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found' }));
+          return;
+        }
+      } catch (error) {
+        simpleServerLogger.error('プロジェクトファイル配信エラー', error);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'File read error' }));
         return;
       }
     }
     
     // 静的ファイルの配信
-    let filePath;
-    
-    // ルートディレクトリから直接ファイルを配信（開発用）
-    if (pathname === '/') {
-      filePath = path.join(__dirname, '../index.html');
-    } else {
-      // まずルートディレクトリから探す
-      filePath = path.join(__dirname, '..', pathname);
+    try {
+      let filePath;
       
-      // ファイルが存在しない場合はdistから探す
-      if (!fs.existsSync(filePath)) {
-        filePath = path.join(__dirname, '../dist', pathname);
-      }
-      
-      // それでも存在しない場合はindex.htmlを返す（SPA対応）
-      if (!fs.existsSync(filePath)) {
+      // ルートディレクトリから直接ファイルを配信（開発用）
+      if (pathname === '/') {
         filePath = path.join(__dirname, '../index.html');
-        if (!fs.existsSync(filePath)) {
-          filePath = path.join(__dirname, '../dist/index.html');
+      } else {
+        // まずルートディレクトリから探す
+        filePath = path.join(__dirname, '..', pathname);
+        
+        // ファイルが存在しない場合はdistから探す
+        if (!(await fileExists(filePath))) {
+          filePath = path.join(__dirname, '../dist', pathname);
+        }
+        
+        // それでも存在しない場合はindex.htmlを返す（SPA対応）
+        if (!(await fileExists(filePath))) {
+          filePath = path.join(__dirname, '../index.html');
+          if (!(await fileExists(filePath))) {
+            filePath = path.join(__dirname, '../dist/index.html');
+          }
         }
       }
+      
+      const ext = path.extname(filePath);
+      const contentType = mimeTypes[ext] || 'application/octet-stream';
+      
+      const data = await readFile(filePath);
+      res.writeHead(200, { 'Content-Type': contentType });
+      res.end(data);
+    } catch (error) {
+      simpleServerLogger.error('静的ファイル配信エラー', error);
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('File Not Found');
     }
     
-    const ext = path.extname(filePath);
-    const contentType = mimeTypes[ext] || 'application/octet-stream';
-    
-    const data = await readFile(filePath);
-    res.writeHead(200, { 'Content-Type': contentType });
-    res.end(data);
-    
   } catch (error) {
-    console.error('エラー:', error);
+    simpleServerLogger.error('サーバーエラー:', error);
     res.writeHead(500, { 'Content-Type': 'text/plain' });
     res.end('Internal Server Error');
   }
 });
 
-  // サーバーを起動
-  server.listen(PORT, '0.0.0.0', () => {
-   simpleServerLogger.success('サーバーが起動しました');
-  simpleServerLogger.info(`ローカル: http://localhost:${PORT}`);
-  simpleServerLogger.info(`ネットワーク: http://0.0.0.0:${PORT}`);
-  simpleServerLogger.info(`開発環境: development`);
-  simpleServerLogger.info(`データ保存先: ${dataDir}`);
-  simpleServerLogger.info(`アップロード先: ${uploadsDir}`);
+// サーバーを起動
+server.listen(PORT, '0.0.0.0', async () => {
+  try {
+    // ディレクトリの初期化
+    await ensureDirectories();
+    
+    simpleServerLogger.success('サーバーが起動しました');
+    simpleServerLogger.info(`ローカル: http://localhost:${PORT}`);
+    simpleServerLogger.info(`ネットワーク: http://0.0.0.0:${PORT}`);
+    simpleServerLogger.info(`開発環境: development`);
+    simpleServerLogger.info(`データ保存先: ${dataDir}`);
+    simpleServerLogger.info(`アップロード先: ${uploadsDir}`);
+  } catch (error) {
+    simpleServerLogger.error('サーバー初期化エラー:', error);
+    process.exit(1);
+  }
 }); 
