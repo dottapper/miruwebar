@@ -5,6 +5,7 @@ const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 import { saveModelToIDB, getAllModelIds } from './indexeddb-storage.js';
 import { getProjects, saveProject } from './project-store.js';
+import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 
 const MIGRATION_FLAG_KEY = 'miruwebAR_migration_completed';
 const MIGRATION_VERSION = '1.0.0';
@@ -325,6 +326,322 @@ export function getMigrationInfo() {
 }
 
 /**
+ * ローディング画面テンプレートの localStorage キー統一移行とデータ正規化
+ * @returns {Promise<void>}
+ */
+async function migrateTemplateStorageKeys() {
+  try {
+    dlog('🔄 テンプレートストレージキー移行開始');
+    
+    const oldKey = 'loadingScreenTemplates';
+    const newKey = TEMPLATES_STORAGE_KEY;
+    
+    let templates = [];
+    let dataSource = 'new';
+    
+    // 新キーのデータを確認
+    const newKeyData = localStorage.getItem(newKey);
+    if (newKeyData) {
+      try {
+        templates = JSON.parse(newKeyData);
+        dataSource = 'existing';
+        dlog('ℹ️ 新キーに既存データあり', { templatesCount: templates.length });
+      } catch (parseError) {
+        console.warn('⚠️ 新キーのデータが破損、初期化します:', parseError);
+        templates = [];
+        dataSource = 'reset';
+      }
+    } else {
+      // 旧キーからデータを取得
+      const oldData = localStorage.getItem(oldKey);
+      if (oldData) {
+        try {
+          const parsedData = JSON.parse(oldData);
+          if (Array.isArray(parsedData)) {
+            templates = parsedData;
+            dataSource = 'migrated';
+            dlog('✅ 旧キーからデータを移行', { templatesCount: templates.length });
+            // 旧キーを削除
+            localStorage.removeItem(oldKey);
+          } else {
+            dlog('⚠️ 旧キーのデータ形式が不正、空配列で初期化');
+            templates = [];
+            dataSource = 'invalid';
+          }
+        } catch (parseError) {
+          console.warn('⚠️ 旧キーのデータが破損している可能性があります:', parseError);
+          localStorage.removeItem(oldKey); // 破損データを削除
+          templates = [];
+          dataSource = 'corrupted';
+        }
+      } else {
+        dlog('ℹ️ 旧キー・新キー共にデータなし');
+        templates = [];
+        dataSource = 'empty';
+      }
+    }
+    
+    // データの正規化（createdAt/updatedAt → created/updated）
+    let normalizedCount = 0;
+    const normalizedTemplates = templates.map(template => {
+      let needsNormalization = false;
+      const normalized = { ...template };
+      
+      // createdAt → created への変換
+      if (template.createdAt && !template.created) {
+        if (typeof template.createdAt === 'string') {
+          // 日付文字列をタイムスタンプに変換
+          try {
+            normalized.created = new Date(template.createdAt).getTime();
+          } catch (dateError) {
+            normalized.created = Date.now();
+          }
+        } else {
+          normalized.created = template.createdAt;
+        }
+        delete normalized.createdAt;
+        needsNormalization = true;
+      }
+      
+      // updatedAt → updated への変換
+      if (template.updatedAt && !template.updated) {
+        if (typeof template.updatedAt === 'string') {
+          // 日付文字列をタイムスタンプに変換
+          try {
+            normalized.updated = new Date(template.updatedAt).getTime();
+          } catch (dateError) {
+            normalized.updated = Date.now();
+          }
+        } else {
+          normalized.updated = template.updatedAt;
+        }
+        delete normalized.updatedAt;
+        needsNormalization = true;
+      }
+      
+      // デフォルト値の設定
+      if (!normalized.created) {
+        normalized.created = Date.now();
+        needsNormalization = true;
+      }
+      if (!normalized.updated) {
+        normalized.updated = normalized.created;
+        needsNormalization = true;
+      }
+      
+      if (needsNormalization) {
+        normalizedCount++;
+      }
+      
+      return normalized;
+    });
+    
+    // 正規化されたデータを保存（変更があった場合のみ）
+    if (normalizedCount > 0 || dataSource !== 'existing') {
+      localStorage.setItem(newKey, JSON.stringify(normalizedTemplates));
+      dlog('✅ テンプレートデータ正規化完了:', {
+        dataSource,
+        totalTemplates: normalizedTemplates.length,
+        normalizedCount
+      });
+    } else {
+      dlog('ℹ️ データ正規化の必要なし');
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ テンプレートストレージキー移行中にエラー:', error);
+  }
+}
+
+/**
+ * プロジェクトのテンプレート参照を正規化
+ * selectedScreenId から loadingScreen.template への移行処理
+ * @returns {Promise<void>}
+ */
+async function migrateProjectTemplateReferences() {
+  try {
+    dlog('🔄 プロジェクトテンプレート参照正規化開始');
+    
+    const projectsJson = localStorage.getItem('miruwebAR_projects');
+    if (!projectsJson) {
+      dlog('ℹ️ プロジェクトデータなし、移行スキップ');
+      return;
+    }
+    
+    let projects;
+    try {
+      projects = JSON.parse(projectsJson);
+    } catch (parseError) {
+      console.warn('⚠️ プロジェクトデータ解析エラー:', parseError);
+      return;
+    }
+    
+    if (!Array.isArray(projects)) {
+      dlog('⚠️ プロジェクトデータが配列ではありません');
+      return;
+    }
+    
+    let migratedCount = 0;
+    const migratedProjects = projects.map(project => {
+      const migrated = { ...project };
+      let needsMigration = false;
+      
+      // loadingScreen が存在する場合
+      if (project.loadingScreen) {
+        // selectedScreenId から template への移行
+        if (project.loadingScreen.selectedScreenId && 
+            !project.loadingScreen.template && 
+            project.loadingScreen.selectedScreenId !== 'none') {
+          migrated.loadingScreen.template = project.loadingScreen.selectedScreenId;
+          needsMigration = true;
+        }
+        
+        // template が存在しない場合はデフォルト値を設定
+        if (!migrated.loadingScreen.template) {
+          migrated.loadingScreen.template = 'default';
+          needsMigration = true;
+        }
+      } else if (project.selectedScreenId && project.selectedScreenId !== 'none') {
+        // 古い形式: プロジェクト直下に selectedScreenId がある場合
+        migrated.loadingScreen = {
+          ...migrated.loadingScreen,
+          template: project.selectedScreenId
+        };
+        needsMigration = true;
+      }
+      
+      if (needsMigration) {
+        migratedCount++;
+        dlog(`✅ プロジェクト「${project.name}」のテンプレート参照を正規化:`, {
+          originalSelectedScreenId: project.loadingScreen?.selectedScreenId || project.selectedScreenId,
+          newTemplate: migrated.loadingScreen?.template
+        });
+      }
+      
+      return migrated;
+    });
+    
+    // 変更があった場合のみ保存
+    if (migratedCount > 0) {
+      localStorage.setItem('miruwebAR_projects', JSON.stringify(migratedProjects));
+      dlog('✅ プロジェクトテンプレート参照正規化完了:', {
+        totalProjects: projects.length,
+        migratedCount
+      });
+    } else {
+      dlog('ℹ️ プロジェクトテンプレート参照の正規化は不要');
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ プロジェクトテンプレート参照正規化中にエラー:', error);
+  }
+}
+
+/**
+ * ロゴプロパティ名の正規化（logoImage → logo）
+ * プロジェクトデータとテンプレートデータのロゴプロパティを統一
+ * @returns {Promise<void>}
+ */
+async function migrateLogoPropertyNames() {
+  try {
+    dlog('🔄 ロゴプロパティ名正規化開始');
+    
+    let migratedCount = 0;
+    
+    // プロジェクトデータの移行
+    const projectsJson = localStorage.getItem('miruwebAR_projects');
+    if (projectsJson) {
+      try {
+        const projects = JSON.parse(projectsJson);
+        if (Array.isArray(projects)) {
+          const migratedProjects = projects.map(project => {
+            const migrated = { ...project };
+            let needsMigration = false;
+            
+            // loadingScreen.logoImage → loadingScreen.logo
+            if (migrated.loadingScreen?.logoImage && !migrated.loadingScreen?.logo) {
+              migrated.loadingScreen.logo = migrated.loadingScreen.logoImage;
+              delete migrated.loadingScreen.logoImage;
+              needsMigration = true;
+            }
+            
+            // startScreen.logoImage → startScreen.logo
+            if (migrated.startScreen?.logoImage && !migrated.startScreen?.logo) {
+              migrated.startScreen.logo = migrated.startScreen.logoImage;
+              delete migrated.startScreen.logoImage;
+              needsMigration = true;
+            }
+            
+            if (needsMigration) {
+              migratedCount++;
+              dlog(`✅ プロジェクト「${project.name}」のロゴプロパティを正規化`);
+            }
+            
+            return migrated;
+          });
+          
+          if (migratedCount > 0) {
+            localStorage.setItem('miruwebAR_projects', JSON.stringify(migratedProjects));
+          }
+        }
+      } catch (parseError) {
+        console.warn('⚠️ プロジェクトデータ解析エラー:', parseError);
+      }
+    }
+    
+    // テンプレートデータの移行
+    const templatesJson = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+    if (templatesJson) {
+      try {
+        const templates = JSON.parse(templatesJson);
+        if (Array.isArray(templates)) {
+          const migratedTemplates = templates.map(template => {
+            const migrated = { ...template };
+            let needsMigration = false;
+            
+            // settings.loadingScreen.logoImage → settings.loadingScreen.logo
+            if (migrated.settings?.loadingScreen?.logoImage && !migrated.settings?.loadingScreen?.logo) {
+              migrated.settings.loadingScreen.logo = migrated.settings.loadingScreen.logoImage;
+              delete migrated.settings.loadingScreen.logoImage;
+              needsMigration = true;
+            }
+            
+            // settings.startScreen.logoImage → settings.startScreen.logo
+            if (migrated.settings?.startScreen?.logoImage && !migrated.settings?.startScreen?.logo) {
+              migrated.settings.startScreen.logo = migrated.settings.startScreen.logoImage;
+              delete migrated.settings.startScreen.logoImage;
+              needsMigration = true;
+            }
+            
+            if (needsMigration) {
+              migratedCount++;
+              dlog(`✅ テンプレート「${template.name}」のロゴプロパティを正規化`);
+            }
+            
+            return migrated;
+          });
+          
+          if (migratedCount > 0) {
+            localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(migratedTemplates));
+          }
+        }
+      } catch (parseError) {
+        console.warn('⚠️ テンプレートデータ解析エラー:', parseError);
+      }
+    }
+    
+    if (migratedCount > 0) {
+      dlog('✅ ロゴプロパティ名正規化完了:', { migratedCount });
+    } else {
+      dlog('ℹ️ ロゴプロパティ名の正規化は不要');
+    }
+    
+  } catch (error) {
+    console.warn('⚠️ ロゴプロパティ名正規化中にエラー:', error);
+  }
+}
+
+/**
  * アプリケーション初期化時のマイグレーション実行
  * @returns {Promise<void>}
  */
@@ -332,10 +649,20 @@ export async function initializeMigration() {
   try {
     dlog('🔄 アプリケーション初期化マイグレーション開始');
     
+    // localStorage キー統一移行を最初に実行
+    await migrateTemplateStorageKeys();
+    
+    // プロジェクトテンプレート参照の正規化
+    await migrateProjectTemplateReferences();
+    
+    // ロゴプロパティ名の正規化
+    await migrateLogoPropertyNames();
+    
+    // Base64 → IndexedDB 移行を実行
     const result = await migrateLegacyBase64ToIDB();
     
     if (result.alreadyMigrated) {
-      dlog('ℹ️ マイグレーション済み、スキップ');
+      dlog('ℹ️ IndexedDB マイグレーション済み、スキップ');
     } else {
       dlog('✅ 初期化マイグレーション完了:', result.migrationInfo);
     }

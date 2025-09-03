@@ -2,7 +2,7 @@
  * ローディング画面テンプレート管理
  */
 
-const TEMPLATES_STORAGE_KEY = 'miruwebAR_loading_templates';
+export const TEMPLATES_STORAGE_KEY = 'miruwebAR_loading_templates';
 
 /**
  * デフォルト設定定義

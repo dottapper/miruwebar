@@ -1,0 +1,26 @@
+{
+  "watch": [
+    "src/",
+    "server/",
+    "public/",
+    "index.html",
+    "vite.config.js"
+  ],
+  "ext": "js,css,html,json,md",
+  "ignore": [
+    "node_modules/",
+    "dist/",
+    ".git/",
+    "*.log",
+    "data/",
+    "uploads/"
+  ],
+  "delay": 1000,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "exec": "npm run dev",
+  "restartable": "rs",
+  "verbose": true,
+  "colours": true
+}

@@ -1,31 +1,31 @@
 {
-  "hash": "60a22dfc",
+  "hash": "41571f98",
   "configHash": "1732d227",
-  "lockfileHash": "f1933b72",
-  "browserHash": "a41f840c",
+  "lockfileHash": "acb99cdd",
+  "browserHash": "dd73c91d",
   "optimized": {
     "uuid": {
       "src": "../../node_modules/uuid/dist/esm-browser/index.js",
       "file": "uuid.js",
-      "fileHash": "fa4500a4",
+      "fileHash": "cbce3596",
       "needsInterop": false
     },
     "idb-keyval": {
       "src": "../../node_modules/idb-keyval/dist/index.js",
       "file": "idb-keyval.js",
-      "fileHash": "1bfddf12",
+      "fileHash": "428f43f7",
       "needsInterop": false
     },
     "qrcode": {
       "src": "../../node_modules/qrcode/lib/browser.js",
       "file": "qrcode.js",
-      "fileHash": "d2977190",
+      "fileHash": "d27b7a4f",
       "needsInterop": true
     },
     "jszip": {
       "src": "../../node_modules/jszip/dist/jszip.min.js",
       "file": "jszip.js",
-      "fileHash": "13886e25",
+      "fileHash": "dfd71e61",
       "needsInterop": true
     }
   },

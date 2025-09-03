@@ -726,7 +726,7 @@ export async function showQRCodeModal(options = {}) {
 
     // プレビュー機能（スマホ向けレスポンシブ表示）
     modalOverlay.querySelector('#test-local-url').addEventListener('click', () => {
-      showARPreview(localUrl, modelId);
+      showARPreview(localUrl, projectId);
     });
 
     // PCブラウザで開く
@@ -788,7 +788,7 @@ export async function showQRCodeModal(options = {}) {
                     const image = canvas.toDataURL('image/png');
                     const link = document.createElement('a');
                     link.href = image;
-                    link.download = `${modelId}-qrcode.png`;
+                    link.download = `${projectId}-qrcode.png`;
                     link.click();
                 } catch (error) {
                     console.error('QRコードのダウンロードに失敗しました:', error);
@@ -911,6 +911,17 @@ export async function showQRCodeModal(options = {}) {
         }
       } catch (e) {
         console.warn('ローカル公開に失敗（フォールバックでURLのみ表示）:', e);
+        
+        // ユーザーに分かりやすいエラーメッセージを表示
+        const container = document.getElementById('qrcode-container');
+        if (container) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 1rem; color: #666;">
+              <p>⚠️ プロジェクトの公開準備中...</p>
+              <p style="font-size: 0.9em;">QRコードを生成しています</p>
+            </div>
+          `;
+        }
       } finally {
         // 初期QR生成（公開に成功していれば更新されたURLになる）
         setTimeout(() => generateQRCode(), 200);

@@ -20,6 +20,7 @@ import {
   ACCEPT_ATTRIBUTES
 } from './constants.js';
 import { settingsAPI, defaultSettings, validateAndFixColor, syncLastUsedTemplateId, importExportAPI } from './settings.js';
+import { TEMPLATES_STORAGE_KEY } from './template-manager.js';
 import { 
   saveLoadingScreenTemplate, 
   getLoadingScreenTemplate, 
@@ -1370,7 +1371,7 @@ function updateEditorTitleFromUrl() {
  */
 function getStoredTemplates() {
   try {
-    const stored = localStorage.getItem('loadingScreenTemplates');
+    const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
     console.error('テンプレート一覧の取得に失敗:', error);

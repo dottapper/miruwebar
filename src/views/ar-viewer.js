@@ -2,6 +2,7 @@
 // 統合ARビューア - QRコードからプロジェクトデータを読み込んでAR表示
 import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
 import { createLogger } from '../utils/logger.js';
+import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
@@ -73,6 +74,19 @@ export default function showARViewer(container) {
           </div>
         </div>
       </div>
+      
+      <!-- ガイド画面（マーカー検出/平面検出の説明） -->
+      <div id="ar-guide-screen" class="ar-guide-screen" style="display: none;">
+        <div class="guide-content">
+          <img id="ar-guide-image" alt="guide image" style="display:none;max-width:240px;max-height:180px;margin-bottom:16px;" />
+          <h2 id="ar-guide-title">画面をタップしてください</h2>
+          <p id="ar-guide-description">平らな面を見つけて画面をタップしてください</p>
+          <div id="ar-guide-marker" style="display:none;">
+            <img id="ar-guide-marker-image" alt="marker" style="max-width:200px;max-height:150px;margin:16px 0;" />
+          </div>
+        </div>
+      </div>
+      
       <div id="ar-host" class="ar-host"></div>
       
       <!-- ARコントロール -->
@@ -140,6 +154,36 @@ export default function showARViewer(container) {
     }
     .start-content { text-align: center; padding: 2rem; position: relative; }
     .start-content h1 { color: #fff; font-size: 1.6rem; margin: 0.5rem 0 0; }
+
+    .ar-guide-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #121212;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1100;
+    }
+    .guide-content { 
+      text-align: center; 
+      padding: 2rem; 
+      position: relative;
+      max-width: 90%;
+    }
+    .guide-content h2 { 
+      color: #fff; 
+      font-size: 1.4rem; 
+      margin: 0.5rem 0 1rem; 
+    }
+    .guide-content p { 
+      color: #ccc; 
+      font-size: 1rem; 
+      margin: 0.5rem 0 1rem; 
+      line-height: 1.4;
+    }
 
     .ar-loading-screen {
       position: absolute;
@@ -368,6 +412,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   const startLogo = container.querySelector('#ar-start-logo');
   const startTitle = container.querySelector('#ar-start-title');
   const startCTA = container.querySelector('#ar-start-cta');
+  const guideScreen = container.querySelector('#ar-guide-screen');
+  const guideImage = container.querySelector('#ar-guide-image');
+  const guideTitle = container.querySelector('#ar-guide-title');
+  const guideDescription = container.querySelector('#ar-guide-description');
+  const guideMarker = container.querySelector('#ar-guide-marker');
+  const guideMarkerImage = container.querySelector('#ar-guide-marker-image');
   const arHost = container.querySelector('#ar-host');
   const statusText = container.querySelector('#ar-status-text');
   const instruction = container.querySelector('#ar-instruction');
@@ -472,6 +522,41 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       startLogo.style.transform = '';
     }
     
+    // ガイド画面のリセット
+    if (guideScreen) {
+      guideScreen.style.backgroundColor = '';
+      guideScreen.style.background = '';
+      guideScreen.style.color = '';
+      guideScreen.style.display = 'none';
+    }
+    
+    if (guideTitle) {
+      guideTitle.style.color = '';
+      guideTitle.style.fontSize = '';
+      guideTitle.style.fontFamily = '';
+      guideTitle.textContent = '画面をタップしてください';
+    }
+    
+    if (guideDescription) {
+      guideDescription.style.color = '';
+      guideDescription.style.fontSize = '';
+      guideDescription.style.fontFamily = '';
+      guideDescription.textContent = '平らな面を見つけて画面をタップしてください';
+    }
+    
+    if (guideImage) {
+      guideImage.style.display = 'none';
+      guideImage.src = '';
+    }
+    
+    if (guideMarker) {
+      guideMarker.style.display = 'none';
+    }
+    
+    if (guideMarkerImage) {
+      guideMarkerImage.src = '';
+    }
+    
     if (startCTA) {
       startCTA.style.backgroundColor = '';
       startCTA.style.background = '';
@@ -524,10 +609,38 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     dlog('📁 読み込まれたプロジェクト:', currentProject);
     dlog('🔍 プロジェクトのloadingScreen:', currentProject.loadingScreen);
+    console.log('🔍 Project URL:', window.location.hash);
+    console.log('🔍 Full currentProject:', JSON.stringify(currentProject, null, 2));
 
-    // 画面設定（ローディング/スタート）の取得
+    // 画面設定（ローディング/スタート/ガイド）の取得
     let ls = currentProject.loadingScreen || {};
     let ss = currentProject.startScreen || {};
+    let gs = currentProject.guideScreen || {};
+    
+    // project.jsonに埋め込まれたtemplateSettingsを最優先で適用
+    console.log('🔍 ss direct check:', ss);
+    console.log('🔍 ls.templateSettings check:', ls.templateSettings);
+    
+    // シンプルなアプローチ：直接startScreen設定を使用
+    if (ls.templateSettings && ls.templateSettings.startScreen) {
+      ss = ls.templateSettings.startScreen;
+      console.log('🎯 直接templateSettings.startScreenを適用:', ss);
+    }
+    
+    if (ls.templateSettings) {
+      console.log('🎯 project.jsonに埋め込まれたtemplateSettingsを適用:', ls.templateSettings);
+      dlog('🎯 project.jsonに埋め込まれたtemplateSettingsを適用:', ls.templateSettings);
+      
+      // templateSettingsから各画面設定を取得
+      if (ls.templateSettings.loadingScreen) {
+        ls = { ...ls.templateSettings.loadingScreen, ...ls };
+      }
+      if (ls.templateSettings.guideScreen) {
+        gs = { ...ls.templateSettings.guideScreen, ...gs };
+      }
+      
+      dlog('🎯 templateSettingsから設定を統合完了:', { ls, ss, gs });
+    }
     
     // ビューア専用の状態管理を使用して設定を適用
     try {
@@ -537,32 +650,62 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const viewerSettings = applyProjectLoadingSettings(currentProject);
       const mergedSettings = mergeLoadingSettings(currentProject, viewerSettings);
       
-      // プロジェクト設定とビューア設定をマージ
-      ls = { ...mergedSettings.loadingScreen, ...ls };
-      ss = { ...mergedSettings.startScreen, ...ss };
+      // templateSettingsが最優先、その後にマージされた設定を適用
+      if (!ls.templateSettings) {
+        ls = { ...mergedSettings.loadingScreen, ...ls };
+      }
+      if (!ss.title && !ls.templateSettings?.startScreen) {
+        ss = { ...mergedSettings.startScreen, ...ss };
+      }
+      if (!gs.message && !ls.templateSettings?.guideScreen) {
+        gs = { ...mergedSettings.guideScreen, ...gs };
+      }
       
-      dlog('🎨 統合システムでローディング画面設定を適用:', { ls, ss, merged: mergedSettings });
+      dlog('🎨 統合システムでローディング画面設定を適用:', { ls, ss, gs, merged: mergedSettings });
     } catch (error) {
       console.warn('統合システムの適用に失敗、従来の方法を使用:', error);
+      
       // フォールバック: エディター保存形式の処理
       const editorSettings = ls.editorSettings || null;
-      ss = currentProject.startScreen || (editorSettings?.startScreen || {});
+      if (!ss.title && !ls.templateSettings?.startScreen) {
+        ss = currentProject.startScreen || (editorSettings?.startScreen || {});
+      }
     }
+
+    console.log('🎨 最終的な設定:', { ls, ss, gs });
+    
+    // editorSettings をスコープ外でも使用するため、ここで定義
+    const editorSettings = ls.editorSettings || null;
     
     if (ls) {
       dlog('🎨 プロジェクトファイルからローディング画面設定を取得:', ls);
       
       // 設定が不完全な場合のみlocalStorageからの補完を試行（フォールバック）
-      if (ls.selectedScreenId && !ls.backgroundColor && !ls.textColor) {
+      if (ls.selectedScreenId && (!ls.backgroundColor || !ls.textColor)) {
         dlog('🔍 設定が不完全のため、localStorageからの補完を試行:', ls.selectedScreenId);
         try {
-          const stored = localStorage.getItem('loadingScreenTemplates');
+          const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
           if (stored) {
             const templates = JSON.parse(stored);
             const template = templates.find(t => t.id === ls.selectedScreenId);
-            if (template?.settings?.loadingScreen) {
-              ls = { ...ls, ...template.settings.loadingScreen };
-              dlog('✅ localStorage補完完了:', template.name);
+            if (template?.settings) {
+              // ローディング画面設定を補完
+              if (template.settings.loadingScreen) {
+                ls = { ...template.settings.loadingScreen, ...ls };
+                dlog('✅ ローディング画面設定をlocalStorageから補完:', template.name);
+              }
+              
+              // スタート画面設定を補完
+              if (template.settings.startScreen && !ss.backgroundColor && !ss.title) {
+                ss = { ...template.settings.startScreen, ...ss };
+                dlog('✅ スタート画面設定をlocalStorageから補完:', template.name);
+              }
+              
+              // ガイド画面設定を補完
+              if (template.settings.guideScreen) {
+                currentProject.guideScreen = { ...template.settings.guideScreen, ...(currentProject.guideScreen || {}) };
+                dlog('✅ ガイド画面設定をlocalStorageから補完:', template.name);
+              }
             }
           }
         } catch (e) {
@@ -597,7 +740,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             fontScale: ls.fontScale || le.fontScale,
             showProgress: (ls.showProgress !== undefined) ? ls.showProgress : (le.showProgress !== undefined ? le.showProgress : true),
             logoType: ls.logoType || le.logoType,
-            logo: ls.logo || le.logo,
+            logoImage: ls.logoImage || ls.logo || le.logoImage || le.logo,
             logoPosition: (ls.logoPosition !== undefined) ? ls.logoPosition : le.logoPosition,
             logoSize: (ls.logoSize !== undefined) ? ls.logoSize : le.logoSize,
             textPosition: (ls.textPosition !== undefined) ? ls.textPosition : le.textPosition
@@ -670,10 +813,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       try {
         let logoSrc = '';
         const logoType = ls.logoType || 'none';
-        if (logoType === 'useStartLogo' && ss.logo) {
-          logoSrc = ss.logo;
-        } else if (logoType === 'custom' && ls.logo) {
-          logoSrc = ls.logo;
+        if (logoType === 'useStartLogo' && (ss.logo || ss.logoImage)) {
+          logoSrc = ss.logo || ss.logoImage;
+        } else if (logoType === 'custom' && (ls.logoImage || ls.logo)) {
+          logoSrc = ls.logoImage || ls.logo;
         }
         if (logoSrc && loadingLogo) {
           loadingLogo.src = logoSrc;
@@ -731,8 +874,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (ss.title && startTitle) startTitle.textContent = ss.title; else if (startTitle) startTitle.textContent = safeName;
       if (ss.textColor && startTitle) startTitle.style.color = ss.textColor;
       // ロゴ
-      if (ss.logo && startLogo) {
-        startLogo.src = ss.logo;
+      if ((ss.logo || ss.logoImage) && startLogo) {
+        startLogo.src = ss.logo || ss.logoImage;
         startLogo.style.display = 'inline-block';
         const pos = (typeof ss.logoPosition === 'number') ? Math.max(5, Math.min(90, ss.logoPosition)) : 20;
         const px = (typeof ss.logoSize === 'number') ? Math.round(Math.max(0.8, Math.min(2.5, ss.logoSize)) * 80) : 120;
@@ -762,6 +905,62 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
       updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
       startBtn.style.display = 'inline-block';
+    }
+
+    // ガイド画面の設定を準備（AR開始時に表示）
+    try {
+      // ガイド画面の背景色設定
+      if (gs.backgroundColor && guideScreen) {
+        guideScreen.style.background = gs.backgroundColor;
+      }
+      
+      // ガイド画面のモード判定（surface/world）
+      const guideMode = gs.mode || (currentProject.type === 'marker' ? 'surface' : 'world');
+      
+      if (guideMode === 'surface' && gs.surfaceDetection) {
+        // マーカー検出モード
+        if (gs.surfaceDetection.title && guideTitle) {
+          guideTitle.textContent = gs.surfaceDetection.title;
+        }
+        if (gs.surfaceDetection.description && guideDescription) {
+          guideDescription.textContent = gs.surfaceDetection.description;
+        }
+        if (gs.surfaceDetection.guideImage && guideImage) {
+          guideImage.src = gs.surfaceDetection.guideImage;
+          guideImage.style.display = 'block';
+        }
+        // マーカー画像も表示
+        if (currentProject.markerImage && guideMarkerImage) {
+          guideMarkerImage.src = currentProject.markerImage;
+          guideMarker.style.display = 'block';
+        }
+      } else if (guideMode === 'world' && gs.worldTracking) {
+        // 平面検出モード
+        if (gs.worldTracking.title && guideTitle) {
+          guideTitle.textContent = gs.worldTracking.title;
+        }
+        if (gs.worldTracking.description && guideDescription) {
+          guideDescription.textContent = gs.worldTracking.description;
+        }
+        if (gs.worldTracking.guideImage && guideImage) {
+          guideImage.src = gs.worldTracking.guideImage;
+          guideImage.style.display = 'block';
+        }
+        // マーカーは非表示
+        if (guideMarker) {
+          guideMarker.style.display = 'none';
+        }
+      }
+      
+      // テキスト色設定
+      if (gs.textColor) {
+        if (guideTitle) guideTitle.style.color = gs.textColor;
+        if (guideDescription) guideDescription.style.color = gs.textColor;
+      }
+      
+      dlog('🎯 ガイド画面設定完了:', { guideMode, gs });
+    } catch (guideError) {
+      console.warn('⚠️ ガイド画面設定エラー:', guideError);
     }
 
   } catch (error) {
@@ -842,7 +1041,16 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   // AR開始
   startBtn.addEventListener('click', async () => {
     startBtn.style.display = 'none';
-    try {
+    
+    // ローディング画面を隠してガイド画面を表示
+    if (loadingScreen) loadingScreen.style.display = 'none';
+    if (guideScreen) guideScreen.style.display = 'flex';
+    
+    // 少し待ってからAR処理を開始（ガイド画面を見せる時間）
+    setTimeout(async () => {
+      if (guideScreen) guideScreen.style.display = 'none';
+      
+      try {
       const isMarker = (currentProject?.type || 'markerless') === 'marker';
       if (isMarker) {
         updateStatus('📹 カメラ起動中（マーカーAR）', 'warning');
@@ -970,6 +1178,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       startBtn.style.display = showRetryButton ? 'inline-block' : 'none';
     }
+    }, 2000); // ガイド画面表示時間: 2秒
   });
 
   // マーカー検出

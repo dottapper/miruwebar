@@ -13,6 +13,7 @@ import {
   CAPACITY_UTILS,
   DEBUG
 } from './constants.js';
+import { TEMPLATES_STORAGE_KEY } from './template-manager.js';
 
 // デフォルト設定の定義
 export const defaultSettings = {
@@ -524,7 +525,7 @@ export const settingsAPI = {
     // ローディング画面関連のキーのみを対象
     const relevantKeys = [
       'loadingScreenSettings',
-      'loadingScreenTemplates',
+      TEMPLATES_STORAGE_KEY,
       'lastUsedTemplateId'
     ];
     

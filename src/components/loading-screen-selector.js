@@ -4,6 +4,7 @@
 
 // import { settingsAPI } from './loading-screen/settings.js'; // 現在未使用
 import { TOTAL_IMAGES_MAX_BYTES } from './loading-screen/constants.js';
+import { TEMPLATES_STORAGE_KEY } from './loading-screen/template-manager.js';
 
 let modalOverlay = null;
 let isModalOpen = false;
@@ -81,11 +82,41 @@ function generateTemplatesList() {
  */
 function getStoredTemplates() {
   try {
-    const stored = localStorage.getItem('loadingScreenTemplates');
+    // データ移行処理: 旧キーから新キーへ
+    migrateTemplateData();
+    
+    const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
     console.error('テンプレート一覧の取得に失敗:', error);
     return [];
+  }
+}
+
+/**
+ * 既存データの移行処理（旧キー → 新キー）
+ */
+function migrateTemplateData() {
+  try {
+    const oldKey = 'loadingScreenTemplates';
+    const newKey = TEMPLATES_STORAGE_KEY;
+    
+    // 新キーにデータが既にある場合は移行しない
+    if (localStorage.getItem(newKey)) {
+      return;
+    }
+    
+    // 旧キーからデータを取得
+    const oldData = localStorage.getItem(oldKey);
+    if (oldData) {
+      // 新キーに移行
+      localStorage.setItem(newKey, oldData);
+      // 旧キーを削除
+      localStorage.removeItem(oldKey);
+      console.log('✅ ローディング画面テンプレートデータを移行しました:', oldKey, '→', newKey);
+    }
+  } catch (error) {
+    console.warn('⚠️ テンプレートデータ移行中にエラー:', error);
   }
 }
 
@@ -290,13 +321,18 @@ function showTemplateNameDialog() {
  * プロジェクトアイテムのHTMLを作成
  */
 function createProjectItemHTML(template) {
+  // 日時の表示形式を統一（created が number の場合は日付文字列に変換）
+  const displayDate = typeof template.created === 'number' 
+    ? new Date(template.created).toLocaleDateString('ja-JP')
+    : template.created || template.createdAt || '不明';
+    
   return `
     <div class="project-item" data-template-id="${template.id}">
       <div class="project-icon">🏢</div>
       <div class="project-info">
         <div class="project-name">${template.name}</div>
         <div class="project-details">
-          <span class="project-date">${template.createdAt}</span>
+          <span class="project-date">${displayDate}</span>
         </div>
       </div>
       <div class="project-actions">
@@ -556,16 +592,41 @@ export async function saveLoadingScreenTemplate(templateData) {
       compressedSettings = sanitized;
     }
 
-    const newTemplate = {
-      id: `template_${Date.now()}`,
-      name: templateData.name || `テンプレート ${templates.length + 1}`,
-      createdAt: new Date().toLocaleDateString('ja-JP'),
-      updatedAt: new Date().toLocaleDateString('ja-JP'),
-      settings: compressedSettings
-    };
+    let template;
+    let isUpdate = false;
     
-    // 新しいテンプレートを追加
-    templates.push(newTemplate);
+    // 既存テンプレートIDが指定されている場合は上書き、そうでなければ新規作成
+    if (templateData.id) {
+      const existingIndex = templates.findIndex(t => t.id === templateData.id);
+      if (existingIndex >= 0) {
+        // 既存テンプレートの上書き
+        template = {
+          ...templates[existingIndex],
+          name: templateData.name || templates[existingIndex].name,
+          updated: Date.now(), // updated のみ更新
+          settings: compressedSettings
+          // created は既存の値を保持
+        };
+        templates[existingIndex] = template;
+        isUpdate = true;
+        console.log('✅ 既存テンプレートを上書き保存:', template.name, template.id);
+      } else {
+        console.warn('⚠️ 指定されたテンプレートIDが見つかりません、新規作成します:', templateData.id);
+      }
+    }
+    
+    if (!isUpdate) {
+      // 新規テンプレートの作成
+      template = {
+        id: `template_${Date.now()}`,
+        name: templateData.name || `テンプレート ${templates.length + 1}`,
+        created: Date.now(),
+        updated: Date.now(),
+        settings: compressedSettings
+      };
+      templates.push(template);
+      console.log('✅ 新規テンプレートを作成:', template.name, template.id);
+    }
     
     // 容量チェック（画像を含まないため、3MB以内に収まる想定）
     const templatesJson = JSON.stringify(templates);
@@ -585,9 +646,9 @@ export async function saveLoadingScreenTemplate(templateData) {
       }
     }
     
-    localStorage.setItem('loadingScreenTemplates', JSON.stringify(templates));
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(templates));
     
-    return newTemplate;
+    return template;
   } catch (error) {
     console.error('テンプレートの保存に失敗:', error);
     throw error;
@@ -610,7 +671,7 @@ export function deleteLoadingScreenTemplate(templateId) {
     const templates = getStoredTemplates();
     const filteredTemplates = templates.filter(template => template.id !== templateId);
     
-    localStorage.setItem('loadingScreenTemplates', JSON.stringify(filteredTemplates));
+    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(filteredTemplates));
     
     // 削除されたテンプレートがlastUsedTemplateIdの場合はクリア
     const lastUsedId = localStorage.getItem('lastUsedTemplateId');
