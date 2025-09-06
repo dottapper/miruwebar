@@ -3,7 +3,7 @@
 
 /* ログイン画面専用スタイル - 他ファイルへの干渉を防ぐため login- プレフィックスを使用 */
 .login-container {
-  min-height: 100vh;
+  min-height: 100svh; /* iOS Safari対応 */
   display: flex;
   align-items: center;
   justify-content: center;

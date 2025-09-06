@@ -77,18 +77,87 @@ export function showMarkerUpload() {
         // 実際の実装では、ここでAPIにファイルをアップロードし、
         // 成功時にmarkerIdなどのデータを取得します
         
-        // 仮実装：画像URLをローカルストレージに保存
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          // 実際の実装ではAPIにアップロードしたマーカーIDやURLを取得します
-          // 仮実装としてローカルストレージに保存
-          localStorage.setItem('markerImageUrl', e.target.result);
-          
-          // アップロード完了後、エディタ画面へ遷移
-          window.location.hash = '#/editor?type=marker';
-          closeModal();
+        // 画像を圧縮してからローカルストレージに保存
+        const compressImage = (file, maxWidth = 800, quality = 0.8) => {
+          return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+              // アスペクト比を維持しながらリサイズ
+              const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+              canvas.width = img.width * ratio;
+              canvas.height = img.height * ratio;
+              
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            
+            const reader = new FileReader();
+            reader.onload = (e) => { img.src = e.target.result; };
+            reader.readAsDataURL(file);
+          });
         };
-        reader.readAsDataURL(file);
+        
+        // 画像を圧縮してから保存
+        compressImage(file).then((compressedDataURL) => {
+          try {
+            const dataURL = compressedDataURL;
+            // LocalStorage使用量を確認
+            const currentSize = JSON.stringify(localStorage).length;
+            const newDataSize = dataURL.length;
+            const totalSize = currentSize + newDataSize;
+            
+            console.log(`LocalStorage使用量: ${Math.round(currentSize/1024)}KB, 新しい画像: ${Math.round(newDataSize/1024)}KB, 合計: ${Math.round(totalSize/1024)}KB`);
+            
+            // LocalStorage制限を回避：合計サイズが4MB以上の場合は警告
+            if (totalSize > 4 * 1024 * 1024) {
+              if (confirm(`ストレージ使用量が制限に近づいています（${Math.round(totalSize/1024)}KB）。既存データをクリアして続行しますか？`)) {
+                // 重要なデータ以外をクリア
+                const importantKeys = ['projects', 'settings'];
+                const backup = {};
+                importantKeys.forEach(key => {
+                  if (localStorage.getItem(key)) {
+                    backup[key] = localStorage.getItem(key);
+                  }
+                });
+                localStorage.clear();
+                Object.entries(backup).forEach(([key, value]) => {
+                  localStorage.setItem(key, value);
+                });
+              } else {
+                alert('画像アップロードをキャンセルしました。');
+                return;
+              }
+            }
+            
+            // 実際の実装ではAPIにアップロードしたマーカーIDやURLを取得します
+            // 仮実装としてローカルストレージに保存
+            localStorage.setItem('markerImageUrl', dataURL);
+            
+            // アップロード完了後、エディタ画面へ遷移
+            window.location.hash = '#/editor?type=marker';
+            closeModal();
+          } catch (error) {
+            if (error.name === 'QuotaExceededError') {
+              alert('ストレージ容量が不足しています。ブラウザのデータをクリアするか、小さな画像を使用してください。');
+              // LocalStorageをクリアしてからもう一度試す
+              if (confirm('ローカルデータをクリアして再試行しますか？')) {
+                localStorage.clear();
+                localStorage.setItem('markerImageUrl', dataURL);
+                window.location.hash = '#/editor?type=marker';
+                closeModal();
+              }
+            } else {
+              console.error('マーカー画像保存エラー:', error);
+              alert('画像の保存に失敗しました。');
+            }
+          }
+        }).catch((error) => {
+          console.error('画像圧縮エラー:', error);
+          alert('画像の圧縮に失敗しました。');
+        });
       }
     });
     

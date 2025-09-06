@@ -50,8 +50,12 @@ export async function exportProjectBundle({ project, assetUrls = [] }) {
       return;
     }
     const params = new URLSearchParams(window.location.search);
-    const src = params.get('src') || 'project.json';
-    const appUrl = '${location.origin}';
+    const src = params.get('src');
+    if (!src) {
+      document.getElementById('app').innerHTML = '<div class="center">エラー: ?src=project.json を指定してください<br><small>例: viewer.html?src=project.json</small></div>';
+      return;
+    }
+    // 配布用ZIPでは相対パス/絶対URLを前提とし、環境依存のoriginは使用しない
     const url = src;
     const res = await fetch(url);
     if (!res.ok) throw new Error('project.json fetch failed');
@@ -59,7 +63,13 @@ export async function exportProjectBundle({ project, assetUrls = [] }) {
     document.getElementById('app').innerHTML = '<div class="center">公開用プロジェクトを読み込みました。<br>ホスト側のアプリで開いてください。</div>';
   }
   start().catch(e=>{
-    document.getElementById('app').innerHTML = '<div class="center">読み込みに失敗しました: '+e.message+'</div>';
+    // ★★★ セキュリティ強化: textContent で XSS 防止 ★★★
+    const appElement = document.getElementById('app');
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'center';
+    errorDiv.textContent = '読み込みに失敗しました: ' + e.message;
+    appElement.textContent = ''; // クリア
+    appElement.appendChild(errorDiv);
   });
 </script>
 `;

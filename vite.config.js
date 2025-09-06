@@ -10,7 +10,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
-    strictPort: false,
+    strictPort: true, // 開発サーバー専用ポート（競合時はエラーを出して明確化）
     hmr: {
       overlay: true // エラーオーバーレイを有効化（ポートは自動）
     },
@@ -22,6 +22,13 @@ export default defineConfig({
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     }
+  },
+  preview: {
+    host: true,
+    port: 4173,
+    strictPort: true,
+    // HTTPS対応（basic-sslプラグインを使用）
+    https: true
   },
   plugins: [
     // 開発用の簡易HTTPSを有効化（スマホのカメラ許可要件を満たす）

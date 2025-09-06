@@ -113,7 +113,7 @@ if (!app) {
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
+      min-height: 100svh; /* iOS Safari対応 */
       background-color: #121212;
       color: white;
       font-family: Arial, sans-serif;
@@ -207,7 +207,7 @@ async function render() {
             display: flex;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            min-height: 100svh; /* iOS Safari対応 */
             background-color: #121212;
             color: white;
             font-family: Arial, sans-serif;
@@ -246,7 +246,7 @@ async function render() {
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 100vh;
+        min-height: 100svh; /* iOS Safari対応 */
         background-color: #121212;
         color: white;
         font-family: Arial, sans-serif;

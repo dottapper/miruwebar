@@ -250,6 +250,43 @@ async function saveProjects(projects) {
 - `network-info` が `localhost` の場合は「同一端末のみ」アクセス可能です。実機では PC とスマホを同一ネットワークに接続してください。
 - iOS/Safari は HTTP ページでカメラが使えないため、HTTPS でアクセスしてください。
 
+### 実機カメラテスト（iOS/Android対応）
+
+自己署名証明書での実機テストに制限がある場合、以下の方法で有効なHTTPS証明書を取得できます：
+
+**方法1: ngrok（推奨・無料）**
+```bash
+# ngrokをインストール（要アカウント登録）
+npm install -g ngrok
+# または: brew install ngrok
+
+# ローカルの3000ポートを公開HTTPS URLとして露出
+npm run dev  # localhost:3000で開発サーバー起動
+ngrok http 3000  # 別ターミナルで実行
+
+# 出力例: https://abc123.ngrok-free.app -> localhost:3000
+# このURLをスマホでアクセス（カメラ権限が正常に機能）
+```
+
+**方法2: Cloudflare Tunnel（無料・永続）**
+```bash
+# Cloudflared CLIをインストール
+brew install cloudflare/cloudflare/cloudflared
+# または: curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+
+# ローカルサーバーをCloudflareネットワーク経由で公開
+npm run dev
+cloudflared tunnel --url localhost:3000
+
+# 出力例: https://abc-123-def.trycloudflare.com
+# 永続的なカスタムドメインも設定可能
+```
+
+**証明書エラー対処法（自己署名）:**
+- Safari: 「詳細」→「このWebサイトにアクセス」
+- Chrome: 「詳細設定」→「localhost に進む（安全でない）」
+- 企業ネットワークの場合: IT管理者に自己署名証明書の許可を依頼
+
 ## ブランチ運用（重要）
 
 - メインブランチ: `indexeddb-storage-refactor`（最新の機能を含む）

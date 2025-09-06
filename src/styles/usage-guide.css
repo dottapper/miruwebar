@@ -4,7 +4,7 @@
 /* 使い方ガイドページ専用スタイル - 他ファイルへの干渉を防ぐため usage-guide- プレフィックスを使用 */
 
 .usage-guide-wrapper {
-  min-height: 100vh;
+  min-height: 100svh; /* iOS Safari対応 */
   background: 
     radial-gradient(circle at 20% 20%, rgba(124, 77, 255, 0.08) 0%, transparent 50%),
     radial-gradient(circle at 80% 80%, rgba(0, 188, 212, 0.06) 0%, transparent 50%),

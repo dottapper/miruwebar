@@ -2,7 +2,7 @@
 // AR.js を使ったマーカーAR実装（iPhone Safari 対応）
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+// GLTFLoaderは動的インポートで統一バージョンを使用
 
 /**
  * AR.js を使用したマーカーベースAR
@@ -32,14 +32,19 @@ export class MarkerAR {
       ...options
     };
 
-    // Three.js 基本要素
-    const T = (typeof window !== 'undefined' && window.THREE) ? window.THREE : THREE;
-    this._T = T;
-    this.scene = new T.Scene();
-    this.camera = new T.Camera();
+    // Three.js 0.165統一: ESM版を標準として使用
+    this._T = THREE;
+    
+    // window.THREEは初期化時に確実に統一バージョンを設定
+    if (typeof window !== 'undefined') {
+      window.THREE = THREE;
+      console.log('✅ Three.js 0.165統一: ESM版をwindow.THREEに設定完了');
+    }
+    this.scene = new this._T.Scene();
+    this.camera = new this._T.Camera();
     // 念のためカメラをシーンに追加（AR.jsの行列更新に影響はないが安全）
     try { this.scene.add(this.camera); } catch (_) {}
-    this.renderer = new T.WebGLRenderer({ 
+    this.renderer = new this._T.WebGLRenderer({ 
       antialias: true, 
       alpha: true,
       powerPreference: "default" // iPhone 用省電力設定
@@ -62,14 +67,9 @@ export class MarkerAR {
     // AR.js は markerRoot の matrix を直接更新するため、autoUpdate をオフにする
     try { this.markerRoot.matrixAutoUpdate = false; } catch (_) {}
     
-    // モデル管理
-    try {
-      this.modelLoader = new GLTFLoader();
-      console.log('✅ GLTFLoader初期化成功');
-    } catch (e) {
-      console.error('❌ GLTFLoader初期化失敗:', e);
-      this.modelLoader = null;
-    }
+    // モデル管理（動的初期化でバージョン統一）
+    this.modelLoader = null;
+    this._initGLTFLoader();
     this.loadedModel = null; // 後方互換用（最後に読んだモデル）
     this.loadedModels = [];  // 読み込まれた全モデル（準備済み）
     this.placedModel = null; // 互換用（配置済みのルート）
@@ -83,18 +83,48 @@ export class MarkerAR {
     // イベント
     this.onMarkerFound = null;
     this.onMarkerLost = null;
-    this.onModelLoaded = null;
-
-    // iPhone 用最適化設定
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // iPhone 用制限
-    this.renderer.shadowMap.enabled = false; // iPhone でのパフォーマンス向上
   }
+
+  /**
+   * GLTFLoaderを動的に初期化してバージョン統一
+   */
+  async _initGLTFLoader() {
+    try {
+      console.log('🔄 GLTFLoader動的初期化開始（バージョン統一）');
+      
+      // ESM版GLTFLoaderを動的インポート
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      
+      // 統一されたThree.jsインスタンスでGLTFLoader作成
+      this.modelLoader = new GLTFLoader();
+      
+      console.log('✅ GLTFLoader初期化成功（統一バージョン0.165）');
+      console.log('🔍 Three.js統一状況:', {
+        esm: this._T.REVISION,
+        window: typeof window !== 'undefined' && window.THREE ? window.THREE.REVISION : 'なし'
+      });
+      
+    } catch (e) {
+      console.error('❌ GLTFLoader動的初期化失敗:', e);
+      this.modelLoader = null;
+    }
+  }
+
 
   /**
    * AR.js マーカーAR を初期化
    */
   async init() {
     console.log('🚀 MarkerAR初期化開始');
+    
+    // GLTFLoaderが未初期化の場合は再初期化
+    if (!this.modelLoader) {
+      await this._initGLTFLoader();
+    }
+    
+    // iPhone 用最適化設定
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = false;
 
     try {
       console.log('🔍 初期化デバッグ:', {
@@ -248,49 +278,29 @@ export class MarkerAR {
   }
 
   /**
-   * AR.js ライブラリを動的読み込み
+   * AR.js ライブラリを動的読み込み (Three.js 0.165統一版)
    */
   async loadARjsLibrary() {
-    // まず、AR.js が期待するグローバル THREE を用意
+    // Three.js 0.165統一: ESM版をwindow.THREEに設定
+    console.log('🔧 Three.js 0.165統一: ESM版をグローバルに設定');
+    window.THREE = THREE;
+    
+    // 現代のThree.jsには removeFromParent が標準で存在するが、安全のためチェック
     try {
-      if (!window.THREE || !window.THREE.REVISION || parseInt(window.THREE.REVISION) > 130) {
-        // CDN優先（404ノイズ回避）。失敗時のみローカル（存在確認済み）
-        console.log('🔧 グローバルTHREEを準備（r122, CDN優先）');
-        let loaded = false;
-        try {
-          await this.loadScript('https://cdn.jsdelivr.net/npm/three@0.122.0/build/three.min.js');
-          loaded = !!(window.THREE && window.THREE.REVISION && parseInt(window.THREE.REVISION) <= 130);
-        } catch (_) {}
-        if (!loaded) {
-          try {
-            if (await this.resourceExists('/arjs/three-r122.min.js')) {
-              await this.loadScript('/arjs/three-r122.min.js');
-              loaded = !!(window.THREE && window.THREE.REVISION && parseInt(window.THREE.REVISION) <= 130);
-            }
-          } catch (_) {}
-        }
-        if (!loaded) {
-          console.warn('⚠️ three r122 の読み込みに失敗。モジュール版THREEを使用（互換性注意）');
-          window.THREE = window.THREE || THREE;
-        }
+      const O3D = THREE.Object3D;
+      if (O3D && !O3D.prototype.removeFromParent) {
+        O3D.prototype.removeFromParent = function() {
+          if (this.parent) this.parent.remove(this);
+          return this;
+        };
+        console.log('🧩 three.Object3D.removeFromParent ポリフィル適用');
       }
-
-      // three r122 では removeFromParent が無い場合があるためポリフィル
-      try {
-        const O3D = window.THREE && window.THREE.Object3D;
-        if (O3D && !O3D.prototype.removeFromParent) {
-          O3D.prototype.removeFromParent = function() {
-            if (this.parent) this.parent.remove(this);
-            return this;
-          };
-          console.log('🧩 three.Object3D.removeFromParent ポリフィル適用');
-        }
-      } catch (_) {}
-    } catch (e) {
-      console.warn('⚠️ グローバルTHREE準備に失敗（続行）:', e);
-      // 最低限、現在のモジュール版THREEをグローバルに割り当て
-      window.THREE = window.THREE || THREE;
-    }
+    } catch (_) {}
+    
+    console.log('✅ Three.js統一完了:', {
+      ESM_REVISION: THREE.REVISION,
+      window_REVISION: window.THREE.REVISION
+    });
 
     // AR.js が既に読み込まれているかチェック
     if (window.THREEx && window.THREEx.ArToolkitSource) {
@@ -503,8 +513,9 @@ export class MarkerAR {
 
             // サイズ調整
             this.onResize();
-            // リサイズ対応
-            window.addEventListener('resize', () => this.onResize());
+            // リサイズ対応（dispose時に削除するため参照を保存）
+            this.resizeHandler = () => this.onResize();
+            window.addEventListener('resize', this.resizeHandler);
             resolve();
           },
           // エラーコールバック
@@ -781,8 +792,8 @@ export class MarkerAR {
       wasVisible = isVisible;
     };
 
-    // 定期的にマーカー可視性をチェック
-    setInterval(checkMarkerVisibility, 100);
+    // 定期的にマーカー可視性をチェック（dispose時に停止するためIDを保存）
+    this.visibilityCheckInterval = setInterval(checkMarkerVisibility, 100);
 
     console.log('✅ マーカーコントロール設定完了');
   }
@@ -1043,11 +1054,11 @@ export class MarkerAR {
     const camEl = this.arToolkitSource.domElement;
     if (camEl) {
       camEl.style.width = '100vw';
-      camEl.style.height = '100vh';
+      camEl.style.height = '100svh'; /* iOS Safari対応: アドレスバー変動を考慮 */
       camEl.style.objectFit = 'cover';
       console.log('📐 カメラ映像サイズ調整:', {
         カメラ実サイズ: `${sourceWidth}x${sourceHeight}`,
-        表示サイズ: '100vw x 100vh'
+        表示サイズ: '100vw x 100svh (iOS Safari対応)'
       });
     }
 
@@ -1075,6 +1086,20 @@ export class MarkerAR {
   dispose() {
     console.log('🧹 MarkerAR クリーンアップ開始');
 
+    // インターバル・タイマーの停止
+    if (this.visibilityCheckInterval) {
+      clearInterval(this.visibilityCheckInterval);
+      this.visibilityCheckInterval = null;
+      console.log('✅ マーカー可視性チェック インターバル停止');
+    }
+
+    // リサイズイベントリスナーの削除
+    if (this.resizeHandler) {
+      window.removeEventListener('resize', this.resizeHandler);
+      this.resizeHandler = null;
+      console.log('✅ リサイズイベントリスナー削除');
+    }
+
     // モデル削除
     this.removeModel();
     
@@ -1093,6 +1118,17 @@ export class MarkerAR {
     if (this.renderer && this.renderer.domElement && this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
       this.renderer.dispose();
+    }
+
+    // AR.jsコンポーネントのクリーンアップ
+    if (this.arToolkitContext) {
+      this.arToolkitContext = null;
+    }
+    if (this.arToolkitSource) {
+      this.arToolkitSource = null;
+    }
+    if (this.markerControls) {
+      this.markerControls = null;
     }
 
     console.log('✅ MarkerAR クリーンアップ完了');

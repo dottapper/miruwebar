@@ -114,7 +114,7 @@ html, body {
   gap: 2rem;
   position: relative;
   z-index: 1;
-  height: calc(100vh - 120px);
+  height: calc(100svh - 120px);
   margin: 0 auto;
   padding: 0.5rem 2rem;
   min-height: 600px;
@@ -128,7 +128,7 @@ html, body {
 .app-layout {
   position: relative !important;
   width: 100% !important;
-  height: 100vh !important;
+  height: 100svh !important; /* iOS Safari対応 */
   margin: 0 !important;
   padding: 0 !important;
   display: block !important;
@@ -148,7 +148,7 @@ aside[class*="side"],
 /* サイドメニュー - 美しい最終版 */
 .side-menu {
   width: 240px;
-  height: 100vh;
+  height: 100svh; /* iOS Safari対応 */
   background-color: var(--color-surface);
   border-right: 1px solid var(--color-border);
   padding: 1rem 0;
@@ -175,7 +175,7 @@ aside[class*="side"],
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
+  min-height: 100svh; /* iOS Safari対応 */
 }
 
 /* ロゴコンテナ - 左端から適切な間隔 */
@@ -429,7 +429,7 @@ aside[class*="side"],
 .loading-screen-editor__content-container {
   position: relative;
   z-index: 1;
-  max-height: calc(100vh - 400px);
+  max-height: calc(100svh - 400px);
   overflow-y: auto;
   width: 100%;
 }

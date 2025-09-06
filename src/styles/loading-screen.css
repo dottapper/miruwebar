@@ -195,7 +195,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  z-index: 2147483647; /* 最大のz-indexを設定 */
+  z-index: 10000; /* 適切なz-index設定（app-loading-screenと統一） */
   padding: 20px;
   text-align: center;
   transition: all 0.3s ease;

@@ -209,7 +209,7 @@ export function showEditor(container) {
             </div>` : ''}
           </div>
 
-          <div class="viewer-panel" style="height: calc(100vh - 250px);">
+          <div class="viewer-panel" style="height: calc(100svh - 250px);">
             <div id="ar-viewer"></div>
           </div>
 
@@ -2448,7 +2448,10 @@ export function showEditor(container) {
         logoImage: detailedLoadingSettings.loadingScreen?.logo || baseSettings.logoImage,
         logoSize: detailedLoadingSettings.loadingScreen?.logoSize || 1.0,
         logoPosition: detailedLoadingSettings.loadingScreen?.logoPosition || 20,
-        fontScale: detailedLoadingSettings.loadingScreen?.fontScale || 1.0
+        fontScale: detailedLoadingSettings.loadingScreen?.fontScale || 1.0,
+        // エディター設定からstartScreenとguideScreenも取得
+        startScreen: detailedLoadingSettings.startScreen || null,
+        guideScreen: detailedLoadingSettings.guideScreen || null
       };
       
       dlog('🔄 詳細設定あり - 現在のローディング設定を取得:', {
@@ -2665,9 +2668,9 @@ export function showEditor(container) {
             // テンプレート設定を完全に埋め込み（スマホ側でlocalStorageが使えないため）
             templateSettings: completeTemplateSettings
           },
-          // startScreenとguideScreenを個別のフィールドとして保存
-          startScreen: loadingSettings.startScreen || completeTemplateSettings?.startScreen || null,
-          guideScreen: loadingSettings.guideScreen || completeTemplateSettings?.guideScreen || null
+          // startScreenとguideScreenを個別のフィールドとして保存（編集された設定を優先）
+          startScreen: completeTemplateSettings?.startScreen || loadingSettings.startScreen || null,
+          guideScreen: completeTemplateSettings?.guideScreen || loadingSettings.guideScreen || null
         };
 
         // getCurrentLoadingSettings()が既に完全な設定を返すため、追加の統合処理は不要

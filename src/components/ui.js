@@ -6,6 +6,7 @@ import { exportProjectBundleById } from '../api/projects.js';
 import { settingsAPI } from './loading-screen/settings.js';
 import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';
+import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
 
 // UI専用ロガーを作成
 const uiLogger = createLogger('UI');
@@ -865,8 +866,22 @@ export async function showQRCodeModal(options = {}) {
 
         // 送信するローディング画面設定
         const lsPayload = { ...(project.loadingScreen || {}) };
+        
+        // ★★★ 重複データ防止: 既存のeditorSettingsを削除してから新しいものを設定 ★★★
+        if (lsPayload.editorSettings) {
+          console.warn('🔍 既存のeditorSettingsを削除して重複を防止');
+          delete lsPayload.editorSettings;
+        }
+        
         if (editorSettings) {
-          lsPayload.editorSettings = editorSettings;
+          // ★★★ editorSettings内の入れ子になったeditorSettingsも削除 ★★★
+          const cleanEditorSettings = { ...editorSettings };
+          if (cleanEditorSettings.editorSettings) {
+            console.warn('🔍 editorSettings内の重複editorSettingsを削除');
+            delete cleanEditorSettings.editorSettings;
+          }
+          
+          lsPayload.editorSettings = cleanEditorSettings;
           // ロゴがBase64で保持されている場合、API側でアセットとして書き出せるようにlogoImageに入れる
           const le = editorSettings.loadingScreen || {};
           if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
@@ -877,16 +892,22 @@ export async function showQRCodeModal(options = {}) {
         // Start Screen をトップレベルに含める（Viewerが直接参照）
         const startScreenPayload = editorSettings?.startScreen || null;
 
+        // ★★★ 最終正規化: 送信前にプロジェクトデータ全体を正規化 ★★★
+        const originalProjectData = {
+          id: projectId,
+          type: project.type || 'markerless',
+          loadingScreen: lsPayload,
+          startScreen: startScreenPayload,
+          models: modelPayload
+        };
+        
+        const normalizedProjectData = normalizeProjectData(originalProjectData);
+        reportSizeReduction(originalProjectData, normalizedProjectData);
+
         const resp = await fetch('/api/publish-project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: projectId,
-            type: project.type || 'markerless',
-            loadingScreen: lsPayload,
-            startScreen: startScreenPayload,
-            models: modelPayload
-          })
+          body: JSON.stringify(normalizedProjectData)
         });
         if (resp.ok) {
           const data = await resp.json();

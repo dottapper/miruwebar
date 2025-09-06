@@ -1,4 +1,5 @@
 import http from 'http';
+import https from 'https';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,7 +10,8 @@ import { createLogger } from './utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3001; // 本番サーバー用ポート（開発のViteと分離）
+const USE_HTTPS = process.env.USE_HTTPS === 'true' || false; // HTTPS有効化フラグ
 
 // データストレージ
 const dataDir = path.join(__dirname, '../data');
@@ -159,13 +161,48 @@ function safeJoin(base, target) {
 // サーバーを作成
 const simpleServerLogger = createLogger('SimpleServer');
 
-const server = http.createServer(async (req, res) => {
+// SSL証明書の設定（開発用自己署名証明書）
+async function getSSLConfig() {
+  if (!USE_HTTPS) return null;
+  
+  try {
+    // Viteのbasic-sslプラグインと同様の自己署名証明書を使用
+    const certPath = path.join(__dirname, '../.vite/ssl/cert.pem');
+    const keyPath = path.join(__dirname, '../.vite/ssl/key.pem');
+    
+    // 証明書ファイルが存在するかチェック
+    await fs.access(certPath);
+    await fs.access(keyPath);
+    
+    const [cert, key] = await Promise.all([
+      fs.readFile(certPath, 'utf8'),
+      fs.readFile(keyPath, 'utf8')
+    ]);
+    
+    return { cert, key };
+  } catch (error) {
+    simpleServerLogger.warn('SSL証明書が見つからないため、HTTPで起動します');
+    simpleServerLogger.debug('証明書エラー:', error.message);
+    return null;
+  }
+}
+
+// リクエストハンドラー関数
+async function requestHandler(req, res) {
   simpleServerLogger.debug(`${new Date().toISOString()} - ${req.method} ${req.url}`);
 
-  // CORS設定
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // CORS設定（本番環境では制限）
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : ['*']; // 開発環境のデフォルト
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes('*') || (origin && allowedOrigins.includes(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigins.includes('*') ? '*' : origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -530,22 +567,41 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(500, { 'Content-Type': 'text/plain' });
     res.end('Internal Server Error');
   }
-});
+}
 
-// サーバーを起動
-server.listen(PORT, '0.0.0.0', async () => {
+// サーバー作成と起動
+async function startServer() {
   try {
     // ディレクトリの初期化
     await ensureDirectories();
     
-    simpleServerLogger.success('サーバーが起動しました');
-    simpleServerLogger.info(`ローカル: http://localhost:${PORT}`);
-    simpleServerLogger.info(`ネットワーク: http://0.0.0.0:${PORT}`);
-    simpleServerLogger.info(`開発環境: development`);
-    simpleServerLogger.info(`データ保存先: ${dataDir}`);
-    simpleServerLogger.info(`アップロード先: ${uploadsDir}`);
+    // SSL設定の取得
+    const sslConfig = await getSSLConfig();
+    
+    // サーバー作成
+    const server = sslConfig 
+      ? https.createServer(sslConfig, requestHandler)
+      : http.createServer(requestHandler);
+    
+    // サーバー起動
+    server.listen(PORT, '0.0.0.0', () => {
+      const protocol = sslConfig ? 'https' : 'http';
+      simpleServerLogger.success('サーバーが起動しました');
+      simpleServerLogger.info(`ローカル: ${protocol}://localhost:${PORT}`);
+      simpleServerLogger.info(`ネットワーク: ${protocol}://0.0.0.0:${PORT}`);
+      simpleServerLogger.info(`開発環境: development`);
+      simpleServerLogger.info(`データ保存先: ${dataDir}`);
+      simpleServerLogger.info(`アップロード先: ${uploadsDir}`);
+      if (sslConfig) {
+        simpleServerLogger.info('🔒 HTTPS対応 (モバイルカメラアクセス可能)');
+      }
+    });
+    
   } catch (error) {
     simpleServerLogger.error('サーバー初期化エラー:', error);
     process.exit(1);
   }
-}); 
+}
+
+// サーバー開始
+startServer();
