@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified State Manager Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #121212; color: white; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background: #2e7d32; }
+        .error { background: #d32f2f; }
+        .info { background: #1976d2; }
+        button { margin: 5px; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        .test-btn { background: #7c4dff; color: white; }
+        .clear-btn { background: #ff5252; color: white; }
+        #output { margin-top: 20px; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>統一状態管理システムテスト</h1>
+    
+    <div>
+        <button class="test-btn" onclick="testBasicOperations()">基本操作テスト</button>
+        <button class="test-btn" onclick="testStateSubscription()">状態購読テスト</button>
+        <button class="test-btn" onclick="testStorageAdapters()">ストレージアダプターテスト</button>
+        <button class="test-btn" onclick="testProjectState()">プロジェクト状態テスト</button>
+        <button class="clear-btn" onclick="clearOutput()">結果クリア</button>
+    </div>
+    
+    <div id="output"></div>
+
+    <script type="module">
+        import { unifiedStateManager } from './src/utils/unified-state-manager.js';
+        import { markAsChanged, checkForUnsavedChanges, markAsSaved } from './src/views/editor/project-state.js';
+
+        // グローバルに公開してボタンから呼び出せるようにする
+        window.unifiedStateManager = unifiedStateManager;
+        window.markAsChanged = markAsChanged;
+        window.checkForUnsavedChanges = checkForUnsavedChanges;
+        window.markAsSaved = markAsSaved;
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        window.log = log;
+
+        // 統一状態管理システムを初期化
+        unifiedStateManager.initialize().then(() => {
+            log('✅ 統一状態管理システム初期化完了', 'success');
+        }).catch(error => {
+            log(`❌ 統一状態管理システム初期化失敗: ${error.message}`, 'error');
+        });
+
+        // 基本操作テスト
+        window.testBasicOperations = async function() {
+            try {
+                log('🔄 基本操作テスト開始...', 'info');
+
+                // 状態設定テスト
+                await unifiedStateManager.setState('testKey', 'testValue', {
+                    namespace: 'test',
+                    storageType: 'memory'
+                });
+                log('✅ 状態設定完了', 'success');
+
+                // 状態取得テスト
+                const value = await unifiedStateManager.getState('testKey', {
+                    namespace: 'test'
+                });
+                
+                if (value === 'testValue') {
+                    log('✅ 状態取得成功: ' + value, 'success');
+                } else {
+                    log('❌ 状態取得失敗: 期待値=testValue, 実際値=' + value, 'error');
+                }
+
+                // デバッグ情報取得
+                const debugInfo = unifiedStateManager.getDebugInfo();
+                log(`📊 デバッグ情報: ${JSON.stringify(debugInfo)}`, 'info');
+
+            } catch (error) {
+                log(`❌ 基本操作テストエラー: ${error.message}`, 'error');
+            }
+        };
+
+        // 状態購読テスト
+        window.testStateSubscription = async function() {
+            try {
+                log('🔄 状態購読テスト開始...', 'info');
+
+                let callbackCount = 0;
+                const unsubscribe = unifiedStateManager.subscribe('subscriptionTest', (value, key) => {
+                    callbackCount++;
+                    log(`📢 購読コールバック ${callbackCount}: ${key} = ${value}`, 'info');
+                }, { namespace: 'test' });
+
+                // 状態変更
+                await unifiedStateManager.setState('subscriptionTest', 'value1', {
+                    namespace: 'test',
+                    storageType: 'memory'
+                });
+
+                await unifiedStateManager.setState('subscriptionTest', 'value2', {
+                    namespace: 'test',
+                    storageType: 'memory'
+                });
+
+                if (callbackCount === 2) {
+                    log('✅ 状態購読テスト成功', 'success');
+                } else {
+                    log(`❌ 状態購読テスト失敗: 期待コールバック数=2, 実際=${callbackCount}`, 'error');
+                }
+
+                // 購読解除
+                unsubscribe();
+                log('✅ 購読解除完了', 'success');
+
+            } catch (error) {
+                log(`❌ 状態購読テストエラー: ${error.message}`, 'error');
+            }
+        };
+
+        // ストレージアダプターテスト
+        window.testStorageAdapters = async function() {
+            try {
+                log('🔄 ストレージアダプターテスト開始...', 'info');
+
+                // メモリストレージテスト
+                await unifiedStateManager.setState('memoryTest', 'memoryValue', {
+                    namespace: 'test',
+                    storageType: 'memory'
+                });
+
+                const memoryValue = await unifiedStateManager.getState('memoryTest', {
+                    namespace: 'test',
+                    storageTypes: ['memory']
+                });
+
+                if (memoryValue === 'memoryValue') {
+                    log('✅ メモリストレージテスト成功', 'success');
+                } else {
+                    log('❌ メモリストレージテスト失敗', 'error');
+                }
+
+                // localStorageテスト
+                await unifiedStateManager.setState('localStorageTest', 'localStorageValue', {
+                    namespace: 'test',
+                    storageType: 'localStorage'
+                });
+
+                const localStorageValue = await unifiedStateManager.getState('localStorageTest', {
+                    namespace: 'test',
+                    storageTypes: ['localStorage']
+                });
+
+                if (localStorageValue === 'localStorageValue') {
+                    log('✅ localStorageテスト成功', 'success');
+                } else {
+                    log('❌ localStorageテスト失敗', 'error');
+                }
+
+            } catch (error) {
+                log(`❌ ストレージアダプターテストエラー: ${error.message}`, 'error');
+            }
+        };
+
+        // プロジェクト状態テスト
+        window.testProjectState = async function() {
+            try {
+                log('🔄 プロジェクト状態テスト開始...', 'info');
+
+                // 初期状態確認
+                const initialState = await checkForUnsavedChanges();
+                log(`📋 初期状態: ${initialState}`, 'info');
+
+                // 変更状態に設定
+                await markAsChanged();
+                const changedState = await checkForUnsavedChanges();
+                
+                if (changedState === true) {
+                    log('✅ 変更状態設定成功', 'success');
+                } else {
+                    log('❌ 変更状態設定失敗', 'error');
+                }
+
+                // 保存済み状態に設定
+                await markAsSaved();
+                const savedState = await checkForUnsavedChanges();
+                
+                if (savedState === false) {
+                    log('✅ 保存済み状態設定成功', 'success');
+                } else {
+                    log('❌ 保存済み状態設定失敗', 'error');
+                }
+
+            } catch (error) {
+                log(`❌ プロジェクト状態テストエラー: ${error.message}`, 'error');
+            }
+        };
+
+        // 結果クリア
+        window.clearOutput = function() {
+            document.getElementById('output').innerHTML = '';
+        };
+
+        log('🚀 テスト環境初期化完了', 'success');
+    </script>
+</body>
+</html>

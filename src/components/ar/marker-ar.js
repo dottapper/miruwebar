@@ -116,12 +116,20 @@ export class MarkerAR {
    */
   async init() {
     console.log('🚀 MarkerAR初期化開始');
-    
+
+    // 既に初期化済みまたは初期化中の場合は処理をスキップ
+    if (this.isInitialized || this.isInitializing) {
+      console.warn('⚠️ MarkerAR は既に初期化済みまたは初期化中です');
+      return this.isInitialized;
+    }
+
+    this.isInitializing = true;
+
     // GLTFLoaderが未初期化の場合は再初期化
     if (!this.modelLoader) {
       await this._initGLTFLoader();
     }
-    
+
     // iPhone 用最適化設定
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = false;
@@ -187,6 +195,7 @@ export class MarkerAR {
       this.startRenderLoop();
 
       this.isInitialized = true;
+      this.isInitializing = false;
       this.dlog('✅ MarkerAR初期化完了');
 
       return true;
@@ -204,6 +213,11 @@ export class MarkerAR {
           modelLoader: !!this.modelLoader
         }
       });
+
+      // 初期化状態をリセット
+      this.isInitializing = false;
+      this.isInitialized = false;
+
       throw new Error(`MarkerAR初期化エラー: ${error.message}`);
     }
   }

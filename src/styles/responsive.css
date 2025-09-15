@@ -1,0 +1,580 @@
+/* src/styles/responsive.css */
+/* レスポンシブ対応のスタイル */
+
+/* 基本レスポンシブユーティリティ */
+.responsive-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* ブレークポイント別の表示制御 */
+.responsive-xs { display: none; }
+.responsive-sm { display: none; }
+.responsive-md { display: none; }
+.responsive-lg { display: none; }
+.responsive-xl { display: none; }
+.responsive-xxl { display: none; }
+
+/* デバイスタイプ別の表示制御 */
+.responsive-mobile { display: none; }
+.responsive-tablet { display: none; }
+.responsive-desktop { display: none; }
+.responsive-large-desktop { display: none; }
+
+/* 向き別の表示制御 */
+.responsive-portrait { display: none; }
+.responsive-landscape { display: none; }
+
+/* グリッドレイアウト */
+.responsive-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;
+}
+
+/* フレックスレイアウト */
+.responsive-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+/* テキストサイズ */
+.responsive-text-xs { font-size: 12px; }
+.responsive-text-sm { font-size: 14px; }
+.responsive-text-md { font-size: 16px; }
+.responsive-text-lg { font-size: 18px; }
+.responsive-text-xl { font-size: 20px; }
+.responsive-text-xxl { font-size: 24px; }
+
+/* パディング */
+.responsive-p-xs { padding: 8px; }
+.responsive-p-sm { padding: 12px; }
+.responsive-p-md { padding: 16px; }
+.responsive-p-lg { padding: 20px; }
+.responsive-p-xl { padding: 24px; }
+
+/* マージン */
+.responsive-m-xs { margin: 8px; }
+.responsive-m-sm { margin: 12px; }
+.responsive-m-md { margin: 16px; }
+.responsive-m-lg { margin: 20px; }
+.responsive-m-xl { margin: 24px; }
+
+/* 超小画面（スマホ縦） */
+@media (max-width: 575px) {
+  .responsive-xs { display: block; }
+  .responsive-mobile { display: block; }
+  .responsive-portrait { display: block; }
+  
+  .responsive-container {
+    padding: 0 16px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .responsive-flex {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .responsive-text-xs { font-size: 11px; }
+  .responsive-text-sm { font-size: 12px; }
+  .responsive-text-md { font-size: 14px; }
+  .responsive-text-lg { font-size: 16px; }
+  .responsive-text-xl { font-size: 18px; }
+  .responsive-text-xxl { font-size: 20px; }
+  
+  .responsive-p-xs { padding: 6px; }
+  .responsive-p-sm { padding: 8px; }
+  .responsive-p-md { padding: 12px; }
+  .responsive-p-lg { padding: 16px; }
+  .responsive-p-xl { padding: 20px; }
+}
+
+/* 小画面（スマホ横） */
+@media (min-width: 576px) and (max-width: 767px) {
+  .responsive-sm { display: block; }
+  .responsive-mobile { display: block; }
+  .responsive-landscape { display: block; }
+  
+  .responsive-container {
+    padding: 0 20px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+    gap: 18px;
+  }
+}
+
+/* 中画面（タブレット） */
+@media (min-width: 768px) and (max-width: 991px) {
+  .responsive-md { display: block; }
+  .responsive-tablet { display: block; }
+  
+  .responsive-container {
+    padding: 0 24px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+    gap: 20px;
+  }
+}
+
+/* 大画面（デスクトップ） */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .responsive-lg { display: block; }
+  .responsive-desktop { display: block; }
+  
+  .responsive-container {
+    padding: 0 32px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+    gap: 24px;
+  }
+}
+
+/* 超大画面（大デスクトップ） */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .responsive-xl { display: block; }
+  .responsive-desktop { display: block; }
+  
+  .responsive-container {
+    padding: 0 40px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 28px;
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+    gap: 28px;
+  }
+}
+
+/* 超超大画面（4K等） */
+@media (min-width: 1400px) {
+  .responsive-xxl { display: block; }
+  .responsive-large-desktop { display: block; }
+  
+  .responsive-container {
+    padding: 0 48px;
+  }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 32px;
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+    gap: 32px;
+  }
+}
+
+/* 向き別の調整 */
+@media (orientation: portrait) {
+  .responsive-portrait { display: block; }
+  
+  .responsive-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .responsive-flex {
+    flex-direction: column;
+  }
+}
+
+@media (orientation: landscape) {
+  .responsive-landscape { display: block; }
+  
+  .responsive-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+  
+  .responsive-flex {
+    flex-direction: row;
+  }
+}
+
+/* ARビューアのレスポンシブ対応 */
+.ar-viewer-responsive {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+.ar-viewer-responsive .ar-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* モバイルでのAR表示調整 */
+@media (max-width: 768px) {
+  .ar-viewer-responsive {
+    height: 100vh;
+    height: 100dvh; /* 動的ビューポート高さ */
+  }
+  
+  .ar-viewer-responsive .ar-container {
+    /* モバイルでのタッチ操作を最適化 */
+    touch-action: manipulation;
+  }
+  
+  /* モバイルでのUI要素のサイズ調整 */
+  .ar-viewer-responsive .ui-button {
+    min-height: 44px; /* タッチターゲットの最小サイズ */
+    min-width: 44px;
+  }
+  
+  .ar-viewer-responsive .ui-text {
+    font-size: 16px; /* モバイルでのズーム防止 */
+  }
+}
+
+/* タブレットでのAR表示調整 */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .ar-viewer-responsive .ar-container {
+    /* タブレットでの表示を最適化 */
+    max-width: 100%;
+    max-height: 100%;
+  }
+}
+
+/* デスクトップでのAR表示調整 */
+@media (min-width: 1024px) {
+  .ar-viewer-responsive .ar-container {
+    /* デスクトップでの表示を最適化 */
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+/* エディターのレスポンシブ対応 */
+.editor-responsive {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  gap: 20px;
+  min-height: 100vh;
+}
+
+@media (max-width: 1200px) {
+  .editor-responsive {
+    grid-template-columns: 250px 1fr 250px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 992px) {
+  .editor-responsive {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .editor-responsive {
+    gap: 12px;
+    padding: 12px;
+  }
+}
+
+/* プロジェクトリストのレスポンシブ対応 */
+.project-list-responsive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  .project-list-responsive {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 16px;
+  }
+}
+
+/* モーダルのレスポンシブ対応 */
+.modal-responsive {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+@media (max-width: 768px) {
+  .modal-responsive {
+    width: 95%;
+    max-width: none;
+    margin: 20px;
+    top: 20px;
+    left: 20px;
+    transform: none;
+  }
+}
+
+/* フォームのレスポンシブ対応 */
+.form-responsive {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-responsive .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 768px) {
+  .form-responsive .form-group {
+    flex-direction: row;
+    align-items: center;
+  }
+  
+  .form-responsive .form-group label {
+    min-width: 120px;
+  }
+}
+
+/* ナビゲーションのレスポンシブ対応 */
+.nav-responsive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.nav-responsive .nav-menu {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.nav-responsive .nav-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .nav-responsive .nav-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+  }
+  
+  .nav-responsive .nav-menu.active {
+    display: flex;
+  }
+  
+  .nav-responsive .nav-toggle {
+    display: block;
+  }
+}
+
+/* 画像のレスポンシブ対応 */
+.img-responsive {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.img-responsive.cover {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+.img-responsive.contain {
+  object-fit: contain;
+  width: 100%;
+  height: 100%;
+}
+
+/* テーブルのレスポンシブ対応 */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+}
+
+@media (max-width: 768px) {
+  .table-responsive table {
+    font-size: 14px;
+  }
+  
+  .table-responsive th,
+  .table-responsive td {
+    padding: 8px 4px;
+  }
+}
+
+/* カードのレスポンシブ対応 */
+.card-responsive {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-responsive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.card-responsive .card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.card-responsive .card-body {
+  padding: 20px;
+}
+
+.card-responsive .card-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+@media (max-width: 768px) {
+  .card-responsive .card-header,
+  .card-responsive .card-body,
+  .card-responsive .card-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* ユーティリティクラス */
+.hide-mobile { display: block; }
+.hide-tablet { display: block; }
+.hide-desktop { display: block; }
+
+.show-mobile { display: none; }
+.show-tablet { display: none; }
+.show-desktop { display: none; }
+
+@media (max-width: 767px) {
+  .hide-mobile { display: none; }
+  .show-mobile { display: block; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .hide-tablet { display: none; }
+  .show-tablet { display: block; }
+}
+
+@media (min-width: 1024px) {
+  .hide-desktop { display: none; }
+  .show-desktop { display: block; }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .card-responsive {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+  
+  .card-responsive .card-header,
+  .card-responsive .card-footer {
+    border-color: #333;
+  }
+  
+  .card-responsive .card-footer {
+    background: #2a2a2a;
+  }
+  
+  .nav-responsive {
+    background: #1e1e1e;
+    border-bottom-color: #333;
+    color: #e0e0e0;
+  }
+  
+  .modal-responsive {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+}
+
+/* 高コントラストモード対応 */
+@media (prefers-contrast: high) {
+  .card-responsive {
+    border: 2px solid #000;
+  }
+  
+  .nav-responsive {
+    border-bottom: 2px solid #000;
+  }
+  
+  .modal-responsive {
+    border: 2px solid #000;
+  }
+}
+
+/* アニメーション軽減設定 */
+@media (prefers-reduced-motion: reduce) {
+  .card-responsive {
+    transition: none;
+  }
+  
+  .card-responsive:hover {
+    transform: none;
+  }
+}

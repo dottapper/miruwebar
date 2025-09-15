@@ -1,0 +1,462 @@
+/* src/styles/error-experience.css */
+/* エラー体験改善のスタイル */
+
+/* エラー表示コンテナ */
+.error-display-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.error-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  animation: errorSlideIn 0.3s ease-out;
+}
+
+@keyframes errorSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* エラーヘッダー */
+.error-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.error-icon {
+  font-size: 24px;
+  margin-right: 12px;
+}
+
+.error-title {
+  margin: 0;
+  color: #d32f2f;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* エラーメッセージ */
+.error-message {
+  margin: 0 0 20px 0;
+  color: #666;
+  line-height: 1.5;
+  font-size: 16px;
+}
+
+/* 復旧手順 */
+.error-recovery {
+  margin-bottom: 24px;
+}
+
+.recovery-title {
+  margin: 0 0 12px 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.recovery-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.recovery-step {
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+/* アクションボタン */
+.error-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.error-actions .btn-primary,
+.error-actions .btn-secondary {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.error-actions .btn-primary {
+  background: #1976d2;
+  color: white;
+}
+
+.error-actions .btn-primary:hover {
+  background: #1565c0;
+  transform: translateY(-1px);
+}
+
+.error-actions .btn-secondary {
+  background: #f5f5f5;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.error-actions .btn-secondary:hover {
+  background: #e0e0e0;
+  transform: translateY(-1px);
+}
+
+/* 詳細エラー情報 */
+.error-details {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.error-details summary:hover {
+  color: #333;
+}
+
+.error-stack {
+  background: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #666;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* 権限設定モーダル */
+.permission-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.permission-settings-modal .modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.permission-settings-modal h2 {
+  margin: 0 0 16px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.permission-instructions {
+  margin-bottom: 20px;
+}
+
+.permission-instructions p {
+  margin: 0 0 8px 0;
+  color: #555;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ブラウザ互換性モーダル */
+.browser-compatibility-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.browser-compatibility-modal .modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.browser-compatibility-modal h2 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.compatibility-results {
+  margin-bottom: 20px;
+}
+
+.compatibility-check {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.compatibility-check:last-child {
+  border-bottom: none;
+}
+
+.check-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.check-status {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.compatibility-check.supported .check-status {
+  color: #4caf50;
+}
+
+.compatibility-check.not-supported .check-status {
+  color: #f44336;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .error-display-container {
+    padding: 16px;
+  }
+  
+  .error-content {
+    padding: 20px;
+    max-width: 100%;
+  }
+  
+  .error-title {
+    font-size: 18px;
+  }
+  
+  .error-message {
+    font-size: 14px;
+  }
+  
+  .error-actions {
+    flex-direction: column;
+  }
+  
+  .error-actions .btn-primary,
+  .error-actions .btn-secondary {
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  
+  .permission-settings-modal .modal-content,
+  .browser-compatibility-modal .modal-content {
+    padding: 20px;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .error-display-container {
+    padding: 12px;
+  }
+  
+  .error-content {
+    padding: 16px;
+  }
+  
+  .error-title {
+    font-size: 16px;
+  }
+  
+  .error-message {
+    font-size: 13px;
+  }
+  
+  .recovery-steps {
+    padding-left: 16px;
+  }
+  
+  .recovery-step {
+    font-size: 13px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .error-content {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+  
+  .error-header {
+    border-bottom-color: #333;
+  }
+  
+  .error-title {
+    color: #ff6b6b;
+  }
+  
+  .error-message {
+    color: #b0b0b0;
+  }
+  
+  .recovery-title {
+    color: #e0e0e0;
+  }
+  
+  .recovery-step {
+    color: #c0c0c0;
+  }
+  
+  .error-actions .btn-secondary {
+    background: #333;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+  
+  .error-actions .btn-secondary:hover {
+    background: #444;
+  }
+  
+  .error-details {
+    border-top-color: #333;
+  }
+  
+  .error-details summary {
+    color: #b0b0b0;
+  }
+  
+  .error-details summary:hover {
+    color: #e0e0e0;
+  }
+  
+  .error-stack {
+    background: #2a2a2a;
+    border-color: #333;
+    color: #b0b0b0;
+  }
+  
+  .permission-settings-modal .modal-content,
+  .browser-compatibility-modal .modal-content {
+    background: #1e1e1e;
+    color: #e0e0e0;
+  }
+  
+  .permission-settings-modal h2,
+  .browser-compatibility-modal h2 {
+    color: #e0e0e0;
+  }
+  
+  .permission-instructions p {
+    color: #b0b0b0;
+  }
+  
+  .compatibility-check {
+    border-bottom-color: #333;
+  }
+  
+  .check-name {
+    color: #e0e0e0;
+  }
+}
+
+/* アニメーション */
+.error-display-container {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* アクセシビリティ対応 */
+.error-display-container:focus {
+  outline: none;
+}
+
+.error-actions button:focus {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+/* 高コントラストモード対応 */
+@media (prefers-contrast: high) {
+  .error-content {
+    border: 2px solid #000;
+  }
+  
+  .error-title {
+    color: #000;
+  }
+  
+  .error-actions .btn-primary {
+    background: #000;
+    color: #fff;
+  }
+  
+  .error-actions .btn-secondary {
+    background: #fff;
+    color: #000;
+    border: 2px solid #000;
+  }
+}

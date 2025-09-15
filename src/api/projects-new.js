@@ -2,12 +2,8 @@
 // 新しい IndexedDB + localStorage ストレージシステムを使ったプロジェクト API
 
 import { saveModelToIDB, loadModelBlob, loadModelMeta, removeModel } from '../storage/indexeddb-storage.js';
-import { saveProject as saveProjectSettings, getProjects, getProject, deleteProject as deleteProjectSettings } from '../storage/project-store.js';
+import { saveProject as saveProjectToLocalList, getProjects, getProject, deleteProject as deleteProjectSettings } from '../storage/project-store.js';
 import { loadGLBFromIDB, createTemporaryObjectURL, revokeModelObjectURL } from '../loader/loadGLBFromIDB.js';
-
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * モデルデータを IndexedDB に保存し、軽量化されたプロジェクトデータを作成
@@ -17,29 +13,29 @@ const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
  */
 async function createProjectDataWithIDB(data, viewerInstance) {
   try {
-    dlog('🔄 createProjectDataWithIDB開始 [IndexedDB版]');
+    console.log('🔄 createProjectDataWithIDB開始 [IndexedDB版]');
     
     // プロジェクト ID を生成
     const projectId = data.id || `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    dlog('✅ プロジェクトID:', projectId);
+    console.log('✅ プロジェクトID:', projectId);
     
     let modelSettings = [];
     
-    dlog('🔍 viewerInstance チェック:', {
+    console.log('🔍 viewerInstance チェック:', {
       hasViewerInstance: !!viewerInstance,
       hasControls: !!viewerInstance?.controls,
       hasGetAllModels: !!viewerInstance?.controls?.getAllModels
     });
     
     if (viewerInstance && viewerInstance.controls && viewerInstance.controls.getAllModels) {
-      dlog('🔄 モデルデータ取得開始 [IndexedDB対応]...');
+      console.log('🔄 モデルデータ取得開始 [IndexedDB対応]...');
       
       try {
         const allModels = viewerInstance.controls.getAllModels();
-        dlog('✅ モデル数:', allModels.length);
-        dlog('🔍 取得したモデル一覧:');
+        console.log('✅ モデル数:', allModels.length);
+        console.log('🔍 取得したモデル一覧:');
         allModels.forEach((model, i) => {
-          dlog(`  モデル${i}:`, {
+          console.log(`  モデル${i}:`, {
             fileName: model.fileName,
             fileSize: model.fileSize,
             hasSourceFile: !!model._sourceFile,
@@ -58,7 +54,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
         for (let index = 0; index < allModels.length; index++) {
           const model = allModels[index];
           
-          dlog(`🔍 モデル${index}の処理:`, {
+          console.log(`🔍 モデル${index}の処理:`, {
             fileName: model.fileName,
             hasPosition: !!model.position,
             hasRotation: !!model.rotation,
@@ -79,7 +75,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
               
               // 元ファイルがある場合は優先的に使用
               if (model._sourceFile && model._sourceFile instanceof File) {
-                dlog(`🔄 元ファイルを使用してIndexedDBに保存: ${model.fileName}`, {
+                console.log(`🔄 元ファイルを使用してIndexedDBに保存: ${model.fileName}`, {
                   fileName: model._sourceFile.name,
                   fileSize: model._sourceFile.size,
                   fileType: model._sourceFile.type
@@ -87,7 +83,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
                 modelBlob = model._sourceFile;
               } else if (typeof model.modelData === 'string' && model.modelData.startsWith('data:')) {
                 // Base64 データの場合
-                dlog(`🔄 Base64データをBlobに変換: ${model.fileName}`);
+                console.log(`🔄 Base64データをBlobに変換: ${model.fileName}`);
                 const base64Data = model.modelData.split(',')[1];
                 const binaryString = atob(base64Data);
                 const bytes = new Uint8Array(binaryString.length);
@@ -128,7 +124,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
                 // IndexedDB に保存
                 await saveModelToIDB(modelId, modelBlob, meta);
                 
-                dlog(`✅ モデル IndexedDB 保存完了: ${model.fileName} → ${modelId}`);
+                console.log(`✅ モデル IndexedDB 保存完了: ${model.fileName} → ${modelId}`);
               }
             } catch (modelSaveError) {
               console.error(`❌ モデル保存エラー: ${model.fileName}`, modelSaveError);
@@ -167,19 +163,19 @@ async function createProjectDataWithIDB(data, viewerInstance) {
           
           modelSettings.push(lightweightModelSettings);
           
-          dlog(`✅ モデル${index}の軽量設定作成完了:`, {
+          console.log(`✅ モデル${index}の軽量設定作成完了:`, {
             fileName: lightweightModelSettings.fileName,
             hasModelId: !!lightweightModelSettings.modelId
           });
         }
         
-        dlog('✅ 全モデル処理完了:', modelSettings.length);
+        console.log('✅ 全モデル処理完了:', modelSettings.length);
       } catch (modelError) {
         console.error('❌ モデルデータ処理エラー:', modelError);
         throw new Error(`モデルデータの処理に失敗しました: ${modelError.message}`);
       }
     } else {
-      dlog('ℹ️ モデルデータが利用できません（viewerInstanceまたはgetAllModelsが存在しない）');
+      console.log('ℹ️ モデルデータが利用できません（viewerInstanceまたはgetAllModelsが存在しない）');
     }
     
     // 軽量化プロジェクトデータを作成
@@ -206,9 +202,9 @@ async function createProjectDataWithIDB(data, viewerInstance) {
       
       // ローディング画面設定
       loadingScreen: data.loadingScreen || null,
-      
-      // スタート画面設定（新規追加）
+      // スタート/ガイド画面設定（ビューアで直接反映できるよう保持）
       startScreen: data.startScreen || null,
+      guideScreen: data.guideScreen || null,
       
       created: data.created || Date.now(),
       updated: Date.now(),
@@ -220,7 +216,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
       }
     };
     
-    dlog('🔍 軽量化後のプロジェクトデータサイズ:', JSON.stringify(lightweightProject).length, 'characters');
+    console.log('🔍 軽量化後のプロジェクトデータサイズ:', JSON.stringify(lightweightProject).length, 'characters');
     
     return lightweightProject;
   } catch (error) {
@@ -237,7 +233,7 @@ async function createProjectDataWithIDB(data, viewerInstance) {
  */
 export async function saveProject(data, viewerInstance) {
   try {
-    dlog('🔄 saveProject開始 [IndexedDB版]:', {
+    console.log('🔄 saveProject開始 [IndexedDB版]:', {
       dataKeys: Object.keys(data || {}),
       hasViewerInstance: !!viewerInstance,
       viewerHasControls: !!viewerInstance?.controls
@@ -246,16 +242,16 @@ export async function saveProject(data, viewerInstance) {
     // プロジェクトデータを作成（モデルを IndexedDB に保存）
     const projectData = await createProjectDataWithIDB(data, viewerInstance);
     
-    dlog('✅ プロジェクトデータ作成完了:', {
+    console.log('✅ プロジェクトデータ作成完了:', {
       id: projectData.id,
       name: projectData.name,
       modelCount: projectData.modelSettings?.length || 0
     });
     
-    // 軽量化されたプロジェクトデータを localStorage に保存
-    const savedProject = saveProjectSettings(projectData);
+    // 軽量化されたプロジェクトデータを localStorage に保存（一覧に反映）
+    const savedProject = saveProjectToLocalList(projectData);
     
-    dlog('✅ プロジェクト保存完了 [IndexedDB版]:', {
+    console.log('✅ プロジェクト保存完了 [IndexedDB版]:', {
       id: savedProject.id,
       name: savedProject.name,
       modelCount: savedProject.modelCount
@@ -275,20 +271,17 @@ export async function saveProject(data, viewerInstance) {
  */
 export async function loadProjectWithModels(project) {
   try {
-    dlog('🔄 プロジェクトモデル復元開始:', {
+    console.log('🔄 プロジェクトモデル復元開始:', {
       projectId: project.id,
       projectName: project.name,
       modelCount: project.modelSettings?.length || 0
     });
     
     if (!project.modelSettings || project.modelSettings.length === 0) {
-      dlog('ℹ️ 復元対象のモデルがありません');
+      console.log('ℹ️ 復元対象のモデルがありません');
       return {
         ...project,
-        modelData: [],
-        // 設定が確実に含まれるようにする
-        loadingScreen: project.loadingScreen || null,
-        startScreen: project.startScreen || null
+        modelData: []
       };
     }
     
@@ -297,13 +290,13 @@ export async function loadProjectWithModels(project) {
     for (let i = 0; i < project.modelSettings.length; i++) {
       const modelSettings = project.modelSettings[i];
       
-      dlog(`🔍 モデル ${i + 1}/${project.modelSettings.length} 復元中:`, {
+      console.log(`🔍 モデル ${i + 1}/${project.modelSettings.length} 復元中:`, {
         fileName: modelSettings.fileName,
         hasModelId: !!modelSettings.modelId
       });
       
       if (!modelSettings.modelId) {
-        dlog(`⚠️ モデル ID なし、スキップ: ${modelSettings.fileName}`);
+        console.log(`⚠️ モデル ID なし、スキップ: ${modelSettings.fileName}`);
         restoredModels.push({
           ...modelSettings,
           objectUrl: null,
@@ -323,7 +316,7 @@ export async function loadProjectWithModels(project) {
           meta: modelData.meta
         });
         
-        dlog(`✅ モデル復元完了: ${modelSettings.fileName}`);
+        console.log(`✅ モデル復元完了: ${modelSettings.fileName}`);
       } catch (modelError) {
         console.error(`❌ モデル復元エラー: ${modelSettings.fileName}`, modelError);
         
@@ -335,7 +328,7 @@ export async function loadProjectWithModels(project) {
       }
     }
     
-    dlog('✅ プロジェクトモデル復元完了:', {
+    console.log('✅ プロジェクトモデル復元完了:', {
       projectId: project.id,
       totalModels: project.modelSettings.length,
       restoredModels: restoredModels.filter(m => m.objectUrl).length,
@@ -344,10 +337,7 @@ export async function loadProjectWithModels(project) {
     
     return {
       ...project,
-      modelData: restoredModels,
-      // 設定が確実に含まれるようにする
-      loadingScreen: project.loadingScreen || null,
-      startScreen: project.startScreen || null
+      modelData: restoredModels
     };
   } catch (error) {
     console.error('❌ プロジェクトモデル復元エラー:', error);
@@ -362,7 +352,7 @@ export async function loadProjectWithModels(project) {
  */
 export async function deleteProject(id) {
   try {
-    dlog('🔄 プロジェクト削除開始 [IndexedDB版]:', id);
+    console.log('🔄 プロジェクト削除開始 [IndexedDB版]:', id);
     
     // プロジェクトデータを取得
     const project = getProject(id);
@@ -374,13 +364,13 @@ export async function deleteProject(id) {
     
     // 関連するモデルを IndexedDB から削除
     if (project.modelSettings && project.modelSettings.length > 0) {
-      dlog(`🔄 関連モデル削除開始: ${project.modelSettings.length}個`);
+      console.log(`🔄 関連モデル削除開始: ${project.modelSettings.length}個`);
       
       for (const modelSettings of project.modelSettings) {
         if (modelSettings.modelId) {
           try {
             await removeModel(modelSettings.modelId);
-            dlog(`✅ モデル削除完了: ${modelSettings.fileName}`);
+            console.log(`✅ モデル削除完了: ${modelSettings.fileName}`);
           } catch (modelDeleteError) {
             console.error(`❌ モデル削除エラー: ${modelSettings.fileName}`, modelDeleteError);
           }
@@ -391,7 +381,7 @@ export async function deleteProject(id) {
     // localStorage からプロジェクト設定を削除
     const success = deleteProjectSettings(id);
     
-    dlog('✅ プロジェクト削除完了 [IndexedDB版]:', {
+    console.log('✅ プロジェクト削除完了 [IndexedDB版]:', {
       projectId: id,
       success
     });

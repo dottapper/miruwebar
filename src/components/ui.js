@@ -528,7 +528,9 @@ export async function showQRCodeModal(options = {}) {
     const localIP = await getLocalNetworkIP();
     const currentPort = window.location.port || '3000';
     const localHost = `${localIP}:${currentPort}`;
-    const scheme = (window.location.protocol === 'https:') ? 'https' : 'http';
+    // HTTPS優先（モバイルでのカメラ利用要件）。httpの場合は注意文表示。
+    const isHttps = (window.location.protocol === 'https:');
+    const scheme = isHttps ? 'https' : 'http';
     
     uiLogger.log('🌐 ネットワーク情報:', {
       currentHost: window.location.host,
@@ -553,6 +555,10 @@ export async function showQRCodeModal(options = {}) {
     modalOverlay.innerHTML = `
         <div class="modal-content">
             <h2>ARをスマホで見る</h2>
+            ${!isHttps ? `<div style="margin: 0.5rem 0 1rem 0; padding: 0.6rem; border-radius: 6px; background: #FFF3CD; color: #664D03; border: 1px solid #FFECB5; font-size: 0.9rem;">
+              ⚠️ 開発環境がHTTPのため、スマホではカメラが使えない場合があります。<br>
+              HTTPSでの起動を推奨します（自己署名証明書でも可）。
+            </div>` : ''}
             <p style="margin: 0 0 1.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.4;">
                 QRコードをスマホでスキャンしてAR体験を開始できます。まずは「📱 スマホでテスト」で同じWi-Fi内のスマホから確認し、
                 問題なければ「🌐 公開用」でインターネット公開用のQRコードを生成してください。

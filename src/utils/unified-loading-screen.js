@@ -462,3 +462,8 @@ export const unifiedLoading = {
 };
 
 export default unifiedLoadingScreen;
+
+// グローバル公開（フォールバック表示用にビュー側から参照できるように）
+if (typeof window !== 'undefined') {
+  window.__unifiedLoading = { unifiedLoading };
+}

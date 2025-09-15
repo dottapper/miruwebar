@@ -203,8 +203,13 @@ async function createProjectData(data, viewerInstance, existingProject = null) {
             // ローディング画面設定（新規追加）
             loadingScreen: data.loadingScreen ? {
                 ...defaultLoadingScreen,
-                ...data.loadingScreen // 既存データがあれば上書き
+                ...data.loadingScreen, // 既存データがあれば上書き
+                // templateSettingsを確実に含める
+                ...(data.loadingScreen.templateSettings ? { templateSettings: data.loadingScreen.templateSettings } : {})
             } : { ...defaultLoadingScreen },
+            // スタート/ガイド画面（ビューアで直接反映できるよう保持）
+            startScreen: data.startScreen || null,
+            guideScreen: data.guideScreen || null,
             
             // マーカー画像（Base64で保存、容量小）
             markerImage: data.markerImage || null,
@@ -916,6 +921,41 @@ async function saveProjectHybrid(projectData) {
             }
             lightweightProject.loadingScreen = loadingScreen;
         }
+
+        // スタート画面の大きな画像データをIndexedDBに移動
+        if (projectData.startScreen) {
+            const startScreen = { ...projectData.startScreen };
+            if (startScreen.logo && typeof startScreen.logo === 'string' && startScreen.logo.startsWith('data:image/') && startScreen.logo.length > 50000) {
+                const logoKey = `start_logo_${projectData.id}`;
+                await saveToIndexedDB(logoKey, startScreen.logo);
+                startScreen.logoRef = logoKey;
+                delete startScreen.logo;
+                largeDataKeys.push('startLogo');
+            }
+            lightweightProject.startScreen = startScreen;
+        }
+
+        // ガイド画面の大きな画像データをIndexedDBに移動
+        if (projectData.guideScreen) {
+            const guideScreen = { ...projectData.guideScreen };
+            const surface = guideScreen.surfaceDetection;
+            const world = guideScreen.worldTracking;
+            if (surface && typeof surface.guideImage === 'string' && surface.guideImage.startsWith('data:image/') && surface.guideImage.length > 50000) {
+                const imageKey = `guide_surface_${projectData.id}`;
+                await saveToIndexedDB(imageKey, surface.guideImage);
+                guideScreen.surfaceDetection = { ...surface, guideImageRef: imageKey };
+                delete guideScreen.surfaceDetection.guideImage;
+                largeDataKeys.push('guideSurface');
+            }
+            if (world && typeof world.guideImage === 'string' && world.guideImage.startsWith('data:image/') && world.guideImage.length > 50000) {
+                const imageKey = `guide_world_${projectData.id}`;
+                await saveToIndexedDB(imageKey, world.guideImage);
+                guideScreen.worldTracking = { ...world, guideImageRef: imageKey };
+                delete guideScreen.worldTracking.guideImage;
+                largeDataKeys.push('guideWorld');
+            }
+            lightweightProject.guideScreen = guideScreen;
+        }
         
         // 軽量化されたプロジェクトデータのサイズをチェック
         const lightweightSize = JSON.stringify(lightweightProject).length;
@@ -1067,13 +1107,39 @@ export async function exportProjectBundleById(projectId) {
     throw new Error('プロジェクトが見つかりません');
   }
   
-  // project.jsonの組み立て（viewer用の簡易形式）
+  // 1) ローディング/スタート/ガイドのテンプレ解決と不足補完
+  let loadingScreen = project.loadingScreen || {};
+  let startScreen = project.startScreen || null;
+  let guideScreen = project.guideScreen || null;
+
+  try {
+    // selectedScreenIdからテンプレを解決
+    if ((!loadingScreen.templateSettings || Object.keys(loadingScreen.templateSettings).length === 0) && loadingScreen.selectedScreenId && loadingScreen.selectedScreenId !== 'none') {
+      const { TEMPLATES_STORAGE_KEY } = await import('../components/loading-screen/template-manager.js');
+      const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+      if (stored) {
+        const templates = JSON.parse(stored);
+        const tpl = templates.find(t => t.id === loadingScreen.selectedScreenId);
+        if (tpl && tpl.settings) {
+          // 軽量のtemplateSettingsを埋め込む
+          const { startScreen: ts, loadingScreen: tl, guideScreen: tg } = tpl.settings;
+          loadingScreen = { ...loadingScreen, templateSettings: {} };
+          if (tl) loadingScreen.templateSettings.loadingScreen = tl;
+          if (ts && !startScreen) startScreen = ts;
+          if (tg && !guideScreen) guideScreen = tg;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2) project.jsonの組み立て（viewer用の十分な設定込み）
   const projectJson = {
     name: project.name,
     description: project.description,
     type: project.type,
-    loadingScreen: project.loadingScreen,
-    // viewer側ではURLで読み込むため、assets配列を生成（IndexedDBは同梱対象外）
+    loadingScreen,
+    startScreen,
+    guideScreen,
     models: (project.modelSettings || []).map((m) => ({
       url: `/assets/${m.fileName}`,
       fileName: m.fileName,

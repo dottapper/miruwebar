@@ -1,8 +1,9 @@
 // src/views/editor/project-operations.js - プロジェクト関連の操作
 
 import { saveProject, getProject, loadProjectWithModels } from '../../api/projects-new.js';
-import { exportProjectBundleById } from '../../api/projects.js';
+import { exportProjectBundleById } from '../../maintenance/project-maintenance.js';
 import { loadLoadingSettingsToUI, resetAllUI } from './ui-handlers.js';
+import { settingsAPI } from '../../components/loading-screen/settings.js';
 
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
@@ -106,17 +107,76 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
     const modelsData = getCurrentModelsData();
     const loadingScreenData = getCurrentLoadingScreenData(savedSelectedScreenId);
 
+    // エディター設定を取得（軽量化してプロジェクトへ反映）
+    let editorSettingsSafe = null;
+    try {
+      const s = settingsAPI.getSettings();
+      // 画像を含む巨大なエディター全体設定はプロジェクトに埋め込まない
+      // ビューア表示に必要な screen 単位の設定のみプロジェクト直下へ保存
+      editorSettingsSafe = s;
+    } catch (_) {
+      editorSettingsSafe = null;
+    }
+
+    // 紐づけテンプレート設定を取得（viewerで直接反映できるよう project.json に埋め込む）
+    let templateSettings = null;
+    try {
+      const templatesJson = localStorage.getItem('miruwebAR_loading_templates');
+      if (templatesJson) {
+        const all = JSON.parse(templatesJson);
+        const tid = loadingScreenData?.selectedScreenId || savedSelectedScreenId || '';
+        if (tid && tid !== 'none') {
+          const match = all.find(t => t.id === tid);
+          if (match && match.settings) {
+            templateSettings = { ...match.settings };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('テンプレート設定の取得に失敗（継続）:', e);
+    }
+
+    // テンプレート未選択時は何も注入しない（既存プロジェクトの設定を尊重）
+    // → viewer側で既存project.jsonのstartScreen/guideScreenまたはテンプレ由来を優先適用
+
     const projectData = {
       id: projectId,
       models: modelsData,
       transform: transformData,
-      loadingScreen: loadingScreenData,
+      // ローディング画面: 選択状態に加え、必要最小限の見栄え設定を併記
+      loadingScreen: {
+        ...loadingScreenData,
+        // エディターの現在値から主要プロパティを反映（画像などはsettings側で圧縮管理）
+        ...(editorSettingsSafe?.loadingScreen ? editorSettingsSafe.loadingScreen : {}),
+        // 紐づけテンプレートをそのまま埋め込み（start/loading/guide を包含）
+        ...(templateSettings ? { templateSettings } : {})
+      },
+      // スタート画面/ガイド画面: ビューアで直接反映できるよう直下に保存
+      startScreen: editorSettingsSafe?.startScreen || (templateSettings?.startScreen || {
+        title: 'AR体験を開始',
+        buttonText: '開始',
+        backgroundColor: '#121212',
+        textColor: '#ffffff',
+        buttonColor: '#007bff',
+        buttonTextColor: '#ffffff',
+        titleSize: 1.5,
+        buttonSize: 1.0,
+        logoSize: 1.0,
+        titlePosition: 40,
+        buttonPosition: 60,
+        logoPosition: 20
+      }),
+      guideScreen: editorSettingsSafe?.guideScreen || (templateSettings?.guideScreen || null),
       lastModified: new Date().toISOString()
     };
 
     dlog('💾 プロジェクトを保存中...', projectData);
     
-    const result = await saveProject(projectId, projectData);
+    // ARViewerインスタンスを取得して渡す
+    const arViewerInstance = window.arViewer;
+    dlog('🔍 ARViewerインスタンス:', arViewerInstance);
+    
+    const result = await saveProject(projectData, arViewerInstance);
     
     if (result.success) {
       dlog('✅ プロジェクト保存完了');
@@ -173,17 +233,54 @@ function getCurrentTransformData() {
  * 現在のモデルデータを取得
  */
 function getCurrentModelsData() {
-  // 現在読み込まれているモデルの情報を収集
-  const modelSelect = document.getElementById('model-select');
+  // ARViewerから実際のモデルデータを取得
+  const arViewer = window.arViewer;
   const models = [];
   
-  if (modelSelect) {
-    for (let i = 1; i < modelSelect.options.length; i++) {
-      const option = modelSelect.options[i];
-      models.push({
-        name: option.textContent,
-        index: option.value
+  dlog('🔍 ARViewerインスタンス確認:', {
+    hasArViewer: !!arViewer,
+    hasControls: !!(arViewer && arViewer.controls),
+    hasGetAllModels: !!(arViewer && arViewer.controls && arViewer.controls.getAllModels),
+    arViewerKeys: arViewer ? Object.keys(arViewer) : [],
+    controlsKeys: arViewer && arViewer.controls ? Object.keys(arViewer.controls) : []
+  });
+  
+  if (arViewer && arViewer.controls && arViewer.controls.getAllModels) {
+    try {
+      const allModels = arViewer.controls.getAllModels();
+      dlog('🔍 ARViewerからモデルデータを取得:', allModels.length, 'models');
+      
+      allModels.forEach((model, index) => {
+        models.push({
+          name: model.fileName || `Model ${index + 1}`,
+          fileName: model.fileName,
+          fileSize: model.fileSize || 0,
+          index: index,
+          position: model.position || { x: 0, y: 0, z: 0 },
+          rotation: model.rotation || { x: 0, y: 0, z: 0 },
+          scale: model.scale || { x: 1, y: 1, z: 1 },
+          visible: model.visible !== false,
+          hasAnimations: Boolean(model.hasAnimations),
+          // モデルデータのBlobも含める
+          modelData: model.modelData
+        });
       });
+      
+      dlog('✅ モデルデータ取得完了:', models);
+    } catch (error) {
+      console.error('❌ ARViewerからモデルデータ取得エラー:', error);
+    }
+  } else {
+    // フォールバック: UIの選択肢から取得
+    const modelSelect = document.getElementById('model-select');
+    if (modelSelect) {
+      for (let i = 1; i < modelSelect.options.length; i++) {
+        const option = modelSelect.options[i];
+        models.push({
+          name: option.textContent,
+          index: option.value
+        });
+      }
     }
   }
   
@@ -198,6 +295,7 @@ function getCurrentLoadingScreenData(savedSelectedScreenId) {
   
   return {
     selectedScreenId: loadingScreenSelect?.value || savedSelectedScreenId || '',
-    editorSettings: null // settingsAPIから取得する場合は別途実装
+    // editorSettings は巨大化しやすいためプロジェクト直下には保存しない
+    // ビューア反映に必要な値は saveCurrentProject 側で各画面へ分配
   };
 }
