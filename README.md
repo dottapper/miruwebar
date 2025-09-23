@@ -226,6 +226,118 @@ async function saveProjects(projects) {
 
 **推奨ブラウザ**: Chrome/Edge（PC）、Safari（iOS）
 
+## AR機能 - マーカーあり/なし対応
+
+### 対応AR技術
+
+miru-WebAR は、デバイスとブラウザに応じて最適なAR技術を自動選択する **統合ARシステム** を採用しています。
+
+#### 🎯 **マーカーAR（AR.js）**
+- **対象**: iPhone Safari、フォールバック環境
+- **方式**: マーカー（Hiroパターン等）を基準とした3Dオブジェクト表示
+- **特徴**: 高い互換性、安定した動作、iPhone対応
+- **使用技術**: AR.js + Three.js
+
+#### 🌐 **マーカーレスAR（WebXR）**
+- **対象**: Android Chrome、デスクトップ Chrome/Edge
+- **方式**: 空間認識による平面検出 + タップ配置
+- **特徴**: 空間スキャン、リアルな3D配置、高度なAR体験
+- **使用技術**: WebXR API + Three.js
+
+### 自動選択システム
+
+AREngineAdapter が端末とブラウザ情報を検出し、最適なAR技術を自動選択します：
+
+```javascript
+// 自動選択ロジック（一例）
+if (isIOS && isSafari) {
+  return 'marker';    // iPhone → マーカーAR
+}
+if (isAndroid && isChrome) {
+  return 'webxr';     // Android → マーカーレスAR
+}
+if (isDesktop && isChrome) {
+  return 'webxr';     // PC → WebXR開発・テスト
+}
+// フォールバック: marker
+```
+
+### 動作例
+
+#### **iPhone/iPad（Safari）**
+1. カメラを起動
+2. マーカー（Hiroパターン）をカメラでスキャン
+3. マーカー上に3Dオブジェクトが表示
+4. マーカーを動かすとオブジェクトも追従
+
+#### **Android（Chrome）・PC（Chrome/Edge）**
+1. WebXRセッションを開始
+2. 空間をスキャンして平面を検出
+3. 床や机の表面にレチクル（照準）が表示
+4. 画面をタップして3Dオブジェクトを配置
+5. デバイスを動かしてもオブジェクトは空間に固定
+
+### 開発環境での確認
+
+#### **iPhone + Mac での開発**
+- **Mac**: Chrome で WebXR 機能の開発・テスト
+- **iPhone**: マーカーAR のテスト・デバッグ
+- **組み合わせ**: 両方の AR 体験をサポート
+
+#### **コンソール確認**
+```javascript
+// ARエンジン選択ログ
+console.log('🔍 選択されたARエンジン:', arEngine.constructor.getEngineType());
+console.log('🌐 navigator.xr 対応状況:', {
+  xrExists: 'xr' in navigator,
+  userAgent: navigator.userAgent
+});
+```
+
+### 技術仕様
+
+#### **共通インターフェース（AREngineInterface）**
+両方のAR技術は統一インターフェースで管理されています：
+
+```javascript
+// 統一された使用方法
+const arEngine = await AREngineAdapter.create({
+  container: arContainer,
+  preferredEngine: 'auto'  // 自動選択
+});
+
+await arEngine.initialize();  // 初期化
+await arEngine.start(projectData);  // AR開始
+await arEngine.stop();  // AR停止
+await arEngine.destroy();  // リソース解放
+```
+
+#### **ブラウザ対応状況**
+| デバイス | ブラウザ | AR技術 | 対応状況 |
+|---------|---------|--------|----------|
+| iPhone/iPad | Safari | マーカーAR | ✅ 完全対応 |
+| Android | Chrome | WebXR | ✅ 完全対応 |
+| PC | Chrome/Edge | WebXR | ✅ 開発・テスト |
+| その他 | 任意 | マーカーAR | ✅ フォールバック |
+
+### トラブルシューティング
+
+#### **AR機能が動作しない場合**
+1. **HTTPS接続を確認**: カメラ権限にはHTTPS必須
+2. **ブラウザ対応確認**: Chrome（Android/PC）、Safari（iOS）推奨
+3. **コンソールログ確認**: エラーメッセージを確認
+4. **フォールバック動作**: WebXR未対応時は自動的にマーカーARに切り替わる
+
+#### **マーカーARでマーカーが認識されない場合**
+- マーカーの印刷品質を確認（鮮明な白黒パターン）
+- 照明環境を改善（明るすぎず暗すぎず）
+- カメラとマーカーの距離を調整（20-50cm程度）
+
+#### **WebXRで平面検出されない場合**
+- デバイスをゆっくり動かして空間をスキャン
+- 床や机など平面が見える環境で試行
+- 照明環境を改善（特徴点検出のため）
+
 ## サーバー構成（一本化の方針）
 
 - 開発時は Vite のプラグインが API を提供します。

@@ -4,16 +4,16 @@
 import * as THREE from 'three';
 import { ARButton } from 'three/examples/jsm/webxr/ARButton.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { AREngineInterface } from '../../utils/ar-engine-adapter.js';
 
 /**
  * WebXRマーカーレスARクラス
  * 空間の平面検出とタッチによる3Dオブジェクト配置を実装
  */
-export class WebXRAR {
-  constructor(container, options = {}) {
+export class WebXRAR extends AREngineInterface {
+  constructor(options = {}) {
+    super(options);
     console.log('🌟 WebXRAR初期化開始', options);
-    
-    this.container = container;
     this.options = {
       backgroundColor: 0x000000,
       enableHitTest: true,
@@ -74,9 +74,9 @@ export class WebXRAR {
   }
 
   /**
-   * WebXR AR を初期化
+   * AREngineInterface 実装: 初期化
    */
-  async init() {
+  async initialize() {
     console.log('🚀 WebXRAR初期化開始');
 
     try {
@@ -139,12 +139,82 @@ export class WebXRAR {
       });
 
       console.log('✅ WebXRAR初期化完了');
+      this.isInitialized = true;
       return true;
 
     } catch (error) {
       console.error('❌ WebXRAR初期化失敗:', error);
       throw new Error(`WebXR初期化エラー: ${error.message}`);
     }
+  }
+
+  /**
+   * AREngineInterface 実装: AR開始
+   */
+  async start(projectData) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    this.isRunning = true;
+    console.log('▶️ WebXRAR開始', projectData);
+    // プロジェクトデータに基づいて3Dモデルを読み込み
+    if (projectData?.modelUrl) {
+      await this.loadModel(projectData.modelUrl);
+    }
+  }
+
+  /**
+   * AREngineInterface 実装: AR停止
+   */
+  async stop() {
+    this.isRunning = false;
+    console.log('⏹️ WebXRAR停止');
+    if (this.renderer?.xr?.isPresenting) {
+      await this.renderer.xr.getSession()?.end();
+    }
+  }
+
+  /**
+   * AREngineInterface 実装: リソース破棄
+   */
+  async destroy() {
+    await this.stop();
+    this.cleanup();
+    this.isInitialized = false;
+    console.log('🗑️ WebXRAR破棄完了');
+  }
+
+  /**
+   * AREngineInterface 実装: デバイス対応チェック
+   * 標準APIを使用した正確な判定
+   */
+  static async isSupported() {
+    try {
+      // secure context チェック
+      if (!window.isSecureContext) {
+        return false;
+      }
+
+      // navigator.xr 存在チェック
+      if (!('xr' in navigator)) {
+        return false;
+      }
+
+      // immersive-ar セッション対応チェック
+      const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+      return !!isSupported;
+
+    } catch (error) {
+      console.debug('WebXR判定エラー:', error);
+      return false;
+    }
+  }
+
+  /**
+   * AREngineInterface 実装: エンジンタイプ
+   */
+  static getEngineType() {
+    return 'webxr';
   }
 
   /**
@@ -434,23 +504,5 @@ export class WebXRAR {
   }
 }
 
-// レチクル位置にオブジェクトを配置するときはloadedModelを使用するよう修正
-WebXRAR.prototype.placeObjectAtReticle = function() {
-  if (!this.reticle.visible) {
-    console.warn('⚠️ レチクルが表示されていません');
-    return;
-  }
-
-  // 配置数制限チェック
-  if (this.placedObjects.length >= this.options.maxObjects) {
-    console.warn(`⚠️ 最大配置数(${this.options.maxObjects})に達しました`);
-    this.removeObject(this.placedObjects[0]);
-  }
-
-  // 読み込み済みモデルがある場合はそれを使用、なければテストキューブ
-  if (this.loadedModel) {
-    this.placeLoadedModel();
-  } else {
-    this.placeTestCube();
-  }
-};
+// WebXRAR を default export
+export default WebXRAR;

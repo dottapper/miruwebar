@@ -4,6 +4,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import { networkInfoPlugin } from './vite/plugins/networkInfo.js';
 import { projectsStaticPlugin } from './vite/plugins/projectsStatic.js';
 import { projectsApiPlugin } from './vite/plugins/projectsApi.js';
+import { execSync } from 'child_process';
 
 export default defineConfig({
   // ★★★ HMR設定の改善 ★★★
@@ -85,8 +86,19 @@ export default defineConfig({
     // 決定性のある出力を保証
     target: 'es2020'
   },
-  // ★★★ LocatorJS警告の抑制 ★★★
+  // ★★★ LocatorJS警告の抑制 & ビルド情報注入 ★★★
   define: {
-    __LOCATOR_DEV__: false
+    __LOCATOR_DEV__: false,
+    __BUILD_SHA__: JSON.stringify(
+      process.env.BUILD_SHA ||
+      (() => {
+        try {
+          return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+        } catch (e) {
+          return 'dev-build';
+        }
+      })()
+    ),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
   }
 });

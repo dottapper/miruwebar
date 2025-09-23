@@ -197,8 +197,9 @@ async function createProjectDataWithIDB(data, viewerInstance) {
         backgroundColor: data.backgroundColor || 0x222222
       },
       
-      // マーカー画像データ（小さい場合のみ）
-      markerImage: data.markerImage && data.markerImage.length < 100000 ? data.markerImage : null,
+      // マーカー画像とパターン
+      markerImage: data.markerImage && data.markerImage.length < 1500000 ? data.markerImage : null,
+      markerPattern: data.markerPattern || null,
       
       // ローディング画面設定
       loadingScreen: data.loadingScreen || null,

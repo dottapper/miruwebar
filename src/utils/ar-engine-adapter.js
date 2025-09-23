@@ -2,6 +2,7 @@
 // ARエンジンの統一アダプターパターン - 端末差異の分岐を封じ込め
 
 import { createLogger } from './logger.js';
+import { checkXRSupport } from './webxr-support.js';
 
 const logger = createLogger('AREngineAdapter');
 
@@ -49,6 +50,9 @@ export class AREngineInterface {
  * 端末差異とエンジン選択ロジックを封じ込める
  */
 export class AREngineAdapter {
+  // グローバル初期化mutex（競合回避）
+  static _initializationMutex = false;
+  static _activeEngine = null;
   /**
    * 最適なARエンジンを自動選択して作成
    * @param {Object} options - 設定オプション
@@ -58,6 +62,18 @@ export class AREngineAdapter {
    * @returns {Promise<AREngineInterface>} ARエンジンインスタンス
    */
   static async create(options = {}) {
+    // 初期化mutex確認（競合防止）
+    if (this._initializationMutex) {
+      throw new Error('AR初期化が既に進行中です。他の初期化を待つか、前の処理を停止してください。');
+    }
+
+    // アクティブエンジンが既に存在する場合は警告
+    if (this._activeEngine) {
+      logger.warn('既存のARエンジンが存在します', {
+        activeEngine: this._activeEngine.constructor.name
+      });
+    }
+
     const {
       container,
       preferredEngine = 'auto',
@@ -67,6 +83,9 @@ export class AREngineAdapter {
     logger.info('ARエンジン作成開始', { preferredEngine });
 
     try {
+      // mutex設定
+      this._initializationMutex = true;
+
       // エンジンタイプ決定
       const engineType = await this.determineEngineType(preferredEngine);
       logger.info('選択されたARエンジンタイプ', { engineType });
@@ -77,9 +96,12 @@ export class AREngineAdapter {
         debug
       });
 
-      logger.success('ARエンジン作成完了', { 
-        engineType, 
-        engineClass: engine.constructor.name 
+      // アクティブエンジン設定
+      this._activeEngine = engine;
+
+      logger.success('ARエンジン作成完了', {
+        engineType,
+        engineClass: engine.constructor.name
       });
 
       return engine;
@@ -87,6 +109,9 @@ export class AREngineAdapter {
     } catch (error) {
       logger.error('ARエンジン作成エラー', error);
       throw error;
+    } finally {
+      // mutex解放
+      this._initializationMutex = false;
     }
   }
 
@@ -155,20 +180,19 @@ export class AREngineAdapter {
   }
 
   /**
-   * WebXRサポート確認
+   * WebXRサポート確認（標準APIユーティリティ使用）
    * @private
    * @returns {Promise<boolean>} WebXRサポート状況
    */
   static async checkWebXRSupport() {
     try {
-      if (!navigator.xr) {
-        return false;
-      }
-      
-      const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-      logger.debug('WebXRサポート確認', { isSupported });
-      
-      return isSupported;
+      const support = await checkXRSupport();
+      logger.debug('WebXRサポート確認', {
+        supported: support.supported,
+        reason: support.reason
+      });
+
+      return support.supported;
     } catch (error) {
       logger.debug('WebXRサポート確認エラー', error);
       return false;
@@ -184,9 +208,22 @@ export class AREngineAdapter {
   static async checkEngineSupport(engineType) {
     try {
       const engineModule = await this.loadEngineModule(engineType);
-      return engineModule.default?.isSupported?.() || true;
+      const supportMethod = engineModule.default?.isSupported;
+
+      if (!supportMethod) {
+        logger.warn('isSupported メソッドが存在しません', { engineType });
+        return true; // フォールバック: 利用可能とみなす
+      }
+
+      // 同期・非同期両対応
+      const result = supportMethod();
+      const isSupported = result instanceof Promise ? await result : result;
+
+      logger.debug('エンジンサポート確認完了', { engineType, isSupported });
+      return !!isSupported;
+
     } catch (error) {
-      logger.warn('エンジンサポート確認エラー', { engineType, error });
+      logger.warn('エンジンサポート確認エラー', { engineType, error: error.message });
       return false;
     }
   }
@@ -228,8 +265,7 @@ export class AREngineAdapter {
         return await import('../components/ar/marker-ar.js');
       
       case 'webxr':
-        // WebXR実装はlegacyディレクトリに移動済み
-        throw new Error('WebXR実装は現在サポートされていません');
+        return await import('../components/ar/webxr-ar.js');
       
       default:
         throw new Error(`未知のARエンジンタイプ: ${engineType}`);
@@ -280,6 +316,56 @@ export class AREngineAdapter {
         error: error.message
       };
     }
+  }
+
+  /**
+   * アクティブエンジンの停止と解放
+   * @returns {Promise<void>}
+   */
+  static async destroyActiveEngine() {
+    if (this._activeEngine) {
+      logger.info('アクティブエンジンを破棄中', {
+        engineType: this._activeEngine.constructor.name
+      });
+
+      try {
+        await this._activeEngine.destroy();
+      } catch (error) {
+        logger.warn('エンジン破棄中にエラー', error);
+      }
+
+      this._activeEngine = null;
+      logger.debug('アクティブエンジン破棄完了');
+    }
+  }
+
+  /**
+   * アクティブエンジン取得
+   * @returns {AREngineInterface|null}
+   */
+  static getActiveEngine() {
+    return this._activeEngine;
+  }
+
+  /**
+   * 初期化状態確認
+   * @returns {boolean}
+   */
+  static isInitializing() {
+    return this._initializationMutex;
+  }
+
+  /**
+   * システム全体のリセット（デバッグ用）
+   * @returns {Promise<void>}
+   */
+  static async reset() {
+    logger.info('ARエンジンアダプターをリセット中');
+
+    await this.destroyActiveEngine();
+    this._initializationMutex = false;
+
+    logger.info('ARエンジンアダプターリセット完了');
   }
 }
 

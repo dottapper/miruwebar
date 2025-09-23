@@ -6,6 +6,7 @@ import { saveProject, getProject, loadProjectWithModels } from '../api/projects-
 import { exportProjectBundleById } from '../api/projects.js'; // エクスポート機能は従来版を使用
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { settingsAPI } from '../components/loading-screen/settings.js';
+import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 
 // CSSファイルのインポート
@@ -2622,6 +2623,16 @@ export function showEditor(container) {
           length: markerImageData?.length || 0,
           preview: markerImageData?.substring(0, 50) || 'なし'
         });
+
+        let markerPattern = null;
+        if (markerImageData) {
+          try {
+            markerPattern = await generateMarkerPatternFromImage(markerImageData);
+            dlog('✅ 保存用マーカーパターン生成成功');
+          } catch (patternError) {
+            console.warn('⚠️ 保存用マーカーパターン生成に失敗:', patternError);
+          }
+        }
         
         // プロジェクト保存前に最新のUI状態を同期
         const loadingScreenSelect = document.getElementById('loading-screen-select');
@@ -2662,6 +2673,7 @@ export function showEditor(container) {
           description: projectData.description,
           type: arType,
           markerImage: markerImageData,
+          markerPattern,
           // ローディング設定を保存（現在のUI設定を反映）
           loadingScreen: {
             ...loadingSettings,
@@ -2687,14 +2699,16 @@ export function showEditor(container) {
           startScreen: saveData.startScreen,
           guideScreen: saveData.guideScreen,
           hasMarkerImage: !!saveData.markerImage,
-          markerImageSize: saveData.markerImage ? (saveData.markerImage.length / 1024).toFixed(2) + 'KB' : '0KB'
+          markerImageSize: saveData.markerImage ? (saveData.markerImage.length / 1024).toFixed(2) + 'KB' : '0KB',
+          hasMarkerPattern: !!saveData.markerPattern
         });
         dlog('🔍 保存データ詳細:', {
           id: saveData.id,
           name: saveData.name,
           type: saveData.type,
           hasMarkerImage: !!saveData.markerImage,
-          markerImageSize: saveData.markerImage?.length || 0
+          markerImageSize: saveData.markerImage?.length || 0,
+          hasMarkerPattern: !!saveData.markerPattern
         });
 
         // プロジェクトを保存

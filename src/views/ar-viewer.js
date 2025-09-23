@@ -3,6 +3,11 @@
 import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
 import { createLogger } from '../utils/logger.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
+import { generateMarkerPatternFromImage, createPatternBlob } from '../utils/marker-utils.js';
+import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
+import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
+import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
+import { createLoadingStateManager, LoadingState } from '../utils/loading-state-manager.js';
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
@@ -27,6 +32,9 @@ export default function showARViewer(container) {
   const queryString = hash.includes('?') ? hash.split('?')[1] : '';
   const urlParams = new URLSearchParams(queryString);
   const projectSrc = urlParams.get('src');
+  // エンジン強制切替: engine=marker|webxr|simple（simpleは将来拡張）
+  const engineOverrideRaw = (urlParams.get('engine') || urlParams.get('type') || '').toLowerCase();
+  const engineOverride = ['marker', 'webxr', 'simple'].includes(engineOverrideRaw) ? engineOverrideRaw : null;
   const enableLSFlag = (urlParams.get('ls') || '').toLowerCase() === 'on';
   // デバッグ用：cube=on で強制デバッグキューブを配置
   const forceDebugCube = ['on','1','true','yes'].includes((urlParams.get('cube')||'').toLowerCase());
@@ -572,6 +580,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let markerDetected = false;
   let currentProject = null;
   let arObjects = [];
+  let markerPatternCleanup = null;
   let loadedModels = [];
 
   // ローディング画面とスタート画面をデフォルト状態にリセットする関数
@@ -1652,196 +1661,328 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateStatus('✅ ARシステム準備完了', 'success');
   }
 
-  // AR初期化状態を管理
-  let isARInitializing = false;
-  let hasARInitFailed = false;
+  // AR状態機械の初期化
+  let arStateMachine = null;
+  let currentAREngine = null;
+  let loadingStateManager = null;
 
-  // AR開始
+  // AR状態機械の初期化
+  function initializeARStateMachine() {
+    if (arStateMachine) {
+      return; // 既に初期化済み
+    }
+
+    // ローディング状態管理の初期化
+    if (!loadingStateManager) {
+      loadingStateManager = createLoadingStateManager({
+        onStateChange: (newState, oldState, data) => {
+          console.log(`📊 ローディング状態: ${oldState} → ${newState}`, data);
+          // updateStatus関数との互換性のため、直接UI更新
+          updateStatus(data.message, data.type);
+        }
+      });
+    }
+
+    arStateMachine = createARStateMachine({
+      onStateChange: async (newState, oldState, data) => {
+        console.log(`🔄 AR状態変更: ${oldState} → ${newState}`, data);
+        await handleARStateChange(newState, oldState, data);
+      },
+      onError: async (error, previousState, data) => {
+        console.error('❌ AR状態機械エラー:', error, { previousState, data });
+        handleARError(error, previousState, data);
+      },
+      defaultTimeout: 30000
+    });
+  }
+
+  // AR開始（ユーザー操作起点・状態機械制御）
   startBtn.addEventListener('click', async () => {
     console.log('🚀 AR開始ボタンが押されました');
 
-    // 既に初期化中または失敗済みの場合は処理をスキップ
-    if (isARInitializing) {
-      console.log('⚠️ AR初期化が既に進行中です');
+    // 状態機械初期化
+    initializeARStateMachine();
+
+    // 現在の状態確認
+    const currentState = arStateMachine.getState();
+    console.log('📊 現在のAR状態:', currentState);
+
+    // IDLE状態でない場合は重複起動防止
+    if (currentState !== ARState.IDLE) {
+      console.log('⚠️ AR処理が既に進行中です:', currentState);
       return;
     }
 
-    if (hasARInitFailed) {
-      console.log('⚠️ AR初期化に失敗済みです。ページをリロードしてから再試行してください');
-      return;
-    }
-
-    isARInitializing = true;
-    startBtn.style.display = 'none';
-    
-    // ガイド画面を表示
-    showScreen(screenStates.GUIDE);
-    
-    // 少し待ってからAR処理を開始（ガイド画面を見せる時間）
-    console.log('⏰ 2秒後にAR初期化を開始します（ガイド画面表示中）');
-    setTimeout(async () => {
-      console.log('🚀 AR初期化タイムアウト実行開始');
-
-      // 🧪 テスト用：画面表示テストのためAR初期化をスキップ
-      const testScreenDisplay = true;
-      if (testScreenDisplay) {
-        console.log('🧪 テストモード：画面表示テスト中（AR初期化スキップ）');
-        console.log('⏰ 5秒後にAR画面に遷移します');
-        setTimeout(() => {
-          console.log('🎯 AR画面表示テスト');
-          showScreen(screenStates.AR);
-        }, 5000);
-        return;
-      }
-
-      try {
-      const isMarker = (currentProject?.type || 'markerless') === 'marker';
-      if (isMarker) {
-        updateStatus('📹 カメラ起動中（マーカーAR）', 'warning');
-        // 動的にMarkerARを読み込み
-        const mod = await import('../components/ar/marker-ar.js');
-        const MarkerAR = mod.MarkerAR;
-        if (!arHost) throw new Error('ARホスト要素が見つかりません');
-
-        // カスタムマーカーがあれば渡し、無ければMarkerAR側のローカル/CDN解決に委ねる
-        const markerOptions = { worldScale: 1.0 };
-        if (currentProject.markerUrl) {
-          const badGh = /ar-js-org\.github\.io\/AR\.js\/data\//;
-          if (!badGh.test(currentProject.markerUrl)) {
-            markerOptions.markerUrl = currentProject.markerUrl;
-          } else {
-            console.warn('⚠️ 無効な旧GHパスのmarkerUrlを無視し、既定解決を使用します:', currentProject.markerUrl);
-          }
-        }
-        const markerAR = new MarkerAR(arHost, { ...markerOptions, forceDebugCube, forceNormalMaterial });
-        // クリーンアップのためにwindow.arInstanceに保存
-        window.arInstance = markerAR;
-        // 成功・喪失イベントでUIを更新（成功が一目で分かるように）
-        markerAR.onMarkerFound = () => {
-          updateStatus('🎯 マーカー検出成功！', 'success');
-          updateInstruction('<strong>🎉 マーカーを認識しました。モデルを表示中…</strong>');
-          if (markerGuide) markerGuide.style.display = 'none';
-          if (markerGuideTips) markerGuideTips.style.display = 'none';
-        };
-        markerAR.onMarkerLost = () => {
-          updateStatus('❌ マーカーを見失いました', 'warning');
-          updateInstruction('<strong>📌 マーカー全体が入るように、距離と角度を調整してください</strong>');
-          if (markerGuide) markerGuide.style.display = 'block';
-          if (markerGuideTips) markerGuideTips.style.display = 'block';
-        };
-        await markerAR.init();
-
-        // プロジェクトのモデルを順に読み込み
-        arViewerLogger.info('プロジェクトモデル数:', currentProject.models?.length || 0);
-        if (Array.isArray(currentProject.models)) {
-          for (const m of currentProject.models) {
-            arViewerLogger.debug('モデル読み込み試行:', m.url);
-            try { 
-              await markerAR.loadModel(m.url); 
-              arViewerLogger.success('モデル読み込み成功:', m.url);
-            } catch (e) {
-              console.error('❌ モデル読み込み失敗:', m.url, e);
-            };
-          }
-        }
-
-        // AR画面を表示（マーカーガイド表示）
-        showScreen(screenStates.AR);
-        updateInstruction('<strong>🎯 マーカーにかざしてください（Hiroでテスト可能）</strong>');
-        updateStatus('✅ マーカーAR準備完了', 'success');
-        // detectボタンは不要
-        detectBtn.style.display = 'none';
-        return;
-      }
-
-      // それ以外（従来のカメラ重畳デモ）
-      updateStatus('📹 カメラ起動中', 'warning');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    // AR起動要求の状態遷移
+    try {
+      await arStateMachine.transition(ARState.LAUNCH_REQUESTED, {
+        timestamp: Date.now(),
+        userInitiated: true,
+        engineOverride
       });
-      video = document.createElement('video');
-      video.srcObject = stream;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.muted = true;
-      video.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:1;`;
-      container.appendChild(video);
-      await video.play();
-      // カメラ起動成功時は全画面を非表示（ARコンテンツ表示）
-      showScreen(null); // 全画面非表示
-      updateStatus('✅ カメラ起動成功', 'success');
-      startRenderLoop();
-      detectBtn.style.display = 'inline-block';
-      updateInstruction('<strong>📱 画面の指示に従ってください</strong>');
     } catch (error) {
-      console.error('❌ AR開始エラー:', error);
-      isARInitializing = false;
-      hasARInitFailed = true;
-
-      updateStatus(`❌ AR開始失敗: ${error.message}`, 'error');
-
-      // エラーの種類に応じたメッセージと再試行ボタンを表示
-      let errorTitle = 'AR開始エラー';
-      let errorMessage = '不明なエラーが発生しました。';
-      let showRetryButton = true;
-      let isPermissionError = false;
-
-      if (error.message.includes('カメラ') || error.message.includes('permission') || error.name === 'NotAllowedError') {
-        errorTitle = 'カメラ権限エラー';
-        errorMessage = 'カメラへのアクセス権限がありません。<br><br><strong>解決方法:</strong><br>1. ブラウザのアドレスバー左側のカメラアイコンをクリック<br>2. カメラアクセスを「許可」に変更<br>3. ページをリロードしてください';
-        isPermissionError = true;
-      } else if (error.message.includes('HTTPS') || error.message.includes('secure')) {
-        errorTitle = 'HTTPS必要エラー';
-        errorMessage = 'AR機能を使用するにはHTTPS接続が必要です。';
-        showRetryButton = false;
-      } else if (error.message.includes('NotFoundError') || error.message.includes('カメラデバイスが見つかりません')) {
-        errorTitle = 'カメラが見つかりません';
-        errorMessage = 'カメラデバイスが見つかりません。カメラが接続されているか確認してください。';
-      } else if (error.message.includes('アセット') || error.message.includes('marker') || error.message.includes('camera_para')) {
-        errorTitle = 'アセット読み込みエラー';
-        errorMessage = 'ARに必要なファイルの読み込みに失敗しました。インターネット接続を確認してください。';
-      }
-
-      // エラーUIを表示
-      updateInstruction(`
-        <div style="text-align: center; padding: 1rem;">
-          <h3 style="color: #ff6b6b; margin-bottom: 0.5rem;">${errorTitle}</h3>
-          <p style="margin-bottom: 1rem; font-size: 0.9em; line-height: 1.4;">${errorMessage}</p>
-          ${showRetryButton ? `<button id="retry-ar-btn" class="btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem;">${isPermissionError ? 'ページをリロード' : '再試行'}</button>` : ''}
-        </div>
-      `);
-
-      // エラー時はガイド画面を表示
-      showScreen(screenStates.ERROR);
-
-      // 再試行ボタンのイベントリスナーを追加
-      if (showRetryButton) {
-        setTimeout(() => {
-          const retryBtn = container.querySelector('#retry-ar-btn');
-          if (retryBtn) {
-            retryBtn.addEventListener('click', () => {
-              if (isPermissionError) {
-                // 権限エラーの場合はページリロード
-                updateInstruction('<strong>🔄 ページをリロードしています...</strong>');
-                window.location.reload();
-              } else {
-                // その他のエラーの場合は状態をリセットして再試行
-                hasARInitFailed = false;
-                isARInitializing = false;
-                updateInstruction('<strong>🔄 再試行中...</strong>');
-                startBtn.style.display = 'inline-block';
-                startBtn.click();
-              }
-            });
-          }
-        }, 100);
-      }
-
-      // 権限エラー以外の場合のみスタートボタンを表示
-      startBtn.style.display = (showRetryButton && !isPermissionError) ? 'inline-block' : 'none';
+      console.error('❌ AR起動要求エラー:', error);
+      handleARError(error, ARState.IDLE, {});
     }
-    }, 2000); // ガイド画面表示時間: 2秒
   });
+
+  // AR状態変更ハンドラー
+  async function handleARStateChange(newState, oldState, data) {
+    switch (newState) {
+      case ARState.LAUNCH_REQUESTED:
+        startBtn.style.display = 'none';
+        loadingStateManager.startLoading('🔍 デバイス対応確認中...');
+        await handleLaunchRequested(data);
+        break;
+
+      case ARState.PERMISSION_PROMPT:
+        loadingStateManager.startLoading('📱 権限確認中...');
+        await handlePermissionPrompt(data);
+        break;
+
+      case ARState.CAMERA_STARTING:
+        loadingStateManager.startLoading('📷 カメラ起動中...');
+        updateGuideScreen(data.fallbackInfo, 'marker');
+        showScreen(screenStates.GUIDE);
+        await handleCameraStarting(data);
+        break;
+
+      case ARState.XR_STARTING:
+        loadingStateManager.startLoading('🥽 WebXR起動中...');
+        updateGuideScreen(data.fallbackInfo, 'webxr');
+        showScreen(screenStates.GUIDE);
+        await handleXRStarting(data);
+        break;
+
+      case ARState.LOADING_ASSETS:
+        loadingStateManager.startLoading('📦 アセット読み込み中...');
+        await handleLoadingAssets(data);
+        break;
+
+      case ARState.PLACING:
+        loadingStateManager.setSuccess('🎯 配置モード');
+        showScreen(screenStates.AR);
+        await handlePlacing(data);
+        break;
+
+      case ARState.RUNNING:
+        loadingStateManager.setSuccess('✅ AR実行中');
+        showScreen(screenStates.AR);
+        await handleRunning(data);
+        break;
+
+      case ARState.ERROR:
+        loadingStateManager.setError(data.error?.message || 'AR起動エラー');
+        handleARError(data.error, oldState, data);
+        break;
+
+      case ARState.DISPOSED:
+        loadingStateManager.setIdle('準備完了');
+        await handleDisposed(data);
+        break;
+    }
+  }
+
+  // AR起動要求処理
+  async function handleLaunchRequested(data) {
+    try {
+      console.log('🔍 WebXRサポート判定開始...');
+
+      const xrSupport = await checkXRSupport();
+      const fallbackInfo = getRecommendedFallback(xrSupport);
+
+      console.log('🔍 WebXRサポート結果:', {
+        supported: xrSupport.supported,
+        reason: xrSupport.reason,
+        recommendation: fallbackInfo.type
+      });
+
+      // AR経路確定（WebXR or AR.js）
+      const useWebXR = xrSupport.supported && !data.engineOverride;
+      const arPath = useWebXR ? 'webxr' : 'marker';
+
+      console.log(`🎯 AR経路確定: ${arPath}${data.engineOverride ? ' (URL強制指定)' : ' (自動判定)'}`, {
+        webxrSupported: xrSupport.supported,
+        engineOverride: data.engineOverride,
+        finalPath: arPath
+      });
+
+      // 次の状態へ遷移
+      const nextState = arPath === 'webxr' ? ARState.XR_STARTING : ARState.CAMERA_STARTING;
+      await arStateMachine.transition(nextState, {
+        arPath,
+        xrSupport,
+        fallbackInfo,
+        engineOverride: data.engineOverride
+      });
+
+    } catch (error) {
+      console.error('❌ AR起動要求処理エラー:', error);
+      throw error;
+    }
+  }
+
+  // 権限プロンプト処理
+  async function handlePermissionPrompt(data) {
+    // 必要に応じて権限要求処理を実装
+    console.log('📱 権限プロンプト処理（必要に応じて実装）');
+  }
+
+  // カメラ起動処理
+  async function handleCameraStarting(data) {
+    try {
+      console.log('📷 AR.jsカメラ起動開始...');
+
+      const arEngine = await AREngineAdapter.create({
+        container: arHost,
+        preferredEngine: 'marker'
+      });
+
+      currentAREngine = arEngine;
+      await arEngine.initialize();
+
+      // アセット読み込みへ遷移
+      await arStateMachine.transition(ARState.LOADING_ASSETS, {
+        ...data,
+        arEngine
+      });
+
+    } catch (error) {
+      console.error('❌ カメラ起動エラー:', error);
+      throw error;
+    }
+  }
+
+  // WebXR起動処理
+  async function handleXRStarting(data) {
+    try {
+      console.log('🥽 WebXR起動開始...');
+
+      const arEngine = await AREngineAdapter.create({
+        container: arHost,
+        preferredEngine: 'webxr'
+      });
+
+      currentAREngine = arEngine;
+      await arEngine.initialize();
+
+      // アセット読み込みへ遷移
+      await arStateMachine.transition(ARState.LOADING_ASSETS, {
+        ...data,
+        arEngine
+      });
+
+    } catch (error) {
+      console.error('❌ WebXR起動エラー:', error);
+      throw error;
+    }
+  }
+
+  // アセット読み込み処理
+  async function handleLoadingAssets(data) {
+    try {
+      console.log('📦 アセット読み込み開始...');
+
+      // プロジェクト開始
+      await currentAREngine.start(currentProject);
+
+      // 配置モードまたは実行モードへ遷移
+      const nextState = data.arPath === 'webxr' ? ARState.PLACING : ARState.RUNNING;
+      await arStateMachine.transition(nextState, data);
+
+    } catch (error) {
+      console.error('❌ アセット読み込みエラー:', error);
+      throw error;
+    }
+  }
+
+  // 配置モード処理
+  async function handlePlacing(data) {
+    console.log('🎯 配置モード開始');
+
+    if (data.arPath === 'webxr') {
+      updateInstruction('<strong>🎯 空間をスキャンしてARオブジェクトを配置してください</strong>');
+    }
+
+    // WebXRの場合、タップで配置完了後にRUNNING状態へ遷移
+    // この遷移は実際のタップイベントで実行される
+  }
+
+  // AR実行処理
+  async function handleRunning(data) {
+    console.log('▶️ AR実行開始');
+
+    if (data.arPath === 'marker') {
+      updateInstruction('<strong>📌 マーカーをカメラにかざしてください</strong>');
+    } else if (data.arPath === 'webxr') {
+      updateInstruction('<strong>🎉 ARオブジェクトを楽しんでください</strong>');
+    }
+  }
+
+  // 破棄処理
+  async function handleDisposed(data) {
+    console.log('🗑️ AR破棄処理');
+
+    // ARエンジンアダプターの完全破棄
+    await AREngineAdapter.destroyActiveEngine();
+    currentAREngine = null;
+
+    arStateMachine = null;
+  }
+
+  // ARエラーハンドリング
+  function handleARError(error, previousState, data) {
+    console.error('❌ AR状態機械エラー:', error, { previousState, data });
+
+    updateStatus(`❌ AR起動失敗: ${error.message}`, 'error');
+    showRetryButton(error.message);
+  }
+
+  // ガイド画面更新
+  function updateGuideScreen(fallbackInfo, arPath) {
+    const guideTitle = container.querySelector('#ar-guide-title');
+    const guideDescription = container.querySelector('#ar-guide-description');
+
+    if (arPath === 'webxr') {
+      if (guideTitle) guideTitle.textContent = '平面をスキャンしてください';
+      if (guideDescription) guideDescription.textContent = '床や机の表面を見つけて、画面をタップして配置してください';
+    } else {
+      if (guideTitle) guideTitle.textContent = 'マーカーをスキャンしてください';
+      if (guideDescription) guideDescription.textContent = 'Hiroマーカーをカメラにかざしてください';
+    }
+  }
+
+
+  // 再試行ボタン表示
+  function showRetryButton(errorMessage) {
+    const retryButton = document.createElement('button');
+    retryButton.textContent = '再試行';
+    retryButton.className = 'btn-primary';
+    retryButton.style.marginTop = '1rem';
+
+    retryButton.onclick = async () => {
+      // 状態機械リセット
+      if (arStateMachine) {
+        await arStateMachine.reset();
+      }
+
+      // ARエンジンアダプターの完全リセット
+      await AREngineAdapter.reset();
+      currentAREngine = null;
+
+      // ローディング状態もリセット
+      if (loadingStateManager) {
+        loadingStateManager.setIdle('準備完了');
+      }
+
+      startBtn.style.display = 'inline-block';
+      retryButton.remove();
+    };
+
+    const errorContainer = container.querySelector('.ar-loading-content') || container;
+    errorContainer.appendChild(retryButton);
+  }
+
 
   // マーカー検出
   detectBtn.addEventListener('click', () => {
@@ -1993,6 +2134,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     renderer = null;
     markerDetected = false;
     currentProject = null;
+
+    if (typeof markerPatternCleanup === 'function') {
+      try { markerPatternCleanup(); } catch (_) {}
+      markerPatternCleanup = null;
+    }
     
     // 7. アニメーションループ停止のためのフラグ設定
     if (typeof window.stopARAnimation !== 'undefined') {

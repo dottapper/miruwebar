@@ -235,8 +235,7 @@ function createLightweightProject(projectData) {
       showGrid: Boolean(projectData.settings?.showGrid),
       backgroundColor: projectData.settings?.backgroundColor || 0x222222
     },
-    // マーカー画像は小さい場合のみ保持
-    markerImage: projectData.markerImage && projectData.markerImage.length < 100000 ? projectData.markerImage : null,
+    markerImage: null,
     created: projectData.created || Date.now(),
     updated: Date.now(),
     stats: {
@@ -246,107 +245,23 @@ function createLightweightProject(projectData) {
   };
 
   // ローディング画面は選択IDに加え、テンプレ解決用のtemplateSettingsを軽量保持
-  const ls = projectData.loadingScreen || {};
-  base.loadingScreen = {
-    selectedScreenId: ls.selectedScreenId || 'none',
-    // 軽量プロパティのみ保持（色/文言/サイズ/位置）
-    ...(ls.templateSettings ? { templateSettings: sanitizeTemplateSettings(ls.templateSettings) } : {}),
-  };
+  base.loadingScreen = projectData.loadingScreen ? JSON.parse(JSON.stringify(projectData.loadingScreen)) : null;
 
-  // スタート/ガイド画面は主要プロパティのみ保持（画像はIDB参照に委譲）
   if (projectData.startScreen) {
-    base.startScreen = sanitizeStartScreen(projectData.startScreen);
+    base.startScreen = JSON.parse(JSON.stringify(projectData.startScreen));
   }
   if (projectData.guideScreen) {
-    base.guideScreen = sanitizeGuideScreen(projectData.guideScreen);
+    base.guideScreen = JSON.parse(JSON.stringify(projectData.guideScreen));
+  }
+
+  if (projectData.markerImage && projectData.markerImage.length < 1500000) {
+    base.markerImage = projectData.markerImage;
+  }
+  if (projectData.markerPattern) {
+    base.markerPattern = projectData.markerPattern;
   }
 
   return base;
-}
-
-function sanitizeTemplateSettings(ts) {
-  const safe = {};
-  if (ts.startScreen) safe.startScreen = sanitizeStartScreen(ts.startScreen);
-  if (ts.loadingScreen) safe.loadingScreen = sanitizeLoadingScreen(ts.loadingScreen);
-  if (ts.guideScreen) safe.guideScreen = sanitizeGuideScreen(ts.guideScreen);
-  return safe;
-}
-
-function sanitizeLoadingScreen(ls = {}) {
-  const {
-    backgroundColor, textColor, progressColor, accentColor,
-    loadingMessage, message, brandName, subTitle,
-    fontScale, showProgress, logoType, logoPosition, logoSize, textPosition
-  } = ls;
-  return {
-    ...(backgroundColor ? { backgroundColor } : {}),
-    ...(textColor ? { textColor } : {}),
-    ...(progressColor ? { progressColor } : {}),
-    ...(accentColor ? { accentColor } : {}),
-    ...(loadingMessage ? { loadingMessage } : {}),
-    ...(message ? { message } : {}),
-    ...(brandName ? { brandName } : {}),
-    ...(subTitle ? { subTitle } : {}),
-    ...(typeof fontScale === 'number' ? { fontScale } : {}),
-    ...(typeof showProgress === 'boolean' ? { showProgress } : {}),
-    ...(logoType ? { logoType } : {}),
-    ...(typeof logoPosition === 'number' ? { logoPosition } : {}),
-    ...(typeof logoSize === 'number' ? { logoSize } : {}),
-    ...(typeof textPosition === 'number' ? { textPosition } : {})
-  };
-}
-
-function sanitizeStartScreen(ss = {}) {
-  const {
-    title, buttonText, backgroundColor, textColor, buttonColor, buttonTextColor,
-    titleSize, buttonSize, logoSize, titlePosition, buttonPosition, logoPosition, logo
-  } = ss;
-  return {
-    ...(title ? { title } : {}),
-    ...(buttonText ? { buttonText } : {}),
-    ...(backgroundColor ? { backgroundColor } : {}),
-    ...(textColor ? { textColor } : {}),
-    ...(buttonColor ? { buttonColor } : {}),
-    ...(buttonTextColor ? { buttonTextColor } : {}),
-    ...(typeof titleSize === 'number' ? { titleSize } : {}),
-    ...(typeof buttonSize === 'number' ? { buttonSize } : {}),
-    ...(typeof logoSize === 'number' ? { logoSize } : {}),
-    ...(typeof titlePosition === 'number' ? { titlePosition } : {}),
-    ...(typeof buttonPosition === 'number' ? { buttonPosition } : {}),
-    ...(typeof logoPosition === 'number' ? { logoPosition } : {}),
-    // 画像データは保持しない（IDB参照へ）
-    ...(typeof logo === 'string' && !logo.startsWith('data:') ? { logo } : {})
-  };
-}
-
-function sanitizeGuideScreen(gs = {}) {
-  const { backgroundColor, textColor, accentColor, mode, title, description, surfaceDetection, worldTracking } = gs;
-  const safe = {
-    ...(backgroundColor ? { backgroundColor } : {}),
-    ...(textColor ? { textColor } : {}),
-    ...(accentColor ? { accentColor } : {}),
-    ...(mode ? { mode } : {}),
-    ...(title ? { title } : {}),
-    ...(description ? { description } : {})
-  };
-  if (surfaceDetection) {
-    const { title: st, description: sd, guideImage } = surfaceDetection;
-    safe.surfaceDetection = {
-      ...(st ? { title: st } : {}),
-      ...(sd ? { description: sd } : {}),
-      // 画像はBase64を保持しない
-      ...(typeof guideImage === 'string' && !guideImage.startsWith('data:') ? { guideImage } : {})
-    };
-  }
-  if (worldTracking) {
-    const { title: wt, description: wd, guideImage } = worldTracking;
-    safe.worldTracking = {
-      ...(wt ? { title: wt } : {}),
-      ...(wd ? { description: wd } : {}),
-      ...(typeof guideImage === 'string' && !guideImage.startsWith('data:') ? { guideImage } : {})
-    };
-  }
-  return safe;
 }
 
 /**

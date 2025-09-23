@@ -100,7 +100,9 @@ const viewModules = {
   '#/qr-code': () => import('./views/qr-code.js'),
   '#/loading-screen': () => import('./views/loading-screen-editor.js'),
   '#/usage-guide': () => import('./views/usage-guide.js'),
-  '#/viewer': () => import('./views/ar-viewer.js')
+  '#/viewer': () => import('./views/ar-viewer.js'),
+  '#/diag': () => import('./views/diag.js'),
+  '#/smoke': () => import('./views/smoke.js')
 };
 
 // アプリケーションのメインコンテナ

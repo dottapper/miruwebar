@@ -904,6 +904,9 @@ export async function showQRCodeModal(options = {}) {
           type: project.type || 'markerless',
           loadingScreen: lsPayload,
           startScreen: startScreenPayload,
+          guideScreen: editorSettings?.guideScreen || project.guideScreen || null,
+          markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
+          markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
           models: modelPayload
         };
         

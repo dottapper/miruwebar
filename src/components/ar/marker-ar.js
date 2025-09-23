@@ -2,19 +2,19 @@
 // AR.js を使ったマーカーAR実装（iPhone Safari 対応）
 
 import * as THREE from 'three';
+import { AREngineInterface } from '../../utils/ar-engine-adapter.js';
 // GLTFLoaderは動的インポートで統一バージョンを使用
 
 /**
  * AR.js を使用したマーカーベースAR
  * iPhone Safari でも動作する軽量実装
  */
-export class MarkerAR {
-  constructor(container, options = {}) {
+export class MarkerAR extends AREngineInterface {
+  constructor(options = {}) {
+    super(options);
     this.IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
     this.dlog = (...args) => { if (this.IS_DEBUG) console.log(...args); };
     console.log('🎯 MarkerAR初期化開始 (iPhone対応)', options);
-    
-    this.container = container;
     this.options = {
       sourceType: 'webcam',
       // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
@@ -929,6 +929,14 @@ export class MarkerAR {
           
           console.log('🎯 3Dモデル準備完了');
           if (this.onModelLoaded) this.onModelLoaded(model);
+
+          // マーカーが既に可視かつ未配置なら即時配置（初回検出が先だったケースを救済）
+          try {
+            if (this.isMarkerVisible && !this.placedModel) {
+              console.log('📌 マーカー可視中のためモデルを即時配置');
+              this.placeModel();
+            }
+          } catch (_) {}
           
           resolve(model);
         },
@@ -1079,12 +1087,26 @@ export class MarkerAR {
     // レンダラーサイズも同期
     this.renderer.setSize(containerWidth, containerHeight);
 
-    // AR.jsリサイズ処理
-    this.arToolkitSource.onResize();
-    this.arToolkitSource.copySizeTo(this.renderer.domElement);
-    
-    if (this.arToolkitContext && this.arToolkitContext.arController) {
-      this.arToolkitSource.copySizeTo(this.arToolkitContext.arController.canvas);
+    // AR.jsリサイズ処理（新旧APIに対応）
+    try {
+      if (typeof this.arToolkitSource.onResizeElement === 'function' &&
+          typeof this.arToolkitSource.copyElementSizeTo === 'function') {
+        // 新API
+        this.arToolkitSource.onResizeElement();
+        this.arToolkitSource.copyElementSizeTo(this.renderer.domElement);
+        if (this.arToolkitContext && this.arToolkitContext.arController) {
+          this.arToolkitSource.copyElementSizeTo(this.arToolkitContext.arController.canvas);
+        }
+      } else {
+        // 互換API（旧）
+        this.arToolkitSource.onResize();
+        this.arToolkitSource.copySizeTo(this.renderer.domElement);
+        if (this.arToolkitContext && this.arToolkitContext.arController) {
+          this.arToolkitSource.copySizeTo(this.arToolkitContext.arController.canvas);
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ リサイズ処理で警告（続行）:', e?.message || e);
     }
 
     console.log('📐 リサイズ完了:', { 
@@ -1161,4 +1183,64 @@ export class MarkerAR {
       cameraReady: !!(this.arToolkitSource && this.arToolkitSource.domElement)
     };
   }
+
+  /**
+   * AREngineInterface 実装: 初期化
+   */
+  async initialize() {
+    console.log('🚀 MarkerAR初期化開始');
+    this.isInitialized = true;
+    return true;
+  }
+
+  /**
+   * AREngineInterface 実装: AR開始
+   */
+  async start(projectData) {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
+    this.isRunning = true;
+    console.log('▶️ MarkerAR開始', projectData);
+    // 既存のARロジックを呼び出し
+    await this.init();
+  }
+
+  /**
+   * AREngineInterface 実装: AR停止
+   */
+  async stop() {
+    this.isRunning = false;
+    console.log('⏹️ MarkerAR停止');
+    if (this.arToolkitSource) {
+      this.arToolkitSource.onResize = null;
+    }
+  }
+
+  /**
+   * AREngineInterface 実装: リソース破棄
+   */
+  async destroy() {
+    await this.stop();
+    this.cleanup();
+    this.isInitialized = false;
+    console.log('🗑️ MarkerAR破棄完了');
+  }
+
+  /**
+   * AREngineInterface 実装: デバイス対応チェック
+   */
+  static isSupported() {
+    return navigator.mediaDevices && navigator.mediaDevices.getUserMedia;
+  }
+
+  /**
+   * AREngineInterface 実装: エンジンタイプ
+   */
+  static getEngineType() {
+    return 'marker';
+  }
 }
+
+// MarkerAR を default export
+export default MarkerAR;

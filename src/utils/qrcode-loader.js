@@ -29,8 +29,21 @@ export async function loadQRCode() {
     try {
       logger.loading('QRCodeライブラリを読み込み中...');
       
+      // まずCDNから読み込みを試行
+      if (typeof window !== 'undefined' && window.QRCode) {
+        QRCode = window.QRCode;
+        logger.success('CDNからQRCodeライブラリを取得しました');
+        return QRCode;
+      }
+      
+      // CDNが利用できない場合はモジュール読み込み
       const qrcodeModule = await import('qrcode');
-      QRCode = qrcodeModule.default;
+      QRCode = qrcodeModule.default || qrcodeModule;
+      
+      // QRCodeライブラリの検証
+      if (!QRCode || typeof QRCode.toCanvas !== 'function') {
+        throw new Error('QRCodeライブラリが無効です');
+      }
       
       logger.success('QRCodeライブラリの読み込みが完了しました');
       return QRCode;
