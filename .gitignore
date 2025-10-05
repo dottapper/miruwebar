@@ -17,10 +17,12 @@ build/
 
 # Data and uploads (local development)
 data/
-uploads/
+uploads/projects/*
+!uploads/projects/sample-keep-me/
 
 # Generated project artifacts (published via API)
-public/projects/
+public/projects/*
+!public/projects/sample-keep-me/
 
 # OS generated files
 .DS_Store

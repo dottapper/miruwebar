@@ -1,9 +1,0 @@
-{
-  "name": "テスト",
-  "description": "",
-  "type": "markerless",
-  "loadingScreen": {
-    "selectedScreenId": "none"
-  },
-  "models": []
-}
