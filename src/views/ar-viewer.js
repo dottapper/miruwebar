@@ -8,11 +8,91 @@ import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
 import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
 import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
 import { createLoadingStateManager, LoadingState } from '../utils/loading-state-manager.js';
+import { getParam, debugURL, getProjectSrc } from '../utils/url-params.js';
+import { applyProjectDesign } from '../utils/apply-project-design.js';
+import { DEV_FORCE_SCREENS, DEV_STRICT_MODE, DEV_VERBOSE_LOGS } from '../config/feature-flags.js';
+import { fetchOnce, reportFetchStats } from '../utils/monitored-fetch.js';
+
+// ============================================================
+// 🔍 診断パネル（deepDiag）- PCで変化なし問題の原因特定
+// ============================================================
+(function deepDiag(){
+  const box = document.createElement('pre');
+  box.style.cssText = 'position:fixed;inset:auto 8px 8px 8px;z-index:99998;max-height:45vh;overflow:auto;background:rgba(0,0,0,.85);color:#0f0;padding:10px;font:12px/1.5 monospace;border:1px solid #0f0';
+  box.textContent = '[diag] running...\n';
+  document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(box));
+  const log=(...a)=>{ console.log('[diag]',...a); box.textContent += a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ')+'\n'; };
+
+  try {
+    const href = window.location.href;
+    const search = new URL(href).search;
+    const hash = window.location.hash;
+    log('href=',href);
+    log('search=',search || '(empty)');
+    log('hash=',hash || '(empty)');
+
+    function getParam(name){
+      const u = new URL(window.location.href);
+      const v1 = u.searchParams.get(name);
+      if (v1) return v1;
+      const h = window.location.hash||'';
+      const qi = h.indexOf('?');
+      if (qi>=0) {
+        const qs = new URLSearchParams(h.slice(qi+1));
+        const v2 = qs.get(name);
+        if (v2) return v2;
+      }
+      return null;
+    }
+    const raw = getParam('src');
+    log('param.src(raw)=', String(raw));
+
+    let srcUrl = null;
+    if (raw) {
+      try { srcUrl = new URL(raw, window.location.origin).toString(); }
+      catch(e) { log('!! new URL failed:', String(e)); }
+    }
+    log('param.src(normalized)=', String(srcUrl));
+
+    if (srcUrl) {
+      const so = (new URL(srcUrl)).origin === window.location.origin;
+      log('sameOrigin=', String(so), 'origin=', (new URL(srcUrl)).origin, 'self=', window.location.origin);
+    } else {
+      log('!! srcUrl が空。URL生成/ハッシュ位置を再確認');
+    }
+
+    async function probe(u){
+      if (!u) return;
+      try {
+        const h = await fetch(u, {method:'HEAD', cache:'no-store'});
+        log('HEAD status=', h.status, h.statusText);
+      } catch(e) { log('!! HEAD error=', String(e)); }
+      try {
+        const r = await fetch(u, {cache:'no-store'});
+        log('GET status=', r.status, r.statusText, 'content-type=', r.headers.get('content-type'));
+        const txt = await r.text();
+        log('body(first 300)=\n' + txt.slice(0,300));
+        try {
+          const json = JSON.parse(txt);
+          log('json.keys=', Object.keys(json).slice(0,20));
+          const required = ['version','screens','theme','start'];
+          const missing = required.filter(k=> !(k in json));
+          if (missing.length) log('!! schema missing=', missing);
+          else log('schema OK (required fields present)');
+        } catch(e) { log('!! JSON parse error=', String(e)); }
+      } catch(e) { log('!! GET error=', String(e)); }
+    }
+    probe(srcUrl);
+  } catch(e) { console.error(e); }
+})();
+// ============================================================
+
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
 const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 const arViewerLogger = createLogger('ARViewer');
+let __booted = false;
 
 function navigateBackOrHome() {
   try {
@@ -24,14 +104,976 @@ function navigateBackOrHome() {
   window.location.hash = '#/projects';
 }
 
+// ★ 旧関数は削除し、getProjectSrc() を直接使用 ★
+// function getProjectSrcFromHash() は url-params.js の getProjectSrc() に統合
+
+// ★ スタートUI乗っ取り版（デザインを"本当に"表示させる）
+function __takeoverStartUI(project){
+  const p = project || window.__project || {};
+  const start = p.start || {};
+  const guideSrc = p?.guide?.marker?.src || '';
+
+  // 既存があれば消す
+  document.getElementById('__dev_applied_proof__')?.remove();
+  document.getElementById('__takeover_start__')?.remove();
+
+  // ルート
+  const root = document.createElement('div');
+  root.id = '__takeover_start__';
+  root.style.cssText = [
+    'position:fixed','inset:0','z-index:999998',
+    'display:flex','justify-content:center','align-items:center',
+    'flex-direction:column','pointer-events:auto',
+    'font-family:system-ui, sans-serif'
+  ].join(';');
+
+  // 背景
+  if (start.backgroundImage) {
+    root.style.backgroundImage = `url(${start.backgroundImage})`;
+    root.style.backgroundSize = 'cover';
+    root.style.backgroundPosition = 'center';
+  }
+  if (start.backgroundColor) root.style.backgroundColor = start.backgroundColor;
+
+  // タイトル
+  const title = document.createElement('h1');
+  title.textContent = start.title || 'AR体験を開始';
+  title.style.cssText = [
+    `color:${start.textColor || '#fff'}`,
+    `font-size:${(start.titleSize ? 32*start.titleSize : 32)}px`,
+    'font-weight:700','margin:0','text-shadow:0 2px 6px rgba(0,0,0,.4)'
+  ].join(';');
+
+  // 位置（%をvhで近似）
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:absolute;left:0;right:0;text-align:center;transform:translateY(-50%)';
+  wrap.style.top = (typeof start.titlePosition === 'number' ? `${start.titlePosition}vh` : '40vh');
+  wrap.appendChild(title);
+
+  // 開始ボタン
+  const btn = document.createElement('button');
+  btn.textContent = '開始';
+  btn.style.cssText = [
+    'margin-top:24px','padding:12px 24px','border-radius:12px',
+    'border:none','cursor:pointer','box-shadow:0 8px 24px rgba(0,0,0,.25)',
+    'background:#6c63ff','color:#fff','font-size:16px','font-weight:600'
+  ].join(';');
+  btn.onclick = async (e)=>{
+    e.stopPropagation();
+    btn.disabled = true;
+
+    // ローディング表示（プロジェクト値を反映）
+    __showLoadingUI(p);
+
+    // 既存の開始ハンドラがあれば呼ぶ
+    try {
+      if (typeof window.onStartClick === 'function') {
+        await window.onStartClick();
+      }
+    } catch(_) {}
+
+    // ガイドに切替（プロジェクト値を反映）
+    __showGuideUI(p);
+
+    // スタートUIを消す
+    root.remove();
+  };
+
+  wrap.appendChild(btn);
+  root.appendChild(wrap);
+
+  // 右上の小タグ
+  const tag = document.createElement('div');
+  tag.textContent = '[TAKEOVER] start';
+  tag.style.cssText = 'position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#0f0;padding:6px 8px;border-radius:6px;font:12px/1 monospace';
+  root.appendChild(tag);
+
+  document.body.appendChild(root);
+  console.info('[TAKEOVER] start UI mounted', {start, guideSrc});
+}
+
+function __showLoadingUI(project){
+  const l = project?.loading || {};
+  // 既存を消す
+  document.getElementById('__takeover_loading__')?.remove();
+
+  const box = document.createElement('div');
+  box.id = '__takeover_loading__';
+  box.style.cssText = 'position:fixed;inset:0;z-index:999997;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
+  if (l.backgroundColor) box.style.background = l.backgroundColor;
+
+  if (l.image){
+    const img = document.createElement('img');
+    img.src = l.image;
+    img.alt = 'loading';
+    img.style.cssText = 'width:120px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))';
+    box.appendChild(img);
+  }
+  const msg = document.createElement('div');
+  msg.textContent = l.message || '読み込み中…';
+  msg.style.cssText = 'margin-top:12px;color:#fff;font-weight:600';
+  box.appendChild(msg);
+
+  document.body.appendChild(box);
+  // 少なくとも一瞬は見えるようタイムアウト解除は別で
+  setTimeout(()=>box.remove(), 800);
+}
+
+function __showGuideUI(project){
+  const g = project?.guide || {};
+  document.getElementById('__takeover_guide__')?.remove();
+
+  const box = document.createElement('div');
+  box.id = '__takeover_guide__';
+  box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:999996;padding:12px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;display:flex;gap:12px;align-items:center';
+
+  if (g?.marker?.src){
+    const img = document.createElement('img');
+    img.src = g.marker.src;
+    img.alt = 'marker';
+    img.style.cssText = 'width:72px;height:auto;border-radius:8px';
+    box.appendChild(img);
+  }
+  const msg = document.createElement('div');
+  msg.textContent = g.message || 'マーカーをカメラに写してください';
+  msg.style.cssText = 'font-weight:600';
+  box.appendChild(msg);
+
+  document.body.appendChild(box);
+}
+
+async function loadProjectFromQR() {
+  const projectSrc = getProjectSrc();
+  if (!projectSrc) {
+    console.error('[FLOW] no project src');
+    if (DEV_STRICT_MODE) {
+      throw new Error('STRICT MODE: No project src from URL. Built-in sample loading is disabled.');
+    }
+    return null;
+  }
+
+  // キャッシュチェック
+  if (typeof window !== 'undefined' && window.__project && window.__projectSrc === projectSrc) {
+    console.info('[FLOW] Using cached project');
+    return window.__project;
+  }
+
+  try {
+    console.info('[FLOW] Fetching project from:', projectSrc);
+    const response = await fetchOnce(projectSrc, { cache: 'no-store' });
+
+    if (!response.ok) {
+      console.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
+      if (DEV_STRICT_MODE) {
+        throw new Error(`STRICT MODE: Project fetch failed (${response.status}). No fallback allowed.`);
+      }
+      return null;
+    }
+
+    // Content-Typeを確認してHTMLレスポンスを検出
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('text/html')) {
+      const text = await response.text();
+      console.error('[FLOW] HTMLレスポンスが返されました:', {
+        url: projectSrc,
+        contentType,
+        preview: text.substring(0, 200)
+      });
+      if (DEV_STRICT_MODE) {
+        throw new Error(`STRICT MODE: HTML response received instead of JSON. URL may be incorrect: ${projectSrc}`);
+      }
+      return null;
+    }
+
+    const project = await response.json();
+
+    if (!project || typeof project !== 'object') {
+      console.error('[FLOW] Invalid project.json (not an object)');
+      if (DEV_STRICT_MODE) {
+        throw new Error('STRICT MODE: Invalid project.json. No fallback allowed.');
+      }
+      return null;
+    }
+
+    project.__sourceUrl = project.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
+
+    if (typeof window !== 'undefined') {
+      window.__project = project;
+      window.__projectSrc = projectSrc;
+    }
+
+    // 初期セットアップでガイドモードを矯正
+    forceGuideModeIfMarker(project);
+
+    console.info('[FLOW] Project loaded successfully');
+    return project;
+  } catch (error) {
+    console.error('[FLOW] project fetch error', error);
+    if (DEV_STRICT_MODE) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+async function bootFromQR() {
+  // ★ 再入禁止ガード
+  if (typeof window !== 'undefined' && window.__viewer_booted) {
+    console.warn('[BOOT] ⚠️ Duplicate boot attempt blocked');
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.__viewer_booted = true;
+  }
+
+  if (__booted) return;
+  __booted = true;
+
+  try {
+    const project = await loadProjectFromQR();
+    if (!project) {
+      console.error('[FLOW] no project');
+      if (DEV_STRICT_MODE) {
+        throw new Error('STRICT MODE: Failed to load project. No fallback allowed.');
+      }
+      return;
+    }
+
+    if (typeof location !== 'undefined') {
+      project.__sourceUrl = project.__sourceUrl || location.href;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.__project = project;
+      window.__projectSrc = getProjectSrc();
+    }
+
+    console.info('[FLOW] project loaded', project);
+
+    // ★ プロジェクトデザインを確実に適用
+    await normalizeProject(project, project.__sourceUrl || location.href);
+    applyProjectDesign(project);
+    console.info('[APPLY] Design applied on boot');
+
+    // ★ スタートUI乗っ取り
+    __takeoverStartUI(project);
+
+    // ★ fetch統計を出力
+    if (DEV_VERBOSE_LOGS) {
+      setTimeout(reportFetchStats, 1000);
+    }
+  } catch (error) {
+    console.error('[FLOW] project boot error', error);
+    if (DEV_STRICT_MODE) {
+      throw error;
+    }
+  }
+}
+
+function onReady(cb) {
+  if (typeof document === 'undefined') return;
+  if (document.readyState !== 'loading') {
+    cb();
+  } else {
+    document.addEventListener('DOMContentLoaded', cb);
+  }
+}
+
+onReady(bootFromQR);
+
+// === 1) 初期セットアップで guide を marker に矯正 ===
+function forceGuideModeIfMarker(project) {
+  const t = project?.type || project?.mode;
+  if (t === 'marker') {
+    try {
+      if (typeof setGuideMode === 'function') setGuideMode('marker');
+      if (!project.guide) project.guide = {};
+      project.guide.mode = 'marker';
+      console.info('[FLOW] guideMode forced at setup -> marker');
+    } catch (e) {
+      console.warn('[FLOW] guideMode force at setup skipped', e);
+    }
+  }
+}
+
+
+function bindStartButtonOnce() {
+  console.log('[FLOW] bindStartButtonOnce called');
+  console.log('[FLOW] document ready state:', document.readyState);
+  console.log('[FLOW] document body:', document.body);
+  
+  const btn =
+    document.querySelector('[data-role="start-button"]') ||
+    document.querySelector('#ar-start-cta') ||
+    document.querySelector('#startButton') ||
+    document.querySelector('button.start') ||
+    document.querySelector('button');
+
+  if (!btn) { 
+    console.error('[FLOW] start button not found'); 
+    console.log('Available buttons:', document.querySelectorAll('button'));
+    console.log('Available elements with data-role:', document.querySelectorAll('[data-role]'));
+    console.log('Available elements with id containing start:', document.querySelectorAll('[id*="start"]'));
+    return; 
+  }
+  if (btn.__bound) {
+    console.log('[FLOW] button already bound');
+    return;
+  }
+  btn.__bound = true;
+  btn.addEventListener('click', onStartClick, { once: true });
+  console.log('[FLOW] start button bound successfully:', btn);
+}
+
+// === 2) marker画像URLの deep search ===
+function deepFindMarkerImageUrl(obj, maxDepth = 5) {
+  const urls = [];
+  const seen = new WeakSet();
+  const isObj = (v) => v && typeof v === 'object';
+
+  function scan(node, depth, trail) {
+    if (!isObj(node) || depth > maxDepth || seen.has(node)) return;
+    seen.add(node);
+
+    // 代表的な場所
+    if (typeof node.markerImageUrl === 'string') urls.push({ url: node.markerImageUrl, trail: [...trail, 'markerImageUrl'] });
+    if (isObj(node.marker) && typeof node.marker.imageUrl === 'string') urls.push({ url: node.marker.imageUrl, trail: [...trail, 'marker.imageUrl'] });
+    if (isObj(node.marker) && typeof node.marker.url === 'string') urls.push({ url: node.marker.url, trail: [...trail, 'marker.url'] });
+    if (isObj(node.markerImage) && typeof node.markerImage.url === 'string') urls.push({ url: node.markerImage.url, trail: [...trail, 'markerImage.url'] });
+    if (isObj(node.markerGuide) && typeof node.markerGuide.imageUrl === 'string') urls.push({ url: node.markerGuide.imageUrl, trail: [...trail, 'markerGuide.imageUrl'] });
+    if (isObj(node.markerSettings) && typeof node.markerSettings.imageUrl === 'string') urls.push({ url: node.markerSettings.imageUrl, trail: [...trail, 'markerSettings.imageUrl'] });
+
+    // assets配列/辞書
+    if (Array.isArray(node.assets)) {
+      node.assets.forEach((a,i) => {
+        if (a?.type === 'marker' && typeof a.url === 'string') urls.push({ url: a.url, trail: [...trail, `assets[${i}].url`] });
+        if (a?.key?.toLowerCase?.() === 'marker' && typeof a.url === 'string') urls.push({ url: a.url, trail: [...trail, `assets[${i}].url`] });
+      });
+    }
+    if (isObj(node.assets)) {
+      const cand = node.assets.marker || node.assets.markerImage;
+      if (typeof cand === 'string') urls.push({ url: cand, trail: [...trail, 'assets.marker'] });
+      if (isObj(cand) && typeof cand.url === 'string') urls.push({ url: cand.url, trail: [...trail, 'assets.marker.url'] });
+    }
+
+    // 汎用：キー名から推測
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (typeof v === 'string') {
+        const lk = k.toLowerCase();
+        if (lk.includes('marker') && (lk.includes('image') || lk.includes('url'))) {
+          urls.push({ url: v, trail: [...trail, k] });
+        }
+      }
+    }
+
+    // 再帰
+    for (const k of Object.keys(node)) {
+      const v = node[k];
+      if (isObj(v)) scan(v, depth+1, [...trail, k]);
+    }
+  }
+
+  scan(obj, 0, []);
+  // 重複除去＆画像拡張子優先
+  const seenUrl = new Set();
+  return urls
+    .filter(({url}) => { if (seenUrl.has(url)) return false; seenUrl.add(url); return true; })
+    .sort((a,b) => {
+      const s = (x) => /\.(png|jpg|jpeg|gif|webp)$/i.test(x) ? 0 : 1;
+      return s(a.url) - s(b.url);
+    });
+}
+
+function absolutizeUrl(u, base) { try { return new URL(u, base).href; } catch { return null; } }
+
+async function verifyReachable(url) {
+  try {
+    console.log('[AR] verifying URL:', url);
+    const res = await fetch(url, { method: 'GET', mode: 'cors' });
+    if (!res.ok) {
+      console.warn(`[AR] URL not reachable: ${res.status} ${res.statusText}`);
+      return false;
+    }
+    const ct = res.headers.get('content-type') || '';
+    const isImage = ct.includes('image') || /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
+    console.log(`[AR] content-type: ${ct}, isImage: ${isImage}`);
+    return isImage;
+  } catch (error) {
+    console.warn('[AR] URL verification failed:', error);
+    return false;
+  }
+}
+
+// 任意のフォールバック（リポジトリに置いてある画像に合わせて）
+const DEFAULT_MARKER_PATH = '/assets/sample.png';
+
+// === 3) normalizeProject（差し替え） ===
+async function normalizeProject(project, baseHref) {
+  const base = new URL('.', baseHref || project.__sourceUrl || location.href);
+  const abs = (u) => absolutizeUrl(u, base);
+
+  // プロジェクトデータ全体で古いマーカーパスを置き換え
+  const replaceOldMarkerPaths = (obj) => {
+    if (typeof obj === 'string') {
+      if (obj.includes('/assets/marker/default-marker.png') || obj.includes('default-marker.png')) {
+        return DEFAULT_MARKER_PATH;
+      }
+    } else if (obj && typeof obj === 'object') {
+      for (const key in obj) {
+        if (obj.hasOwnProperty(key)) {
+          obj[key] = replaceOldMarkerPaths(obj[key]);
+        }
+      }
+    }
+    return obj;
+  };
+  
+  replaceOldMarkerPaths(project);
+
+  // models の絶対化と検証
+  project.models = (project.models || []).map((m, index) => {
+    const absoluteUrl = abs(m.url);
+    console.log(`🔍 モデル ${index + 1} URL検証:`, {
+      original: m.url,
+      absolute: absoluteUrl,
+      valid: !!absoluteUrl
+    });
+    
+    if (!absoluteUrl) {
+      console.warn(`⚠️ モデル ${index + 1} のURLが無効です:`, m.url);
+    }
+    
+    return { ...m, url: absoluteUrl };
+  });
+
+  // marker 探索
+  const candidates = deepFindMarkerImageUrl(project);
+  console.info('[FLOW] marker candidates', candidates);
+  let picked = candidates[0]?.url || null;
+  
+  // 古いパスを新しいパスに置き換え
+  if (picked && (picked.includes('/assets/marker/default-marker.png') || picked.includes('default-marker.png'))) {
+    console.warn('[FLOW] 古いマーカーパスを検出、新しいパスに置き換え:', picked, '->', DEFAULT_MARKER_PATH);
+    picked = DEFAULT_MARKER_PATH;
+  }
+  
+  if (picked) picked = abs(picked);
+
+  // typeがmarkerなら必須。見つからなければフォールバックを適用
+  const t = project.type || project.mode;
+  if (t === 'marker') {
+    if (!picked) {
+      const fb = abs(DEFAULT_MARKER_PATH);
+      console.warn('[FLOW] markerImageUrl not found. fallback ->', fb);
+      picked = fb;
+    }
+    
+    // 到達性チェック（フォールバック画像も含めて）
+    const ok = await verifyReachable(picked);
+    if (!ok) {
+      console.warn('[FLOW] primary marker not reachable, trying fallback');
+      const fallback = abs(DEFAULT_MARKER_PATH);
+      const fallbackOk = await verifyReachable(fallback);
+      if (fallbackOk) {
+        console.log('[FLOW] using fallback marker');
+        picked = fallback;
+      } else {
+        throw new Error('marker image not reachable (CORS/404): ' + picked + ' (fallback also failed)');
+      }
+    }
+  }
+
+  project.markerImageUrl = picked || null;
+  return project;
+}
+
+// ===== 1) pattern 生成 → 登録 =====
+async function prepareMarkerPipeline(project) {
+  console.time('[AR] pattern');
+
+  try {
+    // 画像取得
+    console.log('[AR] fetching marker image:', project.markerImageUrl);
+    const res = await fetch(project.markerImageUrl, { mode: 'cors' });
+    if (!res.ok) {
+      throw new Error(`marker image fetch failed: ${res.status} ${res.statusText} - ${project.markerImageUrl}`);
+    }
+    
+    const imgBlob = await res.blob();
+    console.log('[AR] image blob size:', imgBlob.size, 'type:', imgBlob.type);
+
+    // 画像形式の検証
+    if (!imgBlob.type.startsWith('image/')) {
+      console.warn(`[AR] unexpected content type: ${imgBlob.type}, trying fallback`);
+      
+      // HTMLページが返された場合（404エラーなど）はフォールバック画像を使用
+      if (imgBlob.type === 'text/html') {
+        console.log('[AR] HTML response detected, trying fallback markers');
+        
+        // 複数のフォールバック画像を試す
+        const fallbackPaths = [
+          DEFAULT_MARKER_PATH,
+          '/assets/logo.png',
+          '/assets/main-low.jpg'
+        ];
+        
+        for (const fallbackPath of fallbackPaths) {
+          try {
+            const fallbackUrl = absolutizeUrl(fallbackPath, new URL('.', project.__sourceUrl || location.href));
+            console.log('[AR] trying fallback:', fallbackUrl);
+            
+            const fallbackRes = await fetch(fallbackUrl, { mode: 'cors' });
+            if (fallbackRes.ok) {
+              const fallbackBlob = await fallbackRes.blob();
+              if (fallbackBlob.type.startsWith('image/')) {
+                console.log('[AR] using fallback marker image:', fallbackPath);
+                // フォールバック画像で処理を継続
+                const img = await createImageBitmap(fallbackBlob, {
+                  imageOrientation: 'none',
+                  premultiplyAlpha: 'none'
+                });
+                await markerController.addImageMarker(img);
+                console.timeEnd('[AR] pattern');
+                console.info('[AR] marker registered (fallback)');
+                return;
+              }
+            }
+          } catch (fallbackError) {
+            console.warn('[AR] fallback image failed:', fallbackPath, fallbackError);
+          }
+        }
+        
+        throw new Error('すべてのフォールバック画像の読み込みに失敗しました');
+      }
+      
+      throw new Error(`invalid image type: ${imgBlob.type}. Expected image/* but got ${imgBlob.type}. URL may be incorrect or return an error page.`);
+    }
+
+    // 可能なら .patt へ（存在しない場合は imageBitmap で代替）
+    let pattBlob = null;
+    if (typeof imageUrlToPatternBlob === 'function') {
+      try {
+        pattBlob = await imageUrlToPatternBlob(project.markerImageUrl);
+        console.info('[AR] patt blob size', pattBlob?.size);
+      } catch (e) {
+        console.warn('[AR] pattern encoder missing/fail, fallback to imageBitmap', e);
+      }
+    }
+
+    // 登録：addPattern(pattBlob) or addImageMarker(imageBitmap) のどちらかに対応
+    if (pattBlob && typeof markerController?.addPattern === 'function') {
+      await markerController.addPattern(pattBlob);
+    } else if (typeof markerController?.addImageMarker === 'function') {
+      try {
+        // より安全な画像デコード
+        const img = await createImageBitmap(imgBlob, {
+          imageOrientation: 'none',
+          premultiplyAlpha: 'none'
+        });
+        await markerController.addImageMarker(img);
+        console.log('[AR] image marker created successfully');
+      } catch (decodeError) {
+        console.error('[AR] image decode failed:', decodeError);
+        // フォールバック: 画像URLを直接保存
+        await markerController.addImageMarker(project.markerImageUrl);
+        console.log('[AR] fallback: using image URL directly');
+      }
+    } else if (typeof markerController?.addPattern === 'function') {
+      // ライブラリが .patt しか受けないのに encoder が無い場合は明示的に失敗
+      throw new Error('pattern encoder not wired: addPattern requires .patt');
+    } else {
+      console.warn('[AR] markerController has no addPattern/addImageMarker');
+      // 最低限の登録（URLのみ）
+      if (typeof markerController?.addImageMarker === 'function') {
+        await markerController.addImageMarker(project.markerImageUrl);
+      }
+    }
+
+    console.timeEnd('[AR] pattern');
+    console.info('[AR] marker registered');
+    
+  } catch (error) {
+    console.timeEnd('[AR] pattern');
+    console.error('[AR] prepareMarkerPipeline failed:', error);
+    
+    // より詳細なエラー情報を提供
+    if (error.name === 'InvalidStateError') {
+      throw new Error(`画像のデコードに失敗しました。画像形式を確認してください: ${project.markerImageUrl}`);
+    } else if (error.message.includes('fetch failed')) {
+      throw new Error(`画像の取得に失敗しました。URLとCORS設定を確認してください: ${project.markerImageUrl}`);
+    } else {
+      throw error;
+    }
+  }
+}
+
+// ===== 2) ローディング → ガイドへ（状態機械経路では不要） =====
+async function loadingToMarkerGuide() {
+  const project = window.__project;
+  if (!project) return;
+  if ((project.type || project.mode) !== 'marker') return;
+
+  try {
+    await prepareMarkerPipeline(project);
+  } catch (e) {
+    console.error('[AR] prepareMarkerPipeline failed', e);
+    alert('マーカーの準備に失敗しました（patternエンコーダ or 画像URL/CORS を確認）');
+    return;
+  }
+
+  // UI遷移
+  try {
+    if (typeof setGuideMode === 'function') setGuideMode('marker');
+    showMarkerGuideScreen && showMarkerGuideScreen();
+  } catch {}
+  console.info('[FLOW] marker guide shown');
+}
+
+// マーカーガイド画面を表示（状態機械経路では不要）
+function showMarkerGuideScreen() {
+  console.log('[FLOW] showing marker guide screen');
+  // 既存のガイド画面表示ロジックを使用
+  if (typeof showScreen === 'function') {
+    showScreen('guide');
+  }
+}
+
+// === 4) onStartClick の先頭付近を差し替え ===
+async function onStartClick() {
+  const project = window.__project;
+  if (!project || !(project.type || project.mode)) { alert('プロジェクトが不正（type/modeなし）'); return; }
+
+  // URL正規化＋marker特定
+  try {
+    await normalizeProject(project, project.__sourceUrl || location.href);
+    console.info('[FLOW] urls resolved', {
+      type: project.type || project.mode,
+      markerImageUrl: project.markerImageUrl,
+      models: (project.models || []).map(m => m.url)
+    });
+  } catch (e) {
+    console.error('[FLOW] normalize failed', e);
+    alert('マーカー画像の特定/取得に失敗（URLやCORS設定を確認）');
+    return;
+  }
+
+  // ここでも念のためガイドを marker に矯正
+  forceGuideModeIfMarker(project);
+
+  // ★ プロジェクトデザインをDOMに確実に反映
+  if (typeof applyProjectDesign === 'function') {
+    applyProjectDesign(project);
+  }
+
+  // カメラ許可→ローディング表示（既存ロジック）
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }});
+    if (typeof attachStreamToVideo === 'function') attachStreamToVideo(stream);
+  } catch (e) {
+    console.error('[FLOW] camera error', e);
+    alert('カメラ権限が必要です'); return;
+  }
+
+  if (typeof showLoadingScreen === 'function') showLoadingScreen(project.loadingScreen);
+  console.info('[FLOW] loading ready');
+  
+  // マーカータイプの場合は追加処理を実行（新しい状態機械経路では不要）
+  // if (project.type === 'marker') {
+  //   setTimeout(loadingToMarkerGuide, 100); // ローディング画面表示後に実行
+  // }
+}
+
+
+// onReady(bindStartButtonOnce); // HTML生成後に呼び出すため、ここでは呼び出さない
+
+// ===== 3) 3D表示：GLB読み込み → アンカーに add → レンダー更新 =====
+let __renderer, __scene, __camera, __anchor, __raf;
+let __loader = null;
+
+async function ensureRenderer() {
+  if (!__renderer) {
+    const THREE = await import('three');
+    __renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, canvas: document.querySelector('canvas') || undefined });
+    __renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+}
+async function ensureBasics() {
+  if (!__scene) {
+    const THREE = await import('three');
+    __scene = new THREE.Scene();
+  }
+  if (!__camera) {
+    const THREE = await import('three');
+    __camera = new THREE.Camera();
+  }
+  if (!__anchor) { 
+    const THREE = await import('three');
+    __anchor = new THREE.Group(); 
+    __scene.add(__anchor); 
+  }
+}
+async function ensureLights() {
+  if (__scene.__lit) return;
+  const THREE = await import('three');
+  __scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+  const d = new THREE.DirectionalLight(0xffffff, 0.8); d.position.set(1,1,1);
+  __scene.add(d); __scene.__lit = true;
+}
+async function loadGLB(cfg) {
+  if (!__loader) {
+    const THREE = await import('three');
+    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+    __loader = new GLTFLoader();
+    __loader.setCrossOrigin('anonymous');
+  }
+  
+  try {
+    console.log('🔄 3Dモデル読み込み開始:', cfg.url);
+    
+    // まず実際のファイルを取得してHTMLかどうかをチェック
+    const response = await fetch(cfg.url, { 
+      method: 'GET',
+      headers: {
+        'Accept': 'model/gltf-binary,model/gltf+json,application/octet-stream,*/*'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`モデルファイルが見つかりません: ${response.status} ${response.statusText}`);
+    }
+    
+    // レスポンスの内容をチェック
+    const contentType = response.headers.get('content-type');
+    const contentLength = response.headers.get('content-length');
+    
+    console.log('📄 レスポンス情報:', {
+      contentType,
+      contentLength,
+      status: response.status
+    });
+    
+    // HTMLレスポンスを検出
+    if (contentType && contentType.includes('text/html')) {
+      const text = await response.text();
+      console.error('❌ HTMLレスポンスが返されました:', {
+        url: cfg.url,
+        contentType,
+        preview: text.substring(0, 200)
+      });
+      throw new Error(`モデルファイルの代わりにHTMLページが返されました。URLが正しくない可能性があります: ${cfg.url}`);
+    }
+    
+    // 小さなファイルサイズの場合はHTMLの可能性が高い
+    if (contentLength && parseInt(contentLength) < 1000) {
+      console.warn('⚠️ ファイルサイズが小さすぎます（HTMLの可能性）:', contentLength, 'bytes');
+    }
+    
+    // GLTFLoaderで読み込み
+    const gltf = await __loader.loadAsync(cfg.url);
+    const obj = gltf.scene || gltf.scenes?.[0];
+    
+    if (!obj) {
+      throw new Error('GLTFファイルにシーンが見つかりません');
+    }
+    
+    const s = (cfg.scale || [1,1,1]).map(v => Math.min(Math.max(v,0.01),10));
+    obj.scale.set(...s);
+    obj.position.set(...(cfg.position || [0,0,0]));
+    obj.rotation.set(...(cfg.rotation || [0,0,0]));
+    obj.traverse(n => { if (n.isMesh) n.frustumCulled = false; });
+    
+    console.log('✅ 3Dモデル読み込み完了:', cfg.url);
+    return obj;
+  } catch (error) {
+    console.error('❌ 3Dモデル読み込み失敗:', {
+      url: cfg.url,
+      error: error.message,
+      type: error.constructor.name,
+      stack: error.stack
+    });
+    
+    // HTMLレスポンスが返された場合の詳細エラー
+    if (error.message.includes('Unexpected token') || error.message.includes('<!doctype')) {
+      throw new Error(`モデルファイルの形式が正しくありません。HTMLページが返されました。URLが正しくないか、ファイルが存在しません: ${cfg.url}`);
+    }
+    
+    // ネットワークエラーの場合
+    if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+      throw new Error(`ネットワークエラー: モデルファイルにアクセスできません: ${cfg.url}`);
+    }
+    
+    throw error;
+  }
+}
+async function addDebugCube() {
+  const THREE = await import('three');
+  const g = new THREE.BoxGeometry(0.1,0.1,0.1);
+  const m = new THREE.MeshBasicMaterial({ wireframe:true });
+  __anchor.add(new THREE.Mesh(g,m));
+}
+function startRenderLoop(tick) {
+  cancelAnimationFrame(__raf);
+  const loop = () => {
+    tick && tick();
+    __renderer.render(__scene, __camera);
+    __raf = requestAnimationFrame(loop);
+  };
+  __raf = requestAnimationFrame(loop);
+}
+
+async function runMarkerShowtime(project) {
+  await ensureRenderer(); 
+  await ensureBasics(); 
+  await ensureLights();
+
+  console.time('[AR] models');
+  
+  // モデル読み込みを個別に処理し、失敗したモデルがあっても他のモデルは読み込む
+  const modelPromises = (project.models || []).map(async (modelCfg, index) => {
+    try {
+      console.log(`🔄 モデル ${index + 1}/${project.models.length} 読み込み開始:`, modelCfg.url);
+      const obj = await loadGLB(modelCfg);
+      console.log(`✅ モデル ${index + 1} 読み込み完了`);
+      return { success: true, obj, index };
+    } catch (error) {
+      console.error(`❌ モデル ${index + 1} 読み込み失敗:`, {
+        url: modelCfg.url,
+        error: error.message,
+        index
+      });
+      return { success: false, error, index, url: modelCfg.url };
+    }
+  });
+  
+  const results = await Promise.all(modelPromises);
+  const successfulModels = results.filter(r => r.success).map(r => r.obj);
+  const failedModels = results.filter(r => !r.success);
+  
+  if (failedModels.length > 0) {
+    console.warn(`⚠️ ${failedModels.length}個のモデル読み込みに失敗しました:`, failedModels.map(f => f.url));
+    
+    // 失敗したモデルの詳細情報を表示
+    failedModels.forEach(failed => {
+      console.error(`❌ 失敗したモデル ${failed.index + 1}:`, {
+        url: failed.url,
+        error: failed.error.message
+      });
+    });
+  }
+  
+  if (successfulModels.length === 0) {
+    console.warn('⚠️ すべてのモデル読み込みに失敗、デバッグキューブを追加');
+    await addDebugCube();
+  } else {
+    successfulModels.forEach(o => __anchor.add(o));
+  }
+  
+  console.timeEnd('[AR] models');
+  console.info('[AR] models attached', {
+    successful: successfulModels.length,
+    failed: failedModels.length,
+    total: project.models?.length || 0
+  });
+
+  // 毎フレーム、検出更新
+  startRenderLoop(() => {
+    if (typeof markerController?.update === 'function') markerController.update();
+  });
+}
+
+// マーカーコントローラーの簡易実装
+const markerController = {
+  patterns: new Map(),
+  
+  async addPattern(patternBlob) {
+    const patternId = `marker_${Date.now()}`;
+    this.patterns.set(patternId, {
+      type: 'pattern',
+      data: patternBlob,
+      timestamp: Date.now()
+    });
+    console.log(`[AR] pattern added: ${patternId}, size: ${patternBlob.size} bytes`);
+    return patternId;
+  },
+  
+  async addImageMarker(imageData) {
+    const markerId = `image_${Date.now()}`;
+    this.patterns.set(markerId, {
+      type: typeof imageData === 'string' ? 'url' : 'bitmap',
+      data: imageData,
+      timestamp: Date.now()
+    });
+    
+    if (typeof imageData === 'string') {
+      console.log(`[AR] image marker (URL) added: ${markerId}, url: ${imageData}`);
+    } else {
+      console.log(`[AR] image marker (bitmap) added: ${markerId}, size: ${imageData.width}x${imageData.height}`);
+    }
+    return markerId;
+  },
+  
+  update() {
+    // マーカー検出の更新処理
+    // 実際のARライブラリに応じて実装
+    // 現在は何もしない（プレースホルダー）
+  },
+  
+  getPattern(patternId) {
+    const pattern = this.patterns.get(patternId);
+    return pattern ? pattern.data : null;
+  },
+  
+  getPatternInfo(patternId) {
+    return this.patterns.get(patternId);
+  },
+  
+  removePattern(patternId) {
+    return this.patterns.delete(patternId);
+  },
+  
+  // デバッグ用：登録済みパターン一覧
+  listPatterns() {
+    const list = [];
+    for (const [id, info] of this.patterns) {
+      list.push({ id, type: info.type, timestamp: info.timestamp });
+    }
+    return list;
+  }
+};
+
+// ガイドの「開始」押下で 3D 表示開始
+function bindGuideStartButton() {
+  const guideStartButton = document.querySelector('[data-role="guide-start"]') || 
+                          document.querySelector('#guideStartButton') || 
+                          document.querySelector('button.guide-start');
+  
+  if (guideStartButton && !guideStartButton.__bound) {
+    guideStartButton.__bound = true;
+    guideStartButton.addEventListener('click', () => {
+      // 実エンジン（AREngineAdapter）の状態機械経路を使用
+      const startBtn = document.querySelector('#ar-start-btn');
+      if (startBtn) startBtn.click();
+    }, { once: true });
+    console.log('[FLOW] guide start button bound');
+  }
+}
+
+// ガイド画面表示後にボタンをバインド
+setTimeout(bindGuideStartButton, 500);
+
 export default function showARViewer(container) {
   dlog('🚀 統合ARビューア開始');
-  
-  // URLパラメータからproject.jsonのURLを取得（ハッシュ内のパラメータに対応）
+
+  // ★ URLパラメータから project.json のURLを取得（統一された取得ロジックを使用）
+  const projectSrc = getProjectSrc();
+
+  // 追加パラメータの取得（ハッシュ内パラメータもサポート）
   const hash = window.location.hash;
-  const queryString = hash.includes('?') ? hash.split('?')[1] : '';
-  const urlParams = new URLSearchParams(queryString);
-  const projectSrc = urlParams.get('src');
+  const hashQuery = hash.includes('?') ? hash.split('?')[1] : '';
+  const normalQuery = window.location.search.slice(1);
+  const urlParams = new URLSearchParams(normalQuery || hashQuery);
+
   // エンジン強制切替: engine=marker|webxr|simple（simpleは将来拡張）
   const engineOverrideRaw = (urlParams.get('engine') || urlParams.get('type') || '').toLowerCase();
   const engineOverride = ['marker', 'webxr', 'simple'].includes(engineOverrideRaw) ? engineOverrideRaw : null;
@@ -39,7 +1081,15 @@ export default function showARViewer(container) {
   // デバッグ用：cube=on で強制デバッグキューブを配置
   const forceDebugCube = ['on','1','true','yes'].includes((urlParams.get('cube')||'').toLowerCase());
   const forceNormalMaterial = ['normal','n','1','true','yes'].includes((urlParams.get('mat')||'').toLowerCase());
-  
+
+  console.info('[showARViewer] projectSrc:', projectSrc);
+  console.info('[showARViewer] URL check:', {
+    'window.location.href': window.location.href,
+    'window.location.search': window.location.search,
+    'window.location.hash': window.location.hash,
+    'sessionStorage.project_src': sessionStorage.getItem('project_src')
+  });
+
   if (!projectSrc) {
     container.innerHTML = `
       <div class="viewer-error">
@@ -68,7 +1118,7 @@ export default function showARViewer(container) {
         <div class="start-content">
           <img id="ar-start-logo" alt="start logo" style="display:none;max-width:160px;max-height:80px;margin-bottom:12px;" />
           <h1 id="ar-start-title">AR体験を開始</h1>
-          <button id="ar-start-cta" class="btn-primary" style="margin-top: 12px;">開始</button>
+          <button id="ar-start-cta" class="btn-primary" style="margin-top: 12px;" data-role="start-button">開始</button>
         </div>
       </div>
       <!-- ローディング画面 -->
@@ -405,13 +1455,48 @@ export default function showARViewer(container) {
   }
 
   // ARビューア初期化（機能フラグを渡す）
-  initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceDebugCube, forceNormalMaterial });
+  initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceDebugCube, forceNormalMaterial, engineOverride });
+  
+  // HTML生成直後にボタンのバインドを試行（状態機械経路を呼ぶ）
+  setTimeout(() => {
+    const startCTA = container.querySelector('#ar-start-cta');
+    if (startCTA && !startCTA.__bound) {
+      startCTA.addEventListener('click', () => {
+        const sb = container.querySelector('#ar-start-btn');
+        if (sb) sb.click();
+      }, { once: true });
+      startCTA.__bound = true;
+      console.log('[FLOW] early button binding successful:', startCTA);
+    }
+  }, 50);
+  
+  // MutationObserverでボタンの出現を監視
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const startCTA = node.querySelector ? node.querySelector('#ar-start-cta') : null;
+          if (startCTA && !startCTA.__bound) {
+            startCTA.addEventListener('click', () => {
+              const sb = container.querySelector('#ar-start-btn');
+              if (sb) sb.click();
+            }, { once: true });
+            startCTA.__bound = true;
+            console.log('[FLOW] mutation observer button binding successful:', startCTA);
+            observer.disconnect(); // 見つかったら監視を停止
+          }
+        }
+      });
+    });
+  });
+  
+  observer.observe(container, { childList: true, subtree: true });
 }
 
 // 統合ARビューアの初期化関数
 async function initIntegratedARViewer(container, projectSrc, options = {}) {
   arViewerLogger.info('ARビューア初期化開始:', { projectSrc, options });
-  const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false } = options;
+  const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false, engineOverride = null } = options;
   const loadingScreen = container.querySelector('#ar-loading-screen');
   const loadingBar = container.querySelector('#ar-loading-bar');
   const loadingProgressWrap = container.querySelector('.ar-loading-progress');
@@ -450,6 +1535,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   };
 
   let currentScreenState = null;
+  // カスタムマーカーガイド有無（プロジェクト保存のガイド画像/テキストがあるか）
+  let hasCustomMarkerGuide = false;
 
   function showScreen(state, options = {}) {
     if (currentScreenState === state && !options.force) {
@@ -538,20 +1625,23 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         break;
 
       case screenStates.AR:
-        // AR画面（マーカーガイドなど）
-        let arDisplayed = false;
-        if (markerGuide) {
-          markerGuide.style.display = 'block';
-          arDisplayed = true;
-        }
-        if (markerGuideTips) {
-          markerGuideTips.style.display = 'block';
-          arDisplayed = true;
-        }
-        if (arDisplayed) {
-          console.log('✅ AR画面を表示');
+        // AR画面
+        if (hasCustomMarkerGuide) {
+          // プロジェクトのカスタムガイドを優先表示
+          if (guideScreen) guideScreen.style.display = 'flex';
+          if (markerGuide) markerGuide.style.display = 'none';
+          if (markerGuideTips) markerGuideTips.style.display = 'none';
+          console.log('✅ カスタムガイドを表示（AR実行中の案内として使用）');
         } else {
-          console.warn('⚠️ AR画面要素が見つかりません');
+          // 既定の正方形枠ガイド
+          let arDisplayed = false;
+          if (markerGuide) { markerGuide.style.display = 'block'; arDisplayed = true; }
+          if (markerGuideTips) { markerGuideTips.style.display = 'block'; arDisplayed = true; }
+          if (arDisplayed) {
+            console.log('✅ 既定ガイドを表示');
+          } else {
+            console.warn('⚠️ AR画面要素が見つかりません');
+          }
         }
         break;
 
@@ -574,6 +1664,33 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         break;
     }
   }
+
+  function showLoadingScreenOverlay(settings) {
+    showScreen(screenStates.LOADING, { force: true });
+    if (!settings) return;
+    try {
+      if (settings.backgroundColor && loadingScreen) {
+        loadingScreen.style.background = settings.backgroundColor;
+      }
+      if (settings.textColor) {
+        const loadingTitle = container.querySelector('#ar-loading-title');
+        const loadingMessageEl = container.querySelector('#ar-loading-message');
+        if (loadingTitle) loadingTitle.style.color = settings.textColor;
+        if (loadingMessageEl) loadingMessageEl.style.color = settings.textColor;
+      }
+      if (settings.loadingMessage) {
+        const loadingMessageEl = container.querySelector('#ar-loading-message');
+        if (loadingMessageEl) loadingMessageEl.textContent = settings.loadingMessage;
+      }
+    } catch (error) {
+      console.warn('⚠️ ローディング画面適用中の警告:', error);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.attachStreamToVideo = attachStreamToVideo;
+    window.showLoadingScreen = showLoadingScreenOverlay;
+  }
   
   let camera, scene, renderer, video;
   let overlayLoadingId = null; // unified-loading のID（フォールバック表示用）
@@ -582,6 +1699,30 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let arObjects = [];
   let markerPatternCleanup = null;
   let loadedModels = [];
+  let cameraVideoElement = null;
+
+  function attachStreamToVideo(stream) {
+    if (!stream) return;
+    if (!cameraVideoElement) {
+      cameraVideoElement = document.querySelector('video#ar-camera') || document.createElement('video');
+      if (!cameraVideoElement.id) cameraVideoElement.id = 'ar-camera';
+      cameraVideoElement.playsInline = true;
+      cameraVideoElement.muted = true;
+      cameraVideoElement.autoplay = true;
+      cameraVideoElement.style.position = 'fixed';
+      cameraVideoElement.style.inset = '0';
+      cameraVideoElement.style.opacity = '0';
+      cameraVideoElement.style.pointerEvents = 'none';
+      if (!cameraVideoElement.parentNode) {
+        document.body.appendChild(cameraVideoElement);
+      }
+    }
+    cameraVideoElement.srcObject = stream;
+    const playPromise = cameraVideoElement.play?.();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {});
+    }
+  }
 
   // ローディング画面とスタート画面をデフォルト状態にリセットする関数
   function resetLoadingScreenStyles() {
@@ -706,7 +1847,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     if (guideMarkerImage) {
       guideMarkerImage.src = '';
     }
-    
+
     if (startCTA) {
       startCTA.style.backgroundColor = '';
       startCTA.style.background = '';
@@ -714,7 +1855,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       startCTA.textContent = '開始';
       startCTA.onclick = null;
     }
-    
+
     dlog('✅ ローディング画面・スタート画面リセット完了');
   }
 
@@ -755,12 +1896,37 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateProgress(10, 'プロジェクトデータを読み込み中...');
 
     // プロジェクトデータ取得
-    const response = await fetch(projectSrc);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
+    if (typeof window !== 'undefined' && window.__project && window.__projectSrc === projectSrc) {
+      currentProject = window.__project;
+      console.log('🗂️ 既存のグローバルプロジェクトを使用します');
+    } else {
+      console.warn('[FLOW] ⚠️ この fetch は loadProjectFromQR() で既に実行済みのはず。重複の可能性あり。');
+      const response = await fetchOnce(projectSrc, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-    currentProject = await response.json();
+      // Content-Typeを確認してHTMLレスポンスを検出
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        const text = await response.text();
+        console.error('[FLOW] HTMLレスポンスが返されました:', {
+          url: projectSrc,
+          contentType,
+          preview: text.substring(0, 200)
+        });
+        throw new Error(`HTML response received instead of JSON. URL may be incorrect: ${projectSrc}`);
+      }
+
+      currentProject = await response.json();
+      if (typeof window !== 'undefined') {
+        window.__project = currentProject;
+        window.__projectSrc = projectSrc;
+      }
+      if (currentProject && typeof currentProject === 'object') {
+        currentProject.__sourceUrl = currentProject.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
+      }
+    }
     updateStatus('✅ プロジェクトデータ取得完了', 'success');
     updateProgress(30, 'プロジェクト設定を確認中...');
 
@@ -852,12 +2018,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     // 1.5 プロジェクト直下の画面設定を反映（テンプレの次に優先）
     try {
       if (currentProject?.startScreen) {
-        ss = { ...ss, ...currentProject.startScreen };
-        console.log('📝 project.startScreen を適用:', currentProject.startScreen);
+        // プロジェクト直下の値は不足補完として扱い、テンプレで上書きされた内容を壊さない
+        ss = { ...currentProject.startScreen, ...ss };
+        console.log('📝 project.startScreen を適用 (不足補完優先):', currentProject.startScreen);
       }
       if (currentProject?.guideScreen) {
-        gs = { ...gs, ...currentProject.guideScreen };
-        console.log('📝 project.guideScreen を適用:', currentProject.guideScreen);
+        gs = { ...currentProject.guideScreen, ...gs };
+        console.log('📝 project.guideScreen を適用 (不足補完優先):', currentProject.guideScreen);
       }
       if (currentProject?.loadingScreen) {
         // 既に ls は currentProject.loadingScreen を基にしている想定だが、念のため浅く統合
@@ -1216,7 +2383,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     }
 
     updateProgress(80, 'ARシステムを準備中...');
-    await initAR();
+    // 実エンジン（AREngineAdapter）がレンダラー等を構築するため、ここでの独自Three初期化は行わない
 
     updateProgress(100, '読み込み完了');
 
@@ -1476,61 +2643,41 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         loadingScreen.style.display = 'none';
         console.log('🔍 ローディング画面を初期状態で非表示に設定');
       }
-      // 既存の開始ボタンは隠す（CTAから委譲）
-      startBtn.style.display = 'none';
-    // クリック処理を関数化して複数の経路から確実に起動
-    const handleStartClick = () => {
-      console.log('🎯 スタート画面の開始ボタンが押されました');
-      
-      // ローディング画面を表示
-      showScreen(screenStates.LOADING);
-      // 少なくとも1.2秒はローディングを表示
-      const MIN_LOADING_MS = 1200;
-      const startedAt = Date.now();
-      const startAR = () => {
-        const elapsed = Date.now() - startedAt;
-        const waitMs = Math.max(0, MIN_LOADING_MS - elapsed);
-        setTimeout(() => startBtn.click(), waitMs);
-      };
-      
-      // 追加のフォールバック: unified-loading を同時に表示（確実に見えるオーバーレイ）
-      try {
-        if (!overlayLoadingId) {
-          const { unifiedLoading } = window.__unifiedLoading || {};
-          if (unifiedLoading) {
-            overlayLoadingId = unifiedLoading.show({ container, settings: ls, message: ls.loadingMessage || '読み込み中...' });
-            console.log('🛡️ フォールバックローディング表示 (unified-loading)');
-          }
+      if (startBtn) {
+        startBtn.style.display = 'none';
+      }
+      if (startCTA) {
+        startCTA.setAttribute('data-role', 'start-button');
+      }
+      // HTML生成後にスタートボタンのイベントをバインド
+      setTimeout(() => {
+        const startCTA = container.querySelector('#ar-start-cta');
+        if (startCTA) {
+          startCTA.addEventListener('click', onStartClick, { once: true });
+          console.log('[FLOW] start button bound directly:', startCTA);
+        } else {
+          bindStartButtonOnce();
         }
-      } catch (e) { console.warn('フォールバックローディング表示失敗:', e); }
-      startAR();
-    };
-
-    if (startCTA) {
-      // 複数のバインドで確実にキャッチ
-      startCTA.onclick = handleStartClick;
-      startCTA.addEventListener('click', handleStartClick, { passive: true });
-      // イベントデリゲーション（保険）
-      container.addEventListener('click', (e) => {
-        const t = e.target;
-        if (t && t.id === 'ar-start-cta') {
-          console.log('🪝 デリゲーションでCTAクリックを捕捉');
-          handleStartClick();
-        }
-      });
-      console.log('✅ スタート画面のCTAボタンにイベントリスナーを設定（冗長化）');
-    } else {
-      console.log('❌ スタート画面のCTAボタンが見つかりません');
-    }
+      }, 100); // DOM更新を待つ
       updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>「開始」を押して体験を始めてください`);
     } catch (e) {
       // フォールバック（従来）
       const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
       updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
       startBtn.style.display = 'inline-block';
+      // フォールバックでもボタンのバインドを試行
+      setTimeout(() => {
+        const startBtn = container.querySelector('#ar-start-btn');
+        if (startBtn) {
+          startBtn.addEventListener('click', onStartClick, { once: true });
+          console.log('[FLOW] fallback button bound directly:', startBtn);
+        } else {
+          bindStartButtonOnce();
+        }
+      }, 100);
     }
 
-    // ガイド画面の設定を準備（AR開始時に表示）
+      // ガイド画面の設定を準備（AR開始時に表示）
     try {
       // ガイド画面の背景色設定
       if (gs.backgroundColor && guideScreen) {
@@ -1538,23 +2685,29 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       }
       
       // ガイド画面のモード判定（surface/world）
-      const guideMode = gs.mode || (currentProject.type === 'marker' ? 'surface' : 'world');
+      const guideMode = gs.mode || (currentProject.type === 'marker' ? 'marker' : 'world');
+      const abs = (u) => { try { return new URL(u, currentProject.__sourceUrl || (typeof location!== 'undefined' ? location.href : undefined)).href; } catch { return u; } };
       
-      if (guideMode === 'surface' && gs.surfaceDetection) {
-        // マーカー検出モード
-        if (gs.surfaceDetection.title && guideTitle) {
-          guideTitle.textContent = gs.surfaceDetection.title;
-        }
-        if (gs.surfaceDetection.description && guideDescription) {
-          guideDescription.textContent = gs.surfaceDetection.description;
-        }
-        if (gs.surfaceDetection.guideImage && guideImage) {
-          guideImage.src = gs.surfaceDetection.guideImage;
+      if (guideMode === 'marker') {
+        // マーカー用ガイド（プロジェクト保存デザインを優先）
+        const markerGuide = gs.markerGuide || gs.surfaceDetection || {};
+        if (markerGuide.title && guideTitle) guideTitle.textContent = markerGuide.title;
+        if (markerGuide.description && guideDescription) guideDescription.textContent = markerGuide.description;
+
+        const guideImgUrl = markerGuide.guideImage || markerGuide.imageUrl || markerGuide.url;
+        if (guideImgUrl && guideImage) {
+          guideImage.src = abs(guideImgUrl);
           guideImage.style.display = 'block';
+          // カスタムガイドがある場合は既定の枠ガイドを隠す
+          hasCustomMarkerGuide = true;
+          if (guideMarker) guideMarker.style.display = 'none';
+          if (markerGuideTips) markerGuideTips.style.display = 'none';
         }
-        // マーカー画像も表示
-        if (currentProject.markerImage && guideMarkerImage) {
-          guideMarkerImage.src = currentProject.markerImage;
+
+        // 実マーカー画像（あればプレビュー表示）
+        const markerPreview = currentProject.markerGuide?.previewImage || currentProject.markerImage || currentProject.markerImageUrl;
+        if (markerPreview && guideMarkerImage) {
+          guideMarkerImage.src = abs(markerPreview);
           guideMarker.style.display = 'block';
         }
       } else if (guideMode === 'world' && gs.worldTracking) {
@@ -1566,7 +2719,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           guideDescription.textContent = gs.worldTracking.description;
         }
         if (gs.worldTracking.guideImage && guideImage) {
-          guideImage.src = gs.worldTracking.guideImage;
+          guideImage.src = abs(gs.worldTracking.guideImage);
           guideImage.style.display = 'block';
         }
         // マーカーは非表示
@@ -1581,7 +2734,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (guideDescription) guideDescription.style.color = gs.textColor;
       }
       
-      dlog('🎯 ガイド画面設定完了:', { guideMode, gs });
+      dlog('🎯 ガイド画面設定完了:', { guideMode, gs, hasCustomMarkerGuide });
     } catch (guideError) {
       console.warn('⚠️ ガイド画面設定エラー:', guideError);
     }
@@ -1592,7 +2745,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateInstruction('プロジェクトの読み込みに失敗しました');
   }
 
-  // 3Dモデル読み込み
+  // 3Dモデル読み込み（WebXRのみ使用。マーカーはMarkerAR側で処理）
   async function loadModels() {
     updateStatus('📦 3Dモデル読み込み開始', 'info');
     
@@ -1627,39 +2780,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateStatus(`📦 3Dモデル読み込み完了 (${loadedModels.length}個)`, 'success');
   }
 
-  // AR初期化
-  async function initAR() {
-    updateStatus('🎨 ARシステム初期化中', 'info');
-    
-    // Three.jsの動的インポート
-    const THREE = await import('three');
-
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 5);
-
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0);
-    renderer.domElement.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 2;
-      pointer-events: none;
-    `;
-
-    container.appendChild(renderer.domElement);
-
-    // ライティング
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(1, 1, 1);
-    scene.add(directionalLight);
-
-    updateStatus('✅ ARシステム準備完了', 'success');
-  }
+  // AR初期化はAREngineAdapter側に委譲（ここでは何もしない）
+  async function initAR() {}
 
   // AR状態機械の初期化
   let arStateMachine = null;
@@ -1718,7 +2840,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       await arStateMachine.transition(ARState.LAUNCH_REQUESTED, {
         timestamp: Date.now(),
         userInitiated: true,
-        engineOverride
+        engineOverride: engineOverride || null
       });
     } catch (error) {
       console.error('❌ AR起動要求エラー:', error);
@@ -1807,9 +2929,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         finalPath: arPath
       });
 
-      // 次の状態へ遷移
-      const nextState = arPath === 'webxr' ? ARState.XR_STARTING : ARState.CAMERA_STARTING;
-      await arStateMachine.transition(nextState, {
+      // 次の状態へ遷移（権限プロンプトを経由）
+      await arStateMachine.transition(ARState.PERMISSION_PROMPT, {
         arPath,
         xrSupport,
         fallbackInfo,
@@ -1824,18 +2945,97 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   // 権限プロンプト処理
   async function handlePermissionPrompt(data) {
-    // 必要に応じて権限要求処理を実装
-    console.log('📱 権限プロンプト処理（必要に応じて実装）');
+    console.log('📱 権限プロンプト処理開始');
+    
+    // 権限要求処理（カメラアクセス）
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
+      });
+      console.log('✅ カメラ権限取得完了');
+      
+      // ストリームを停止（ARエンジン側で再取得）
+      stream.getTracks().forEach(track => track.stop());
+      
+      // 次の状態へ遷移
+      const nextState = data.arPath === 'webxr' ? ARState.XR_STARTING : ARState.CAMERA_STARTING;
+      await arStateMachine.transition(nextState, data);
+      
+    } catch (error) {
+      console.error('❌ カメラ権限取得失敗:', error);
+      await arStateMachine.transition(ARState.ERROR, { 
+        error: new Error(`カメラ権限が必要です: ${error.message}`) 
+      });
+    }
   }
 
   // カメラ起動処理
   async function handleCameraStarting(data) {
     try {
       console.log('📷 AR.jsカメラ起動開始...');
+      console.log('🔍 currentProject確認:', {
+        'projectが存在': !!currentProject,
+        'markerPattern': currentProject?.markerPattern ? '存在' : 'なし',
+        'markerImage': currentProject?.markerImage || 'なし',
+        'markerImageUrl': currentProject?.markerImageUrl || 'なし',
+        'marker.url': currentProject?.marker?.url || 'なし',
+        '__sourceUrl': currentProject?.__sourceUrl
+      });
+
+      // プロジェクトのカスタムマーカーを優先して .patt を用意
+      let markerUrlOption = null;
+      try {
+        // 1) 既に .patt 文字列が保存されている場合
+        if (currentProject?.markerPattern && typeof currentProject.markerPattern === 'string') {
+          console.log('✅ markerPattern が存在します（文字列長:', currentProject.markerPattern.length, '）');
+          const patt = createPatternBlob(currentProject.markerPattern);
+          markerUrlOption = patt.url;
+          markerPatternCleanup = patt.revoke;
+          console.log('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
+        } else {
+          console.log('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
+          // 2) マーカー画像から .patt を生成
+          const rawUrl = currentProject?.markerImage || currentProject?.markerImageUrl || currentProject?.marker?.url || null;
+          console.log('🔍 マーカー画像URL:', rawUrl);
+          if (rawUrl) {
+            // 絶対URL化
+            const absUrl = (() => { try { return new URL(rawUrl, currentProject.__sourceUrl || location.href).href; } catch { return rawUrl; } })();
+            console.log('🔗 絶対URL化されたマーカー画像:', absUrl);
+            console.log('🔄 マーカーパターン生成開始...');
+            const patternString = await generateMarkerPatternFromImage(absUrl).catch((err) => {
+              console.error('❌ マーカーパターン生成エラー:', err);
+              return null;
+            });
+            if (patternString) {
+              console.log('✅ マーカーパターン生成成功（文字列長:', patternString.length, '）');
+              const patt = createPatternBlob(patternString);
+              markerUrlOption = patt.url;
+              markerPatternCleanup = patt.revoke;
+              console.log('📌 マーカー画像から生成した .patt を使用:', markerUrlOption);
+            } else {
+              console.warn('⚠️ マーカーパターン生成に失敗しました');
+            }
+          } else {
+            console.warn('⚠️ マーカー画像URLが見つかりません');
+          }
+        }
+      } catch (genErr) {
+        console.error('❌ マーカーパターン準備エラー:', genErr);
+        console.warn('⚠️ マーカーパターン準備で警告（フォールバック継続）:', genErr?.message || genErr);
+      }
+
+      console.log('🎯 最終的なmarkerUrlOption:', markerUrlOption);
+
+      // markerUrlOptionがnullの場合は、既定のHiroマーカー(.patt)を使う
+      // undefinedではなくnullを渡すことで、MarkerARがデフォルト値を使うようになる
+      const finalMarkerUrl = markerUrlOption || null;
+      console.log('🎯 AREngineAdapter.create()に渡すmarkerUrl:', finalMarkerUrl);
 
       const arEngine = await AREngineAdapter.create({
         container: arHost,
-        preferredEngine: 'marker'
+        preferredEngine: 'marker',
+        // MarkerAR にカスタムマーカーを渡す（nullなら既定の /arjs/patt.hiro にフォールバック）
+        markerUrl: finalMarkerUrl
       });
 
       currentAREngine = arEngine;
@@ -1911,6 +3111,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   // AR実行処理
   async function handleRunning(data) {
     console.log('▶️ AR実行開始');
+
+    // RUNNING状態のタイムアウトをクリア（実行中は無期限）
+    if (arStateMachine) {
+      arStateMachine.clearStateTimeout(ARState.RUNNING);
+    }
 
     if (data.arPath === 'marker') {
       updateInstruction('<strong>📌 マーカーをカメラにかざしてください</strong>');

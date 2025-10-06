@@ -24,7 +24,17 @@ async function loadImage(dataUrl) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('マーカー画像の読み込みに失敗しました'));
+    img.onerror = (event) => {
+      console.error('❌ 画像読み込みエラー詳細:', {
+        url: dataUrl,
+        urlの長さ: dataUrl?.length,
+        urlの先頭100文字: dataUrl?.substring(0, 100),
+        イベント: event,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent
+      });
+      reject(new Error(`マーカー画像の読み込みに失敗しました: ${dataUrl?.substring(0, 100)}...`));
+    };
     img.src = dataUrl;
   });
 }
@@ -76,9 +86,34 @@ export async function generateMarkerPatternFromImage(dataUrl, { size = DEFAULT_P
   const patternFromToolkit = await generatePatternWithTHREEx(dataUrl).catch(() => null);
   if (patternFromToolkit) return patternFromToolkit;
 
-  const image = await loadImage(dataUrl);
-  const imageData = drawImageToCanvas(image, size);
-  return generatePatternStringFromImageData(imageData);
+  try {
+    const image = await loadImage(dataUrl);
+    const imageData = drawImageToCanvas(image, size);
+    return generatePatternStringFromImageData(imageData);
+  } catch (error) {
+    console.warn('❌ 画像読み込み失敗、フォールバック画像を試行:', error.message);
+    
+    // フォールバック画像を試す
+    const fallbackUrls = [
+      '/assets/sample.png',
+      '/assets/logo.png',
+      '/assets/main-low.jpg'
+    ];
+    
+    for (const fallbackUrl of fallbackUrls) {
+      try {
+        console.log('🔄 フォールバック画像を試行:', fallbackUrl);
+        const fallbackImage = await loadImage(fallbackUrl);
+        const imageData = drawImageToCanvas(fallbackImage, size);
+        console.log('✅ フォールバック画像で成功:', fallbackUrl);
+        return generatePatternStringFromImageData(imageData);
+      } catch (fallbackError) {
+        console.warn('⚠️ フォールバック画像も失敗:', fallbackUrl, fallbackError.message);
+      }
+    }
+    
+    throw new Error(`マーカー画像の読み込みに失敗しました。元のエラー: ${error.message}`);
+  }
 }
 
 export function createPatternBlob(patternString) {

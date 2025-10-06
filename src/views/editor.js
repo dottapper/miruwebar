@@ -633,11 +633,22 @@ export function showEditor(container) {
         let markerUrlToUse = null;
         
         if (project.markerImage && project.markerImage !== 'has_marker') {
-          // プロジェクトに保存されたマーカー画像を使用
+          // プロジェクトに保存されたマーカー画像を使用（古いパスを置き換え）
           markerUrlToUse = project.markerImage;
+          if (markerUrlToUse.includes('/assets/marker/default-marker.png') || markerUrlToUse.includes('default-marker.png')) {
+            console.warn('🔧 プロジェクト内の古いマーカーパスを検出、新しいパスに置き換え:', markerUrlToUse, '->', '/assets/sample.png');
+            markerUrlToUse = '/assets/sample.png';
+          }
         } else {
           // 既存のlocalStorageからマーカー画像を取得
-          const existingMarkerUrl = localStorage.getItem('markerImageUrl');
+          let existingMarkerUrl = localStorage.getItem('markerImageUrl');
+          
+          // localStorageの古いパスも置き換え
+          if (existingMarkerUrl && (existingMarkerUrl.includes('/assets/marker/default-marker.png') || existingMarkerUrl.includes('default-marker.png'))) {
+            console.warn('🔧 localStorage内の古いマーカーパスを検出、新しいパスに置き換え:', existingMarkerUrl, '->', '/assets/sample.png');
+            existingMarkerUrl = '/assets/sample.png';
+            localStorage.setItem('markerImageUrl', existingMarkerUrl);
+          }
           
           if (existingMarkerUrl) {
             markerUrlToUse = existingMarkerUrl;
@@ -2616,7 +2627,15 @@ export function showEditor(container) {
         dlog('viewerInstance:', viewerInstance);
         
         // マーカー画像データを取得
-        const markerImageData = isMarkerMode ? localStorage.getItem('markerImageUrl') : null;
+        let markerImageData = isMarkerMode ? localStorage.getItem('markerImageUrl') : null;
+        
+        // 古いパスを新しいパスに置き換え
+        if (markerImageData && (markerImageData.includes('/assets/marker/default-marker.png') || markerImageData.includes('default-marker.png'))) {
+          console.warn('🔧 古いマーカーパスを検出、新しいパスに置き換え:', markerImageData, '->', '/assets/sample.png');
+          markerImageData = '/assets/sample.png';
+          localStorage.setItem('markerImageUrl', markerImageData);
+        }
+        
         dlog('🔍 保存前のマーカー画像データ:', {
           exists: !!markerImageData,
           type: typeof markerImageData,

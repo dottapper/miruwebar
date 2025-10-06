@@ -15,6 +15,11 @@ export class MarkerAR extends AREngineInterface {
     this.IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
     this.dlog = (...args) => { if (this.IS_DEBUG) console.log(...args); };
     console.log('🎯 MarkerAR初期化開始 (iPhone対応)', options);
+    console.log('🔍 markerUrl受け取り確認:', {
+      '渡されたmarkerUrl': options.markerUrl,
+      'markerUrlの型': typeof options.markerUrl,
+      'markerUrlが存在': !!options.markerUrl
+    });
     this.options = {
       sourceType: 'webcam',
       // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
@@ -719,14 +724,20 @@ export class MarkerAR extends AREngineInterface {
    */
   setupMarkerControls() {
     console.log('🔧 マーカーコントロール設定');
+    console.log('🎯 使用するマーカーURL:', this.options.markerUrl);
+    console.log('🎯 マーカーURL詳細:', {
+      '完全なURL': this.options.markerUrl,
+      'URLの長さ': this.options.markerUrl?.length,
+      'Blobか': this.options.markerUrl?.startsWith?.('blob:')
+    });
 
     // マーカールートをシーンに追加
     this.scene.add(this.markerRoot);
 
     // マーカーコントロール作成
     this.markerControls = new window.THREEx.ArMarkerControls(
-      this.arToolkitContext, 
-      this.markerRoot, 
+      this.arToolkitContext,
+      this.markerRoot,
       {
         type: 'pattern',
         patternUrl: this.options.markerUrl,
@@ -741,13 +752,16 @@ export class MarkerAR extends AREngineInterface {
     // マーカー検出イベント
     let wasVisible = false;
     let debugCounter = 0;
-    
+    let lastDebugTime = Date.now();
+
     const checkMarkerVisibility = () => {
       const isVisible = this.markerRoot.visible;
-      
-      // デバッグ出力（5秒に1回）
+
+      // デバッグ出力（3秒に1回）
       debugCounter++;
-      if (debugCounter % 50 === 0) {
+      const now = Date.now();
+      if (now - lastDebugTime > 3000) {
+        lastDebugTime = now;
         console.log('🔍 MarkerAR デバッグ:', {
           マーカー可視: isVisible,
           ARコンテキスト: !!this.arToolkitContext,
@@ -755,10 +769,11 @@ export class MarkerAR extends AREngineInterface {
           カメラソース存在: !!this.arToolkitSource,
           カメラ準備完了: !!(this.arToolkitSource && this.arToolkitSource.ready === true),
           カメラDOM要素: !!(this.arToolkitSource && this.arToolkitSource.domElement),
-          動画サイズ: this.arToolkitSource && this.arToolkitSource.domElement ? 
+          動画サイズ: this.arToolkitSource && this.arToolkitSource.domElement ?
             `${this.arToolkitSource.domElement.videoWidth}x${this.arToolkitSource.domElement.videoHeight}` : 'N/A',
-          読み込み済みモデル: !!this.loadedModel,
-          配置済みモデル: !!this.placedModel
+          読み込み済みモデル数: this.loadedModels?.length || 0,
+          配置済みモデル: !!this.placedModel,
+          使用中のマーカーURL: this.options.markerUrl
         });
       }
       
@@ -1201,9 +1216,62 @@ export class MarkerAR extends AREngineInterface {
       await this.initialize();
     }
     this.isRunning = true;
-    console.log('▶️ MarkerAR開始', projectData);
-    // 既存のARロジックを呼び出し
+    console.log('▶️ MarkerAR開始');
+    console.log('🔍 projectData受け取り確認:', {
+      'projectDataが存在': !!projectData,
+      'projectDataの型': typeof projectData,
+      'モデル数': projectData?.models?.length || 0,
+      'モデルURL一覧': (projectData?.models || []).map(m => m.url || m.src),
+      '__sourceUrl': projectData?.__sourceUrl
+    });
+
+    // 1) 既存の初期化（AR.js起動・レンダリング・コントロール設定）
     await this.init();
+
+    // 1.5) GLTFLoaderの初期化を確実に完了させる
+    if (!this.modelLoader) {
+      console.log('🔄 GLTFLoader未初期化のため再初期化を実行');
+      await this._initGLTFLoader();
+      // 少し待機してローダーの準備を確認
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 2) プロジェクトのモデルを事前読み込み（URLは __sourceUrl を基準に絶対化）
+    try {
+      const baseHref = (projectData && (projectData.__sourceUrl || (typeof location !== 'undefined' ? location.href : ''))) || '';
+      const absolutize = (u) => {
+        try { return new URL(u, baseHref).href; } catch (_) { return u; }
+      };
+
+      const models = Array.isArray(projectData?.models) ? projectData.models : [];
+      if (models.length > 0) {
+        console.log('📦 プロジェクトモデル読み込み開始:', models.length);
+        for (const m of models) {
+          const url = absolutize(m.url || m.src || m.href);
+          if (!url) continue;
+          try {
+            // GLB/GLTF を読み込み、this.loadedModels に貯める
+            const gltf = await this.loadModel(url);
+            if (gltf) {
+              // this.loadModel 内で this.loadedModels に追加する設計に合わせる
+            }
+          } catch (e) {
+            console.warn('⚠️ モデル読み込み失敗をスキップ:', url, e?.message || e);
+          }
+        }
+        console.log('✅ プロジェクトモデル読み込み完了:', this.loadedModels?.length || 0);
+      } else {
+        console.log('ℹ️ プロジェクトにモデルがありません');
+      }
+
+      // 3) 既にマーカーが見えていれば配置を実行
+      if (this.isMarkerVisible && (this.loadedModels?.length || 0) > 0) {
+        console.log('🎯 既にマーカー可視 → モデルを配置');
+        this.placeModel();
+      }
+    } catch (e) {
+      console.warn('⚠️ モデル事前読み込み処理で警告:', e?.message || e);
+    }
   }
 
   /**

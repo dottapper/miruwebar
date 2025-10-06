@@ -77,7 +77,8 @@ export class AREngineAdapter {
     const {
       container,
       preferredEngine = 'auto',
-      debug = false
+      debug = false,
+      ...engineOptions // カスタムオプション（markerUrl等）を保持
     } = options;
 
     logger.info('ARエンジン作成開始', { preferredEngine });
@@ -93,7 +94,8 @@ export class AREngineAdapter {
       // エンジンインスタンス作成
       const engine = await this.createEngineInstance(engineType, {
         container,
-        debug
+        debug,
+        ...engineOptions // カスタムオプションを渡す
       });
 
       // アクティブエンジン設定

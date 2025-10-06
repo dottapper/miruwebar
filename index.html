@@ -8,10 +8,72 @@
     <style>
       /* ローディング画面のスタイルはCSSファイルに移動 */
     </style>
+
+    <!-- ★ 早取り退避: ルーター初期化前にsrcパラメータをsessionStorageに保存 ★ -->
+    <script>
+    (function stashSrcEarly(){
+      try{
+        const u=new URL(location.href);
+        const s=u.searchParams.get('src');
+        if(s) sessionStorage.setItem('project_src', new URL(s, location.origin).toString());
+        const h=location.hash||''; const qi=h.indexOf('?');
+        if(!s && qi>=0){
+          const qs=new URLSearchParams(h.slice(qi+1));
+          const sh=qs.get('src');
+          if(sh) sessionStorage.setItem('project_src', new URL(sh, location.origin).toString());
+        }
+      }catch(_){}
+    })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
     <!-- ローディング画面要素を削除 -->
+
+    <!-- 開発モード用エラーオーバーレイ -->
+    <script>
+    (function () {
+      // 開発モード検出: localhost または DEBUG フラグ
+      const isDev = window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1' ||
+                    window.location.hostname.startsWith('192.168.') ||
+                    window.DEBUG === true;
+
+      if (!isDev) return; // 開発モード以外では無効
+
+      function showOverlay(msg, src, line, col, err) {
+        const o = document.createElement('div');
+        o.style.cssText = 'position:fixed;z-index:99999;inset:0;background:rgba(0,0,0,.9);color:#fff;padding:16px;overflow:auto;font:14px/1.4 monospace;white-space:pre-wrap';
+
+        const errorText = '[ERROR] ' + msg + '\n' +
+          (src ? ('at ' + src + ':' + line + ':' + col + '\n') : '') +
+          (err && err.stack ? err.stack : '');
+
+        o.innerText = errorText;
+
+        // 閉じるボタンを追加
+        const closeBtn = document.createElement('button');
+        closeBtn.innerText = '✕ Close';
+        closeBtn.style.cssText = 'position:absolute;top:16px;right:16px;padding:8px 16px;background:#f44336;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px';
+        closeBtn.onclick = () => document.body.removeChild(o);
+        o.appendChild(closeBtn);
+
+        document.body.appendChild(o);
+        console.error('[ERROR-OVERLAY]', msg, err);
+      }
+
+      window.addEventListener('error', e => {
+        showOverlay(e.message, e.filename, e.lineno, e.colno, e.error);
+      });
+
+      window.addEventListener('unhandledrejection', e => {
+        showOverlay('UnhandledRejection: ' + (e.reason && e.reason.message || e.reason), '', '', '', e.reason);
+      });
+
+      console.log('[ERROR-OVERLAY] Development error overlay enabled');
+    })();
+    </script>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

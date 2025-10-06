@@ -113,13 +113,15 @@ export class URLStabilizer {
     const scheme = this.urlSettings.useHttps ? 'https' : 'http';
 
     const baseHost = `${localIP}:${port}`;
-    const projectJsonUrl = `${scheme}://${baseHost}/projects/${projectId}/project.json`;
-    const viewerUrl = `${scheme}://${baseHost}/#/viewer?src=${encodeURIComponent(projectJsonUrl)}`;
+    // ★ 相対パスに統一（同一オリジン保証）
+    const projectJsonPath = `/projects/${projectId}/project.json`;
+    // ✅ クエリ前置: ?src=/projects/...#/viewer の形式（相対パス）
+    const viewerUrl = `${scheme}://${baseHost}/?src=${encodeURIComponent(projectJsonPath)}#/viewer`;
 
     return {
       type: URLType.LOCAL,
       viewerUrl,
-      projectJsonUrl,
+      projectJsonUrl: `${scheme}://${baseHost}${projectJsonPath}`, // 参照用の絶対URL
       baseHost,
       description: '同一Wi-Fi内のデバイスからアクセス可能',
       instructions: 'このQRコードをスマホでスキャンしてください（同じWi-Fi内限定）',
@@ -138,13 +140,15 @@ export class URLStabilizer {
     }
 
     const scheme = 'https'; // 公開用は常にHTTPS
-    const projectJsonUrl = `${scheme}://${this.publicDomain}/projects/${projectId}/project.json`;
-    const viewerUrl = `${scheme}://${this.publicDomain}/#/viewer?src=${encodeURIComponent(projectJsonUrl)}`;
+    // ★ 相対パスに統一（同一オリジン保証）
+    const projectJsonPath = `/projects/${projectId}/project.json`;
+    // ✅ クエリ前置: ?src=/projects/...#/viewer の形式（相対パス）
+    const viewerUrl = `${scheme}://${this.publicDomain}/?src=${encodeURIComponent(projectJsonPath)}#/viewer`;
 
     return {
       type: URLType.PUBLIC,
       viewerUrl,
-      projectJsonUrl,
+      projectJsonUrl: `${scheme}://${this.publicDomain}${projectJsonPath}`, // 参照用の絶対URL
       baseHost: this.publicDomain,
       description: 'インターネット経由でアクセス可能',
       instructions: 'このQRコードは世界中のどこからでもアクセス可能です',
@@ -162,13 +166,15 @@ export class URLStabilizer {
     const scheme = this.urlSettings.useHttps ? 'https' : 'http';
 
     const baseHost = `localhost:${port}`;
-    const projectJsonUrl = `${scheme}://${baseHost}/projects/${projectId}/project.json`;
-    const viewerUrl = `${scheme}://${baseHost}/#/viewer?src=${encodeURIComponent(projectJsonUrl)}`;
+    // ★ 相対パスに統一（同一オリジン保証）
+    const projectJsonPath = `/projects/${projectId}/project.json`;
+    // ✅ クエリ前置: ?src=/projects/...#/viewer の形式（相対パス）
+    const viewerUrl = `${scheme}://${baseHost}/?src=${encodeURIComponent(projectJsonPath)}#/viewer`;
 
     return {
       type: URLType.LOCALHOST,
       viewerUrl,
-      projectJsonUrl,
+      projectJsonUrl: `${scheme}://${baseHost}${projectJsonPath}`, // 参照用の絶対URL
       baseHost,
       description: '開発用ローカルホストアクセス',
       instructions: 'このQRコードは開発用です（localhost限定）',

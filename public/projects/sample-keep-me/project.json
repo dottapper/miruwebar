@@ -1,1 +1,33 @@
-{"id":"sample-keep-me","name":"Sample Project","description":"Minimal sample for directory structure"}
+{
+  "id": "sample-keep-me",
+  "version": "1",
+  "name": "Sample Project",
+  "start": {
+    "title": "AR体験を開始",
+    "titlePosition": 40,
+    "titleSize": 1,
+    "textColor": "#FFFFFF",
+    "backgroundColor": "rgba(0,0,0,0.6)",
+    "backgroundImage": "assets/start-bg.jpg"
+  },
+  "loading": {
+    "message": "読み込み中…",
+    "image": "assets/loading.png"
+  },
+  "guide": {
+    "marker": { "src": "assets/marker.png" },
+    "message": "マーカーをカメラに写してください"
+  },
+  "theme": {
+    "primary": "#00B4D8",
+    "accent": "#FFD166",
+    "text": "#FFFFFF"
+  },
+  "screens": [
+    {
+      "type": "marker",
+      "marker": { "src": "assets/marker.png" },
+      "models": []
+    }
+  ]
+}
