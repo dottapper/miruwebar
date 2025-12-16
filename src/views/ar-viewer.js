@@ -1,6 +1,8 @@
 // src/views/ar-viewer.js
 // 統合ARビューア - QRコードからプロジェクトデータを読み込んでAR表示
 import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
+// Takeover: viewer内で必ず読み込む（関数非依存で Start→Loading→Guide を直列制御）
+import '../dev/takeover-viewer-standalone.js';
 import { createLogger } from '../utils/logger.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 import { generateMarkerPatternFromImage, createPatternBlob } from '../utils/marker-utils.js';
@@ -10,8 +12,9 @@ import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
 import { createLoadingStateManager, LoadingState } from '../utils/loading-state-manager.js';
 import { getParam, debugURL, getProjectSrc } from '../utils/url-params.js';
 import { applyProjectDesign } from '../utils/apply-project-design.js';
-import { DEV_FORCE_SCREENS, DEV_STRICT_MODE, DEV_VERBOSE_LOGS } from '../config/feature-flags.js';
+import { DEV_FORCE_SCREENS, DEV_STRICT_MODE, DEV_VERBOSE_LOGS, DEV_TAKEOVER_UI } from '../config/feature-flags.js';
 import { fetchOnce, reportFetchStats } from '../utils/monitored-fetch.js';
+import { extractDesign } from '../utils/design-extractor.js';
 
 // ============================================================
 // 🔍 診断パネル（deepDiag）- PCで変化なし問題の原因特定
@@ -64,11 +67,11 @@ import { fetchOnce, reportFetchStats } from '../utils/monitored-fetch.js';
     async function probe(u){
       if (!u) return;
       try {
-        const h = await fetch(u, {method:'HEAD', cache:'no-store'});
+        const h = await fetchOnce(u, {method:'HEAD', cache:'no-store'});
         log('HEAD status=', h.status, h.statusText);
       } catch(e) { log('!! HEAD error=', String(e)); }
       try {
-        const r = await fetch(u, {cache:'no-store'});
+        const r = await fetchOnce(u, {cache:'no-store'});
         log('GET status=', r.status, r.statusText, 'content-type=', r.headers.get('content-type'));
         const txt = await r.text();
         log('body(first 300)=\n' + txt.slice(0,300));
@@ -82,7 +85,13 @@ import { fetchOnce, reportFetchStats } from '../utils/monitored-fetch.js';
         } catch(e) { log('!! JSON parse error=', String(e)); }
       } catch(e) { log('!! GET error=', String(e)); }
     }
-    probe(srcUrl);
+    // 診断プローブは ?debug=diag パラメータがある場合のみ実行（重複fetch回避）
+    const enableDiag = getParam('debug') === 'diag';
+    if (enableDiag) {
+      probe(srcUrl);
+    } else {
+      log('diag probe disabled (add ?debug=diag to enable)');
+    }
   } catch(e) { console.error(e); }
 })();
 // ============================================================
@@ -199,7 +208,7 @@ function __showLoadingUI(project){
 
   const box = document.createElement('div');
   box.id = '__takeover_loading__';
-  box.style.cssText = 'position:fixed;inset:0;z-index:999997;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
+  box.style.cssText = 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
   if (l.backgroundColor) box.style.background = l.backgroundColor;
 
   if (l.image){
@@ -225,7 +234,7 @@ function __showGuideUI(project){
 
   const box = document.createElement('div');
   box.id = '__takeover_guide__';
-  box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:999996;padding:12px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;display:flex;gap:12px;align-items:center';
+  box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;padding:12px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;display:flex;gap:12px;align-items:center';
 
   if (g?.marker?.src){
     const img = document.createElement('img');
@@ -241,6 +250,14 @@ function __showGuideUI(project){
 
   document.body.appendChild(box);
 }
+
+// Expose minimal UI hooks for the takeover injector
+try {
+  if (typeof window !== 'undefined') {
+    if (typeof window.__showLoadingUI !== 'function') window.__showLoadingUI = __showLoadingUI;
+    if (typeof window.__showGuideUI !== 'function') window.__showGuideUI = __showGuideUI;
+  }
+} catch {}
 
 async function loadProjectFromQR() {
   const projectSrc = getProjectSrc();
@@ -351,12 +368,31 @@ async function bootFromQR() {
     console.info('[FLOW] project loaded', project);
 
     // ★ プロジェクトデザインを確実に適用
-    await normalizeProject(project, project.__sourceUrl || location.href);
-    applyProjectDesign(project);
+    await applyProjectDesign(project);
     console.info('[APPLY] Design applied on boot');
 
-    // ★ スタートUI乗っ取り
-    __takeoverStartUI(project);
+    // ★ スタートUI乗っ取り（統合UI）はデフォルト無効化
+    try {
+      if (DEV_TAKEOVER_UI === true) {
+        const here = new URLSearchParams(location.search||'');
+        let topHas = false; try { topHas = (window.top && window.top!==window) ? new URLSearchParams(window.top.location.search||'').has('__takeoverStartUI') : false; } catch {}
+        const active = here.has('__takeoverStartUI') || topHas;
+        if (!active && typeof __takeoverStartUI === 'function') {
+          __takeoverStartUI(project);
+        }
+      } else {
+        console.info('[FLOW] takeover UI disabled by flag');
+      }
+    } catch (e) {
+      console.warn('[FLOW] takeover UI call skipped', e);
+    }
+
+    // ★ bootFromQR 完了後に initIntegratedARViewer を実行
+    if (typeof window !== 'undefined') {
+      window.__bootFromQR_completed = true;
+      // カスタムイベントを発火して initIntegratedARViewer に通知
+      window.dispatchEvent(new CustomEvent('bootFromQRCompleted', { detail: { project } }));
+    }
 
     // ★ fetch統計を出力
     if (DEV_VERBOSE_LOGS) {
@@ -490,7 +526,7 @@ function absolutizeUrl(u, base) { try { return new URL(u, base).href; } catch { 
 async function verifyReachable(url) {
   try {
     console.log('[AR] verifying URL:', url);
-    const res = await fetch(url, { method: 'GET', mode: 'cors' });
+    const res = await fetchOnce(url, { method: 'GET', mode: 'cors' });
     if (!res.ok) {
       console.warn(`[AR] URL not reachable: ${res.status} ${res.statusText}`);
       return false;
@@ -530,6 +566,25 @@ async function normalizeProject(project, baseHref) {
   };
   
   replaceOldMarkerPaths(project);
+
+  // ★ type/mode自動推定（未設定時）
+  if (!project.type && !project.mode) {
+    console.warn('[FLOW] type/mode未設定、自動推定を試行');
+    
+    // マーカー画像の有無をチェック
+    const markerCandidates = deepFindMarkerImageUrl(project);
+    const hasMarkerImage = markerCandidates.length > 0 && markerCandidates[0]?.url;
+    const hasMarkerPattern = !!(project.markerPattern || project.marker?.pattern);
+    
+    if (hasMarkerImage || hasMarkerPattern) {
+      project.type = 'marker';
+      console.info('[FLOW] type自動推定: marker（マーカー画像/パターンが存在）');
+    } else {
+      // デフォルト: markerless（WebXR）
+      project.type = 'markerless';
+      console.info('[FLOW] type自動推定: markerless（デフォルト）');
+    }
+  }
 
   // models の絶対化と検証
   project.models = (project.models || []).map((m, index) => {
@@ -595,7 +650,7 @@ async function prepareMarkerPipeline(project) {
   try {
     // 画像取得
     console.log('[AR] fetching marker image:', project.markerImageUrl);
-    const res = await fetch(project.markerImageUrl, { mode: 'cors' });
+    const res = await fetchOnce(project.markerImageUrl, { mode: 'cors' });
     if (!res.ok) {
       throw new Error(`marker image fetch failed: ${res.status} ${res.statusText} - ${project.markerImageUrl}`);
     }
@@ -623,7 +678,7 @@ async function prepareMarkerPipeline(project) {
             const fallbackUrl = absolutizeUrl(fallbackPath, new URL('.', project.__sourceUrl || location.href));
             console.log('[AR] trying fallback:', fallbackUrl);
             
-            const fallbackRes = await fetch(fallbackUrl, { mode: 'cors' });
+            const fallbackRes = await fetchOnce(fallbackUrl, { mode: 'cors' });
             if (fallbackRes.ok) {
               const fallbackBlob = await fallbackRes.blob();
               if (fallbackBlob.type.startsWith('image/')) {
@@ -740,43 +795,69 @@ function showMarkerGuideScreen() {
 }
 
 // === 4) onStartClick の先頭付近を差し替え ===
-async function onStartClick() {
-  const project = window.__project;
-  if (!project || !(project.type || project.mode)) { alert('プロジェクトが不正（type/modeなし）'); return; }
+// ★ 再入禁止フラグ（グローバル）
+let __onStartClickRunning = false;
 
-  // URL正規化＋marker特定
-  try {
-    await normalizeProject(project, project.__sourceUrl || location.href);
-    console.info('[FLOW] urls resolved', {
-      type: project.type || project.mode,
-      markerImageUrl: project.markerImageUrl,
-      models: (project.models || []).map(m => m.url)
-    });
-  } catch (e) {
-    console.error('[FLOW] normalize failed', e);
-    alert('マーカー画像の特定/取得に失敗（URLやCORS設定を確認）');
+async function onStartClick() {
+  // ★ 再入禁止ガード
+  if (__onStartClickRunning) {
+    console.warn('[FLOW] onStartClick already running, ignoring duplicate call');
     return;
   }
-
-  // ここでも念のためガイドを marker に矯正
-  forceGuideModeIfMarker(project);
-
-  // ★ プロジェクトデザインをDOMに確実に反映
-  if (typeof applyProjectDesign === 'function') {
-    applyProjectDesign(project);
-  }
-
-  // カメラ許可→ローディング表示（既存ロジック）
+  __onStartClickRunning = true;
+  
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }});
-    if (typeof attachStreamToVideo === 'function') attachStreamToVideo(stream);
-  } catch (e) {
-    console.error('[FLOW] camera error', e);
-    alert('カメラ権限が必要です'); return;
-  }
+    const project = window.__project;
+    if (!project) {
+      alert('プロジェクトが読み込まれていません');
+      return;
+    }
+    
+    // ★ type/mode自動推定済みであれば使用、未設定なら警告
+    if (!project.type && !project.mode) {
+      console.warn('[FLOW] type/mode未設定、normalizeProjectで自動推定されるはず');
+    }
 
-  if (typeof showLoadingScreen === 'function') showLoadingScreen(project.loadingScreen);
-  console.info('[FLOW] loading ready');
+    // URL正規化＋marker特定（type自動推定含む）
+    try {
+      await normalizeProject(project, project.__sourceUrl || location.href);
+      console.info('[FLOW] urls resolved', {
+        type: project.type || project.mode,
+        markerImageUrl: project.markerImageUrl,
+        models: (project.models || []).map(m => m.url)
+      });
+    } catch (e) {
+      console.error('[FLOW] normalize failed', e);
+      alert('マーカー画像の特定/取得に失敗（URLやCORS設定を確認）');
+      return;
+    }
+
+    // ここでも念のためガイドを marker に矯正
+    forceGuideModeIfMarker(project);
+
+    // ★ プロジェクトデザインをDOMに確実に反映
+    if (typeof applyProjectDesign === 'function') {
+      applyProjectDesign(project);
+    }
+
+    // カメラ許可→ローディング表示（既存ロジック）
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }});
+      if (typeof attachStreamToVideo === 'function') attachStreamToVideo(stream);
+    } catch (e) {
+      console.error('[FLOW] camera error', e);
+      alert('カメラ権限が必要です（HTTPSが必要な場合があります）');
+      return;
+    }
+
+    if (typeof showLoadingScreen === 'function') showLoadingScreen(project.loadingScreen);
+    console.info('[FLOW] loading ready');
+  } finally {
+    // ★ 処理完了後にフラグをリセット（次回呼び出しを許可）
+    setTimeout(() => {
+      __onStartClickRunning = false;
+    }, 1000); // 1秒後にリセット（連打防止）
+  }
   
   // マーカータイプの場合は追加処理を実行（新しい状態機械経路では不要）
   // if (project.type === 'marker') {
@@ -832,7 +913,7 @@ async function loadGLB(cfg) {
     console.log('🔄 3Dモデル読み込み開始:', cfg.url);
     
     // まず実際のファイルを取得してHTMLかどうかをチェック
-    const response = await fetch(cfg.url, { 
+    const response = await fetchOnce(cfg.url, {
       method: 'GET',
       headers: {
         'Accept': 'model/gltf-binary,model/gltf+json,application/octet-stream,*/*'
@@ -1091,18 +1172,72 @@ export default function showARViewer(container) {
   });
 
   if (!projectSrc) {
+    const isHttps = window.location.protocol === 'https:';
+    const currentUrl = window.location.href;
+    const hasQuerySrc = new URL(currentUrl).searchParams.has('src');
+    const hasHashSrc = window.location.hash.includes('?src=');
+    
     container.innerHTML = `
       <div class="viewer-error">
         <div class="error-content">
           <h1>❌ プロジェクトが見つかりません</h1>
-          <p>URLパラメータ 'src' が指定されていません。</p>
-          <p>正しいQRコードまたはURLを使用してください。</p>
-          <button id="viewer-back-button" class="btn-primary">戻る</button>
+          <p style="margin-bottom: 1rem;">URLパラメータ 'src' が指定されていません。</p>
+          
+          <div style="background: rgba(255,235,59,0.1); border-left: 4px solid #FFC107; padding: 1rem; margin: 1rem 0; text-align: left;">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">📋 診断情報</h3>
+            <ul style="margin: 0; padding-left: 1.5rem; font-size: 0.9rem; line-height: 1.6;">
+              <li>プロトコル: ${isHttps ? '✅ HTTPS（推奨）' : '⚠️ HTTP（カメラ制限あり）'}</li>
+              <li>通常クエリ(?src=): ${hasQuerySrc ? '✅ あり' : '❌ なし'}</li>
+              <li>ハッシュクエリ(#/viewer?src=): ${hasHashSrc ? '✅ あり' : '❌ なし'}</li>
+              <li>SessionStorage: ${sessionStorage.getItem('project_src') ? '✅ あり' : '❌ なし'}</li>
+            </ul>
+          </div>
+          
+          ${!isHttps ? `
+          <div style="background: rgba(255,87,34,0.1); border-left: 4px solid #FF5722; padding: 1rem; margin: 1rem 0; text-align: left;">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">⚠️ HTTPS要件</h3>
+            <p style="margin: 0; font-size: 0.9rem; line-height: 1.6;">
+              スマホのカメラを使うにはHTTPSが必要です。<br>
+              開発環境でHTTPSを有効化するか、Ngrok/Cloudflare Tunnelをご利用ください。
+            </p>
+          </div>
+          ` : ''}
+          
+          <div style="background: rgba(33,150,243,0.1); border-left: 4px solid #2196F3; padding: 1rem; margin: 1rem 0; text-align: left;">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">✅ 正しいURL形式</h3>
+            <code style="display: block; background: rgba(0,0,0,0.05); padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; word-break: break-all; margin: 0.5rem 0;">
+              https://your-host/?src=/projects/&lt;id&gt;/project.json#/viewer
+            </code>
+            <p style="margin: 0.5rem 0 0 0; font-size: 0.85rem; color: #666;">
+              または（旧形式も対応）
+            </p>
+            <code style="display: block; background: rgba(0,0,0,0.05); padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; word-break: break-all; margin: 0.5rem 0;">
+              https://your-host/#/viewer?src=https://your-host/projects/&lt;id&gt;/project.json
+            </code>
+          </div>
+          
+          <div style="margin-top: 1.5rem;">
+            <button id="viewer-back-button" class="btn-primary" style="margin-right: 0.5rem;">← プロジェクト一覧に戻る</button>
+            <button id="viewer-reload-button" class="btn-secondary">🔄 ページ再読み込み</button>
+          </div>
+          
+          <details style="margin-top: 1rem; text-align: left; font-size: 0.85rem;">
+            <summary style="cursor: pointer; color: #666;">🔍 詳細デバッグ情報</summary>
+            <pre style="background: #f5f5f5; padding: 0.5rem; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem; font-size: 0.75rem;">${JSON.stringify({
+              href: currentUrl,
+              search: window.location.search,
+              hash: window.location.hash,
+              protocol: window.location.protocol,
+              host: window.location.host
+            }, null, 2)}</pre>
+          </details>
         </div>
       </div>
     `;
     const backBtn = container.querySelector('#viewer-back-button');
     if (backBtn) backBtn.addEventListener('click', navigateBackOrHome);
+    const reloadBtn = container.querySelector('#viewer-reload-button');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
     return function cleanup() {
       console.log('🧹 早期リターン: クリーンアップ不要');
     };
@@ -1112,9 +1247,9 @@ export default function showARViewer(container) {
 
   // 統合ARビューアのHTML構造
   container.innerHTML = `
-    <div class="integrated-ar-viewer">
+    <div id="webar-ui" class="integrated-ar-viewer">
       <!-- スタート画面（開始→ローディング→ガイドの順） -->
-      <div id="ar-start-screen" class="ar-start-screen" style="display: none;">
+      <div id="ar-start-screen" class="ar-start-screen" data-screen="start" style="display: none;">
         <div class="start-content">
           <img id="ar-start-logo" alt="start logo" style="display:none;max-width:160px;max-height:80px;margin-bottom:12px;" />
           <h1 id="ar-start-title">AR体験を開始</h1>
@@ -1122,7 +1257,7 @@ export default function showARViewer(container) {
         </div>
       </div>
       <!-- ローディング画面 -->
-      <div id="ar-loading-screen" class="ar-loading-screen" style="display: none;">
+      <div id="ar-loading-screen" class="ar-loading-screen" data-screen="loading" style="display: none;">
         <div class="ar-loading-content">
           <img id="ar-loading-logo" alt="brand logo" style="display:none;max-width:160px;max-height:80px;margin-bottom:12px;" />
           <div id="ar-loading-text-group" class="loading-text-group">
@@ -1136,7 +1271,7 @@ export default function showARViewer(container) {
       </div>
       
       <!-- ガイド画面（マーカー検出/平面検出の説明） -->
-      <div id="ar-guide-screen" class="ar-guide-screen" style="display: none;">
+      <div id="ar-guide-screen" class="ar-guide-screen" data-screen="guide" style="display: none;">
         <div class="guide-content">
           <img id="ar-guide-image" alt="guide image" style="display:none;max-width:240px;max-height:180px;margin-bottom:16px;" />
           <h2 id="ar-guide-title">画面をタップしてください</h2>
@@ -1454,43 +1589,70 @@ export default function showARViewer(container) {
     }, 5000);
   }
 
+  // ★ 統一されたボタンバインド処理（二重バインド防止・再入禁止）
+  const bindStartButtonOnce = () => {
+    // 複数セレクタでボタンを検索（優先順）
+    const startCTA = container.querySelector('#ar-start-cta') || 
+                     container.querySelector('[data-role="start-button"]') ||
+                     container.querySelector('#ar-start-button');
+    
+    if (!startCTA) {
+      console.warn('[FLOW] start button not found yet');
+      return false; // 未発見
+    }
+    
+    if (startCTA.__bound) {
+      console.log('[FLOW] start button already bound, skipping');
+      return true; // 既にバインド済み
+    }
+    
+    // バインド実行
+    startCTA.addEventListener('click', () => {
+      console.log('[FLOW] #ar-start-cta clicked, forwarding to #ar-start-btn');
+      const sb = container.querySelector('#ar-start-btn');
+      if (sb) {
+        sb.click();
+      } else {
+        console.warn('[FLOW] #ar-start-btn not found');
+      }
+    }, { once: true });
+    
+    startCTA.__bound = true;
+    console.log('[FLOW] start button bound successfully:', startCTA.id || startCTA.getAttribute('data-role'));
+    return true; // バインド成功
+  };
+
   // ARビューア初期化（機能フラグを渡す）
-  initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceDebugCube, forceNormalMaterial, engineOverride });
+  // ★ bootFromQR 完了を待ってから実行
+  const initARViewerWhenReady = () => {
+    if (window.__bootFromQR_completed && window.__project) {
+      initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceDebugCube, forceNormalMaterial, engineOverride });
+    } else {
+      // bootFromQR がまだ完了していない場合、イベントを待つ
+      window.addEventListener('bootFromQRCompleted', initARViewerWhenReady, { once: true });
+    }
+  };
   
-  // HTML生成直後にボタンのバインドを試行（状態機械経路を呼ぶ）
+  initARViewerWhenReady();
+  
+  // HTML生成直後にボタンのバインドを試行（1回目）
   setTimeout(() => {
-    const startCTA = container.querySelector('#ar-start-cta');
-    if (startCTA && !startCTA.__bound) {
-      startCTA.addEventListener('click', () => {
-        const sb = container.querySelector('#ar-start-btn');
-        if (sb) sb.click();
-      }, { once: true });
-      startCTA.__bound = true;
-      console.log('[FLOW] early button binding successful:', startCTA);
+    if (!bindStartButtonOnce()) {
+      console.log('[FLOW] early binding failed, will retry via observer');
     }
   }, 50);
   
-  // MutationObserverでボタンの出現を監視
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-          const startCTA = node.querySelector ? node.querySelector('#ar-start-cta') : null;
-          if (startCTA && !startCTA.__bound) {
-            startCTA.addEventListener('click', () => {
-              const sb = container.querySelector('#ar-start-btn');
-              if (sb) sb.click();
-            }, { once: true });
-            startCTA.__bound = true;
-            console.log('[FLOW] mutation observer button binding successful:', startCTA);
-            observer.disconnect(); // 見つかったら監視を停止
-          }
-        }
-      });
-    });
+  // MutationObserverでボタンの出現を監視（2回目以降）
+  const observer = new MutationObserver(() => {
+    if (bindStartButtonOnce()) {
+      observer.disconnect(); // バインド成功したら監視停止
+    }
   });
   
   observer.observe(container, { childList: true, subtree: true });
+
+  // ★ DOM変更時のデザイン再適用用MutationObserver（削除）
+  // シンプルな実装のため、画面表示時の再適用のみに限定
 }
 
 // 統合ARビューアの初期化関数
@@ -1538,7 +1700,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   // カスタムマーカーガイド有無（プロジェクト保存のガイド画像/テキストがあるか）
   let hasCustomMarkerGuide = false;
 
-  function showScreen(state, options = {}) {
+  async function showScreen(state, options = {}) {
     if (currentScreenState === state && !options.force) {
       console.log(`⚠️ 画面状態は既に ${state} です`);
       return;
@@ -1578,6 +1740,24 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     switch (state) {
       case screenStates.START:
         if (startScreen) {
+          // 1) 表示直前に適用
+          if (window.__project) {
+            try { 
+              await applyProjectDesign(window.__project, { screen: 'start' }); 
+              console.info('[APPLY] screen=start applied');
+            } catch (e) { 
+              console.error('[APPLY] start pre-apply error', e); 
+            }
+            // 2) 描画確定後にもう一度適用
+            requestAnimationFrame(() => {
+              try { 
+                applyProjectDesign(window.__project, { screen: 'start' }); 
+                console.info('[APPLY] screen=start rAF applied');
+              } catch (e) { 
+                console.error('[APPLY] start rAF-apply error', e); 
+              }
+            });
+          }
           startScreen.style.display = 'flex';
           console.log('✅ スタート画面を表示');
           console.log('🔍 表示後の確認:', {
@@ -1592,6 +1772,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       case screenStates.LOADING:
         if (loadingScreen) {
+          if (window.__project) {
+            try { 
+              await applyProjectDesign(window.__project, { screen: 'loading' }); 
+              console.info('[APPLY] screen=loading applied');
+            } catch (e) { 
+              console.error('[APPLY] loading pre-apply error', e); 
+            }
+            requestAnimationFrame(() => {
+              try { 
+                applyProjectDesign(window.__project, { screen: 'loading' }); 
+                console.info('[APPLY] screen=loading rAF applied');
+              } catch (e) { 
+                console.error('[APPLY] loading rAF-apply error', e); 
+              }
+            });
+          }
           loadingScreen.style.display = 'flex';
           loadingScreen.style.setProperty('position', 'fixed', 'important');
           loadingScreen.style.setProperty('top', '0', 'important');
@@ -1612,6 +1808,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       case screenStates.GUIDE:
         if (guideScreen) {
+          if (window.__project) {
+            try { 
+              await applyProjectDesign(window.__project, { screen: 'guide' }); 
+              console.info('[APPLY] screen=guide applied');
+            } catch (e) { 
+              console.error('[APPLY] guide pre-apply error', e); 
+            }
+            requestAnimationFrame(() => {
+              try { 
+                applyProjectDesign(window.__project, { screen: 'guide' }); 
+                console.info('[APPLY] screen=guide rAF applied');
+              } catch (e) { 
+                console.error('[APPLY] guide rAF-apply error', e); 
+              }
+            });
+          }
           guideScreen.style.display = 'flex';
           console.log('✅ ガイド画面を表示');
           console.log('🔍 表示後の確認:', {
@@ -1895,37 +2107,18 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateStatus('📡 プロジェクトデータ取得中', 'info');
     updateProgress(10, 'プロジェクトデータを読み込み中...');
 
-    // プロジェクトデータ取得
-    if (typeof window !== 'undefined' && window.__project && window.__projectSrc === projectSrc) {
+    // プロジェクトデータは bootFromQR で既に取得済み（window.__project に保存）
+    if (typeof window !== 'undefined' && window.__project) {
       currentProject = window.__project;
-      console.log('🗂️ 既存のグローバルプロジェクトを使用します');
+      console.log('🗂️ bootFromQR で取得済みのプロジェクトを使用');
     } else {
-      console.warn('[FLOW] ⚠️ この fetch は loadProjectFromQR() で既に実行済みのはず。重複の可能性あり。');
-      const response = await fetchOnce(projectSrc, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      // Content-Typeを確認してHTMLレスポンスを検出
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('text/html')) {
-        const text = await response.text();
-        console.error('[FLOW] HTMLレスポンスが返されました:', {
-          url: projectSrc,
-          contentType,
-          preview: text.substring(0, 200)
-        });
-        throw new Error(`HTML response received instead of JSON. URL may be incorrect: ${projectSrc}`);
-      }
-
-      currentProject = await response.json();
-      if (typeof window !== 'undefined') {
-        window.__project = currentProject;
-        window.__projectSrc = projectSrc;
-      }
-      if (currentProject && typeof currentProject === 'object') {
-        currentProject.__sourceUrl = currentProject.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
-      }
+      console.error('[FLOW] ❌ プロジェクトが bootFromQR で読み込まれていません');
+      throw new Error('Project not loaded by bootFromQR. Check initialization flow.');
+    }
+    
+    
+    if (currentProject && typeof currentProject === 'object') {
+      currentProject.__sourceUrl = currentProject.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
     }
     updateStatus('✅ プロジェクトデータ取得完了', 'success');
     updateProgress(30, 'プロジェクト設定を確認中...');
@@ -1939,6 +2132,17 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     let ls = currentProject.loadingScreen || {};
     let ss = currentProject.startScreen || {};
     let gs = currentProject.guideScreen || {};
+
+    // 正規化されたデザインを先に取り出し、初期値として採用
+    try {
+      const { startScreen, loadingScreen, guideScreen } = extractDesign(currentProject);
+      ss = { ...ss, ...(startScreen || {}) };
+      ls = { ...ls, ...(loadingScreen || {}) };
+      gs = { ...gs, ...(guideScreen || {}) };
+      console.log('🎯 normalized design extracted for viewer');
+    } catch (e) {
+      console.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
+    }
 
     // 追加補完: エディター保存のローカル設定（同一オリジンでの即時反映用）
     try {
@@ -3155,6 +3359,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (guideTitle) guideTitle.textContent = 'マーカーをスキャンしてください';
       if (guideDescription) guideDescription.textContent = 'Hiroマーカーをカメラにかざしてください';
     }
+
+    // 画面状態遷移を強制（ガイドを可視化）
+    try { showScreen(screenStates.GUIDE, { force: true }); } catch(_) {}
   }
 
 

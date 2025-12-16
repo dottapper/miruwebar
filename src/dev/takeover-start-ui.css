@@ -1,0 +1,26 @@
+/* takeover発動中のみ有効化するスイッチ */
+:root[data-takeover-start="1"] { }
+
+/* 既存の START レイヤーを一切見せず、クリックもさせない */
+:root[data-takeover-start="1"] #ar-start-overlay:not(#takeover-start-overlay),
+:root[data-takeover-start="1"] .ar-start-overlay:not(#takeover-start-overlay),
+:root[data-takeover-start="1"] [data-ar-layer="start"]:not(#takeover-start-overlay) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* takeover の背景は不透明（透け防止） */
+:root[data-takeover-start="1"] #takeover-start-overlay {
+  background: var(--ar-start-bg, #000) !important;
+}
+
+/* Loading/Guide/Takeover の z-index を固定 */
+:root[data-takeover-start="1"] #ar-loading-overlay,
+:root[data-takeover-start="1"] .ar-loading-overlay,
+:root[data-takeover-start="1"] [data-ar-layer="loading"],
+:root[data-takeover-start="1"] #ar-guide-overlay,
+:root[data-takeover-start="1"] .ar-guide-overlay,
+:root[data-takeover-start="1"] [data-ar-layer="guide"],
+:root[data-takeover-start="1"] #takeover-start-overlay {
+  z-index: 2147483000 !important;
+}

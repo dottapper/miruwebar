@@ -321,45 +321,30 @@ export class MarkerAR extends AREngineInterface {
       window_REVISION: window.THREE.REVISION
     });
 
-    // AR.js が既に読み込まれているかチェック
+    // AR.js が既に読み込まれているかチェック（index.htmlで読み込み済みのはず）
     if (window.THREEx && window.THREEx.ArToolkitSource) {
-      console.log('📦 AR.js は既に読み込み済み');
+      console.log('📦 AR.js は既に読み込み済み (window.THREEx.ArToolkitSource available)');
       return;
     }
 
-    try {
-      // CDN優先（404ノイズ回避）。失敗時のみローカル（存在確認済み）
-      let ok = false;
-      try {
-        await this.loadScript('https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/build/ar-threex.js');
-        ok = !!(window.THREEx && window.THREEx.ArToolkitSource);
-      } catch (_) {}
-      if (!ok) {
-        try {
-          await this.loadScript('https://unpkg.com/@ar-js-org/ar.js@3.4.5/three.js/build/ar-threex.js');
-          ok = !!(window.THREEx && window.THREEx.ArToolkitSource);
-        } catch (_) {}
+    // index.htmlでの読み込みを待つ（最大3秒）
+    console.log('⏳ AR.jsライブラリの読み込みを待機中...');
+    const maxWait = 3000;
+    const startTime = Date.now();
+
+    while (!window.THREEx || !window.THREEx.ArToolkitSource) {
+      if (Date.now() - startTime > maxWait) {
+        console.error('❌ AR.jsライブラリが3秒待っても読み込まれませんでした');
+        console.error('📍 確認事項:');
+        console.error('  - index.htmlに <script src="/arjs/ar-threex.js"></script> が存在するか');
+        console.error('  - /arjs/ar-threex.js ファイルが存在するか');
+        console.error('  - ブラウザコンソールに読み込みエラーが出ていないか');
+        throw new Error('AR.js ライブラリの読み込みに失敗しました (タイムアウト)');
       }
-      if (!ok) {
-        try {
-          if (await this.resourceExists('/arjs/ar-threex.js')) {
-            await this.loadScript('/arjs/ar-threex.js');
-            ok = !!(window.THREEx && window.THREEx.ArToolkitSource);
-          }
-        } catch (_) {}
-      }
-
-      if (!ok) throw new Error('AR.js ライブラリの読み込みに失敗しました');
-
-      console.log('✅ AR.js ライブラリ読み込み成功');
-
-      console.log('✅ GLTFLoader モジュール版使用');
-
-    } catch (error) {
-      if (!window.THREEx || !window.THREEx.ArToolkitSource) {
-        throw error;
-      }
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
+
+    console.log('✅ AR.js ライブラリ読み込み成功 (THREEx available)');
   }
 
   /**

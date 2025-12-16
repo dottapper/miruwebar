@@ -1,3 +1,5 @@
+// ★ 旧 injector は競合を避けるため停止（viewer側の standalone を使用）
+// import './dev/takeover-injector.js';
 import './styles/style.css'
 import './styles/editor.css'
 import './styles/login.css';
@@ -9,6 +11,9 @@ import './styles/loading-screen.css'; // ローディング画面のスタイル
 import './styles/loading-screen-selector.css'; // ローディング画面選択モーダルのスタイル
 import './styles/usage-guide.css'; // 使い方ガイドページのスタイル
 import './styles/ar-viewer.css'; // ARビューアー用のスタイルをインポート
+// 旧 takeover UI は重複動作を避けるため一旦無効化
+// import './dev/takeover-start-ui.css';
+// import './dev/takeover-start-ui.js';
 
 // HMRクライアントをインポート
 import hmrClient from './utils/hmr-client.js';

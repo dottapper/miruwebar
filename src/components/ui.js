@@ -6,6 +6,7 @@ import { exportProjectBundleById } from '../api/projects.js';
 import { settingsAPI } from './loading-screen/settings.js';
 import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';
+import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
 
 // UI専用ロガーを作成
@@ -539,10 +540,13 @@ export async function showQRCodeModal(options = {}) {
       port: currentPort
     });
     
-    // URL生成（ローカル公開の想定パス）
-    let localUrl = `${scheme}://${localHost}/#/viewer?src=${scheme}://${localHost}/projects/${encodeURIComponent(projectId)}/project.json`;
+    // URL生成（URLStabilizerを使用して ?src=...#/viewer 形式に統一）
+    const stabilizer = createURLStabilizer();
+    const localUrlInfo = await stabilizer.generateARViewerURL(projectId, URLType.LOCAL, { validateProject: false, skipValidation: true });
+    let localUrl = localUrlInfo.viewerUrl;
     const appOrigin = window.location.origin;
-    const webUrl = `${appOrigin}/#/viewer?src=https://your-domain.com/projects/${projectId}/project.json`;
+    // 初期表示用の公開URL（プレースホルダー）。実際の公開先は入力欄で更新
+    const webUrl = `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
     
     uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
@@ -673,7 +677,7 @@ export async function showQRCodeModal(options = {}) {
     let currentMethod = options.defaultMethod || 'local';
     let currentUrl = localUrl;
 
-    function switchTab(method) {
+    async function switchTab(method) {
       currentMethod = method;
       
       // タブの見た目を切り替え
@@ -690,7 +694,18 @@ export async function showQRCodeModal(options = {}) {
         modalOverlay.querySelector('#local-url').textContent = localUrl;
       } else {
         const webUrlInput = modalOverlay.querySelector('#web-url-input').value;
-        const newWebUrl = `${webUrlInput}/#/viewer?src=${webUrlInput}/projects/${projectId}/project.json`;
+        let newWebUrl = '';
+        try {
+          const parsed = new URL(webUrlInput);
+          const publicDomain = parsed.host; // hostはポート含む
+          const publicStabilizer = createURLStabilizer({ publicDomain });
+          const info = await publicStabilizer.generateARViewerURL(projectId, URLType.PUBLIC, { skipValidation: true });
+          newWebUrl = info.viewerUrl;
+        } catch (_) {
+          // 入力がURLとして不正な場合は手動生成（フォールバック）
+          const host = webUrlInput.replace(/\/$/, '');
+          newWebUrl = `${host}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+        }
         currentUrl = newWebUrl;
         modalOverlay.querySelector('#web-url').textContent = newWebUrl;
       }

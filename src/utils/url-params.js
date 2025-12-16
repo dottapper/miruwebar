@@ -23,6 +23,7 @@ export function getProjectSrc() {
     if (s1) {
       const normalized = new URL(s1, location.origin).toString();
       console.log('[URL-PARAMS] getProjectSrc: found in normal query:', normalized);
+      try { sessionStorage.setItem('project_src', normalized); } catch {}
       return normalized;
     }
 
@@ -35,6 +36,7 @@ export function getProjectSrc() {
       if (s2) {
         const normalized = new URL(s2, location.origin).toString();
         console.log('[URL-PARAMS] getProjectSrc: found in hash query:', normalized);
+        try { sessionStorage.setItem('project_src', normalized); } catch {}
         return normalized;
       }
     }
