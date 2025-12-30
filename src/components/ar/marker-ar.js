@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { AREngineInterface } from '../../utils/ar-engine-adapter.js';
+import { generateMarkerPatternFromImage, createPatternBlob } from '../../utils/marker-utils.js';
 // GLTFLoaderは動的インポートで統一バージョンを使用
 
 /**
@@ -170,24 +171,72 @@ export class MarkerAR extends AREngineInterface {
       ]);
       // マーカーURL解決（カスタムマーカー必須 - HIROマーカーへのフォールバック禁止）
       // ⚠️ 重要: docs/MARKER_POLICY.md を参照
-      const markerCandidates = [];
-      if (this.options.markerUrl) {
-        // カスタムマーカーを最優先
-        markerCandidates.push(this.options.markerUrl);
+      // ⚠️ AR.jsは.pattファイルを必要とするため、画像から変換が必要
+      console.log('🔍 マーカーURL処理開始:', {
+        渡されたmarkerUrl: this.options.markerUrl,
+        isBlobUrl: this.options.markerUrl?.startsWith?.('blob:')
+      });
+
+      let finalPatternUrl = null;
+
+      // 既にBlob URL（.patt形式）が渡されている場合はそのまま使用
+      if (this.options.markerUrl && this.options.markerUrl.startsWith('blob:')) {
+        console.log('✅ 既に.patt形式のBlob URLが渡されました');
+        finalPatternUrl = this.options.markerUrl;
+      } else {
+        // 画像URLから.pattを生成する必要がある
+        const markerImageCandidates = [];
+        if (this.options.markerUrl) {
+          markerImageCandidates.push(this.options.markerUrl);
+        }
+        // フォールバックはプロジェクト内のサンプル画像のみ（HIROマーカー禁止）
+        markerImageCandidates.push(
+          '/assets/sample.png',
+          '/assets/logo.png'
+        );
+
+        // カスタムマーカーが設定されていない場合は警告を表示
+        if (!this.options.markerUrl) {
+          console.warn('⚠️ カスタムマーカーが設定されていません。サンプル画像を使用します。');
+          console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください。');
+        }
+
+        // 画像URLを解決
+        const resolvedImageUrl = await this.resolveAssetUrl(markerImageCandidates);
+        console.log('🔗 マーカー画像URL解決:', resolvedImageUrl);
+
+        // 画像から.pattパターンを生成
+        if (resolvedImageUrl) {
+          try {
+            console.log('🔄 マーカーパターン生成開始...');
+            const patternString = await generateMarkerPatternFromImage(resolvedImageUrl);
+            if (patternString) {
+              const pattBlob = createPatternBlob(patternString);
+              finalPatternUrl = pattBlob.url;
+              // クリーンアップ用に保存
+              this._patternBlobRevoke = pattBlob.revoke;
+              console.log('✅ マーカーパターン生成成功:', {
+                パターン長: patternString.length,
+                BlobURL: finalPatternUrl
+              });
+            } else {
+              console.error('❌ マーカーパターン生成失敗: パターン文字列が空');
+            }
+          } catch (patternError) {
+            console.error('❌ マーカーパターン生成エラー:', patternError);
+          }
+        }
       }
-      // フォールバックはプロジェクト内のサンプル画像のみ（HIROマーカー禁止）
-      markerCandidates.push(
-        '/assets/sample.png',
-        '/assets/logo.png'
-      );
-      
-      // カスタムマーカーが設定されていない場合は警告を表示
-      if (!this.options.markerUrl) {
-        console.warn('⚠️ カスタムマーカーが設定されていません。サンプル画像を使用します。');
-        console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください。');
+
+      // 最終的なパターンURLを設定
+      if (finalPatternUrl) {
+        this.options.markerUrl = finalPatternUrl;
+        console.log('✅ マーカーパターンURL設定完了:', finalPatternUrl);
+      } else {
+        console.error('❌ マーカーパターンの準備に失敗しました');
+        throw new Error('マーカーパターンの準備に失敗しました。マーカー画像を確認してください。');
       }
-      
-      this.options.markerUrl = await this.resolveAssetUrl(markerCandidates);
+
       console.log('✅ アセットURL解決完了');
 
       this.dlog('🔗 解決したアセットURL:', {
@@ -599,154 +648,111 @@ export class MarkerAR extends AREngineInterface {
    * ARToolkitContext 初期化（マーカー検出）
    */
   initARToolkitContext() {
-    console.log('🚨 initARToolkitContext() 関数が呼び出されました');
-    return new Promise(async (resolve, reject) => {
+    console.log('🎯 initARToolkitContext() 開始');
+    return new Promise((resolve, reject) => {
       this.dlog('🎯 マーカー検出システム初期化開始');
 
-      // カメラパラメータはAR.jsのデフォルトを使用（事前チェックスキップ）
-      console.log('🔍 AR.jsデフォルトカメラパラメータを使用します');
-
+      // カメラパラメータ設定
       const contextConfig = {
-        // カメラパラメータファイルを指定しない（AR.jsデフォルトを使用）
+        cameraParametersUrl: this.options.cameraParametersUrl,
         detectionMode: 'mono',
         matrixCodeType: '3x3',
-        canvasWidth: 640,   // iPhone 用解像度制限
+        canvasWidth: 640,
         canvasHeight: 480,
-        maxDetectionRate: 30, // iPhone 用フレームレート制限
-        // 追加の安定化設定
+        maxDetectionRate: 30,
         debug: !!this.IS_DEBUG,
         imageSmoothingEnabled: false
       };
-      
+
       console.log('🔧 ARコンテキスト設定:', contextConfig);
       this.arToolkitContext = new window.THREEx.ArToolkitContext(contextConfig);
 
-      try {
-        console.log('🚀 ARコンテキスト init() 開始');
-        
-        // 初期化進捗の詳細監視
-        let callbackExecuted = false;
-        let initStartTime = Date.now();
-        let timeoutId;
-        
-        // 初期化状態の定期チェック
-        const checkInterval = setInterval(() => {
+      let callbackExecuted = false;
+      const initStartTime = Date.now();
+
+      // クリーンアップ用
+      let checkInterval = null;
+      let forceSuccessTimeoutId = null;
+      let errorTimeoutId = null;
+
+      const cleanup = () => {
+        if (checkInterval) clearInterval(checkInterval);
+        if (forceSuccessTimeoutId) clearTimeout(forceSuccessTimeoutId);
+        if (errorTimeoutId) clearTimeout(errorTimeoutId);
+      };
+
+      // AR.js初期化の成功コールバック
+      const onInitSuccess = () => {
+        if (callbackExecuted) return; // 二重実行防止
+        callbackExecuted = true;
+        cleanup();
+
+        this.arContextInitialized = true;
+        console.log('✅ ARコンテキスト初期化完了:', {
+          初期化時間: `${Date.now() - initStartTime}ms`,
+          arController: !!this.arToolkitContext.arController
+        });
+
+        // カメラの投影行列を設定
+        try {
+          const projMatrix = this.arToolkitContext.getProjectionMatrix();
+          if (projMatrix && this.camera.projectionMatrix) {
+            this.camera.projectionMatrix.copy(projMatrix);
+            this.dlog('✅ カメラ投影行列設定完了');
+          }
+        } catch (projError) {
+          console.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
+        }
+
+        resolve();
+      };
+
+      // 初期化状態の定期チェック（デバッグ用）
+      if (this.IS_DEBUG) {
+        checkInterval = setInterval(() => {
           const elapsed = Date.now() - initStartTime;
-          if (this.IS_DEBUG) console.log(`🔄 ARコンテキスト初期化進捗 (${elapsed}ms):`, {
-            _arContext: !!this.arToolkitContext._arContext,
-            arController: !!this.arToolkitContext.arController,
-            parameters: !!this.arToolkitContext.parameters,
+          console.log(`🔄 AR初期化進捗 (${elapsed}ms):`, {
+            arController: !!this.arToolkitContext?.arController,
             callbackExecuted
           });
-        }, 3000); // 3秒ごとに状態確認
-        
-        // AR.js初期化の成功コールバック
-        const onInitSuccess = () => {
-          callbackExecuted = true;
-          clearInterval(checkInterval);
-          clearTimeout(timeoutId);
-          this.arContextInitialized = true;
-          this.dlog('✅ ARコンテキスト初期化コールバック実行');
-          this.dlog('🔍 ARコンテキスト最終状態:', {
-            _arContext: !!this.arToolkitContext._arContext,
-            arController: !!this.arToolkitContext.arController,
-            parameters: !!this.arToolkitContext.parameters,
-            初期化時間: `${Date.now() - initStartTime}ms`
-          });
-
-          // カメラの投影行列を設定（Three.js互換性対応）
-          try {
-            const projMatrix = this.arToolkitContext.getProjectionMatrix();
-            if (projMatrix && this.camera.projectionMatrix) {
-              this.camera.projectionMatrix.copy(projMatrix);
-              this.dlog('✅ カメラ投影行列設定完了');
-            } else {
-              console.warn('⚠️ 投影行列の設定をスキップ（互換性問題）');
-            }
-          } catch (projError) {
-            console.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
-          }
-          
-          resolve();
-        };
-
-        // AR.js初期化実行（10秒後に強制完了も用意）
-        this.arToolkitContext.init(onInitSuccess);
-        
-        // 10秒後に強制的に成功扱いにする（AR.jsコールバックが呼ばれない場合の対策）
-        const forceSuccessTimeout = setTimeout(() => {
-          if (!callbackExecuted) {
-            console.warn('⚠️ ARコンテキスト初期化コールバックが10秒経過しても呼ばれないため強制完了');
-            
-            // ARコンテキストの状態を確認し、必要に応じて手動で初期化状態を設定
-            console.log('🔧 ARコンテキスト強制初期化試行中...');
-            
-            // AR.jsが内部的に初期化されているかチェック
-            if (this.arToolkitContext && (this.arToolkitContext._arContext || this.arToolkitContext.arController)) {
-              console.log('✅ ARコンテキストは実際には初期化されているため続行');
-              onInitSuccess();
-            } else {
-              console.warn('⚠️ ARコンテキストが初期化されていないが強制的に続行');
-              
-              // 手動で最小限の初期化状態を設定
-              try {
-                if (this.arToolkitContext && !this.arToolkitContext._arContext) {
-                  console.log('🔧 手動でARコンテキスト状態を設定中...');
-                  // 最小限の_arContext状態をシミュレート
-                  this.arToolkitContext._arContext = { initialized: true };
-                }
-              } catch (e) {
-                console.warn('⚠️ 手動初期化設定に失敗（続行）:', e.message);
-              }
-              
-              onInitSuccess();
-            }
-          }
-        }, 5000);
-
-        // エラータイムアウト（30秒に延長 + より詳細な診断）
-        timeoutId = setTimeout(async () => {
-          clearInterval(checkInterval);
-          if (!callbackExecuted) {
-            console.error('❌ ARコンテキスト初期化タイムアウト（30秒）詳細:', {
-              arToolkitContext: !!this.arToolkitContext,
-              _arContext: !!this.arToolkitContext._arContext,
-              arController: !!this.arToolkitContext.arController,
-              cameraParametersUrl: this.options.cameraParametersUrl,
-              callbackExecuted,
-              経過時間: `${Date.now() - initStartTime}ms`
-            });
-            
-            // カメラパラメータファイルの詳細テスト
-            try {
-              console.log('🔍 カメラパラメータファイル詳細テスト開始...');
-              const response = await fetch(this.options.cameraParametersUrl);
-              const buffer = await response.arrayBuffer();
-              console.log('📁 camera_para.dat テスト結果:', {
-                status: response.status,
-                statusText: response.statusText,
-                size: buffer.byteLength,
-                contentType: response.headers.get('content-type'),
-                url: this.options.cameraParametersUrl
-              });
-            } catch (err) {
-              console.error('📁 camera_para.dat アクセスエラー:', err);
-            }
-            
-            reject(new Error('マーカー検出システム初期化タイムアウト（30秒）'));
-          }
-        }, 30000); // 30秒に延長
-        
-        // 成功時にタイムアウトをクリア
-        const originalResolve = resolve;
-        resolve = (...args) => {
-          clearTimeout(timeoutId);
-          originalResolve(...args);
-        };
-      } catch (error) {
-        console.error('❌ ARToolkitContext初期化エラー:', error);
-        reject(new Error(`マーカー検出システム初期化エラー: ${error.message}`));
+        }, 2000);
       }
+
+      // AR.js初期化実行
+      try {
+        this.arToolkitContext.init(onInitSuccess);
+      } catch (initError) {
+        console.error('❌ ARコンテキスト init() 呼び出しエラー:', initError);
+        cleanup();
+        reject(new Error(`ARコンテキスト初期化エラー: ${initError.message}`));
+        return;
+      }
+
+      // 3秒後: 内部状態をチェックして準備ができていれば強制完了
+      forceSuccessTimeoutId = setTimeout(() => {
+        if (!callbackExecuted) {
+          console.log('🔄 3秒経過、AR.js内部状態をチェック...');
+
+          // AR.jsが内部的に初期化されているかチェック
+          const hasArController = !!this.arToolkitContext?.arController;
+          const hasArContext = !!this.arToolkitContext?._arContext;
+
+          if (hasArController || hasArContext) {
+            console.log('✅ AR.jsは内部的に初期化済み、強制的に成功扱い');
+            onInitSuccess();
+          } else {
+            console.log('⏳ AR.jsはまだ初期化中、さらに待機...');
+          }
+        }
+      }, 3000);
+
+      // 10秒後: まだ完了していなければ強制的に成功扱い（AR.jsコールバック問題対策）
+      errorTimeoutId = setTimeout(() => {
+        if (!callbackExecuted) {
+          console.warn('⚠️ ARコンテキスト初期化が10秒経過、強制的に続行します');
+          onInitSuccess();
+        }
+      }, 10000);
     });
   }
 
@@ -868,18 +874,21 @@ export class MarkerAR extends AREngineInterface {
       requestAnimationFrame(animate);
 
       try {
-        // AR.js 更新（より厳密な条件チェック）
-        if (this.arToolkitSource && 
-            this.arToolkitSource.ready === true && 
+        // AR.js 更新
+        if (this.arToolkitSource &&
+            this.arToolkitSource.ready === true &&
             this.arToolkitSource.domElement &&
             this.arToolkitContext &&
-            this.arToolkitContext.arController) {
+            this.arContextInitialized) {
           // 入力映像が有効か確認
           const videoElement = this.arToolkitSource.domElement;
           const hasSize = (videoElement.videoWidth > 0 && videoElement.videoHeight > 0);
           const readyStateOk = (typeof videoElement.readyState === 'number' ? videoElement.readyState >= 2 : true);
           if (hasSize && readyStateOk) {
-            this.arToolkitContext.update(videoElement);
+            // update()が存在する場合のみ呼び出し
+            if (typeof this.arToolkitContext.update === 'function') {
+              this.arToolkitContext.update(videoElement);
+            }
           }
         }
 
@@ -1211,6 +1220,17 @@ export class MarkerAR extends AREngineInterface {
     }
     if (this.markerControls) {
       this.markerControls = null;
+    }
+
+    // パターンBlob URLのクリーンアップ
+    if (this._patternBlobRevoke) {
+      try {
+        this._patternBlobRevoke();
+        console.log('✅ パターンBlob URL解放');
+      } catch (e) {
+        console.warn('⚠️ パターンBlob URL解放エラー:', e);
+      }
+      this._patternBlobRevoke = null;
     }
 
     console.log('✅ MarkerAR クリーンアップ完了');

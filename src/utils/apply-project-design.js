@@ -42,6 +42,34 @@ function preloadImage(url) {
 }
 
 /**
+ * 相対パスを絶対パスに変換
+ * @param {string} url - URL
+ * @param {string} baseUrl - ベースURL
+ * @returns {string} - 絶対URL
+ */
+function resolveUrl(url, baseUrl) {
+  if (!url) return url;
+  // 既に絶対URLまたはdata/blob URLの場合はそのまま
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url;
+  }
+  // ルートからの相対パス
+  if (url.startsWith('/')) {
+    return new URL(url, location.origin).href;
+  }
+  // プロジェクトフォルダからの相対パス
+  if (baseUrl) {
+    try {
+      const projectFolder = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+      return new URL(url, projectFolder).href;
+    } catch {
+      return url;
+    }
+  }
+  return url;
+}
+
+/**
  * プロジェクトデザインをDOMに適用
  * @param {Object} project - 正規化済みのproject.json
  * @param {Object} options - 適用オプション
@@ -55,7 +83,8 @@ export async function applyProjectDesign(project, options = {}) {
   }
 
   const { screen, container = '#webar-ui' } = options;
-  
+  const baseUrl = project.__sourceUrl || location.href;
+
   // コンテナの存在確認
   const containerElement = document.querySelector(container) || document.getElementById('webar-ui') || document.body;
   if (!containerElement) {
@@ -65,6 +94,23 @@ export async function applyProjectDesign(project, options = {}) {
 
   // プロジェクトのスキーマ差異を吸収して正規化
   const { startScreen, loadingScreen, guideScreen } = extractDesign(project);
+
+  // 画像URLを絶対パスに解決
+  if (startScreen) {
+    if (startScreen.backgroundImage) startScreen.backgroundImage = resolveUrl(startScreen.backgroundImage, baseUrl);
+    if (startScreen.background) startScreen.background = resolveUrl(startScreen.background, baseUrl);
+    if (startScreen.logo) startScreen.logo = resolveUrl(startScreen.logo, baseUrl);
+  }
+  if (loadingScreen) {
+    if (loadingScreen.background) loadingScreen.background = resolveUrl(loadingScreen.background, baseUrl);
+    if (loadingScreen.logo) loadingScreen.logo = resolveUrl(loadingScreen.logo, baseUrl);
+    if (loadingScreen.image) loadingScreen.image = resolveUrl(loadingScreen.image, baseUrl);
+  }
+  if (guideScreen) {
+    if (guideScreen.background) guideScreen.background = resolveUrl(guideScreen.background, baseUrl);
+    if (guideScreen.markerImage) guideScreen.markerImage = resolveUrl(guideScreen.markerImage, baseUrl);
+    if (guideScreen.marker?.src) guideScreen.marker.src = resolveUrl(guideScreen.marker.src, baseUrl);
+  }
   
   // プロジェクトに正規化されたUIデータを追加
   if (!project.ui) {

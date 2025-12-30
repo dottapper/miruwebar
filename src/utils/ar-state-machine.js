@@ -55,7 +55,7 @@ export class ARStateMachine {
 
     // タイムアウト管理
     this.timeouts = new Map();
-    this.defaultTimeout = options.defaultTimeout || 30000; // 30秒
+    this.defaultTimeout = options.defaultTimeout || 60000; // 60秒に延長（マーカー生成に時間がかかる場合への対応）
 
     // 進行中の処理追跡
     this.currentOperation = null;

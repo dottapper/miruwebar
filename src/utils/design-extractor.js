@@ -18,19 +18,25 @@ function normalizeStartScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.startScreen || {};
   // templateSettings を最優先、次にプロジェクト直下（start / startScreen）
   const merged = shallowMerge(base, direct, tpl);
+
+  // backgroundImageとbackgroundの両方をサポート（backgroundImageを優先）
+  const bgImage = merged.backgroundImage || merged.background || merged.bg;
+
   return {
-    title: merged.title,
+    title: merged.title || merged.titleText,
     titlePosition: merged.titlePosition,
     titleSize: merged.titleSize,
-    textColor: merged.textColor,
-    backgroundColor: merged.backgroundColor,
-    backgroundImage: merged.backgroundImage,
-    buttonText: merged.buttonText,
-    buttonColor: merged.buttonColor,
-    buttonTextColor: merged.buttonTextColor,
+    textColor: merged.textColor || merged.titleColor,
+    backgroundColor: merged.backgroundColor || merged.bgColor,
+    backgroundImage: bgImage,
+    // apply-project-design.jsとの互換性のためbackgroundにも設定
+    background: bgImage,
+    buttonText: merged.buttonText || merged.ctaText || '開始',
+    buttonColor: merged.buttonColor || merged.ctaColor,
+    buttonTextColor: merged.buttonTextColor || merged.ctaTextColor,
     buttonPosition: merged.buttonPosition,
     buttonSize: merged.buttonSize,
-    logo: merged.logo || merged.logoImage,
+    logo: merged.logo || merged.logoImage || merged.logoUrl,
     logoPosition: merged.logoPosition,
     logoSize: merged.logoSize
   };
@@ -40,21 +46,24 @@ function normalizeLoadingScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.loadingScreen || {};
   // templateSettings を最優先、次にプロジェクト直下（loading / loadingScreen）
   const tplMapped = {
-    backgroundColor: tpl.backgroundColor,
+    backgroundColor: tpl.backgroundColor || tpl.bgColor,
     textColor: tpl.textColor,
     progressColor: tpl.progressColor,
-    message: tpl.message || tpl.loadingMessage,
+    message: tpl.message || tpl.loadingMessage || tpl.text,
     showProgress: tpl.showProgress,
-    logo: tpl.logo,
+    logo: tpl.logo || tpl.image,
     logoPosition: tpl.logoPosition,
     logoSize: tpl.logoSize,
-    textPosition: tpl.textPosition
+    textPosition: tpl.textPosition,
+    background: tpl.background || tpl.backgroundImage
   };
   const directMapped = {
-    backgroundColor: direct.backgroundColor,
+    backgroundColor: direct.backgroundColor || direct.bgColor,
     textColor: direct.textColor,
-    message: direct.message,
-    image: direct.image || direct.logo
+    message: direct.message || direct.text,
+    image: direct.image || direct.logo,
+    logo: direct.logo || direct.image,
+    background: direct.background || direct.backgroundImage
   };
   const merged = shallowMerge(base, directMapped, tplMapped);
   return merged;
@@ -64,15 +73,20 @@ function normalizeGuideScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.guideScreen || {};
   const merged = shallowMerge(base, direct, tpl);
   // marker画像と文言にフォーカスして正規化
-  const markerSrc = merged.marker?.src || merged.markerImageUrl || merged.guideImage || merged.imageUrl;
+  const markerSrc = merged.marker?.src || merged.markerImage || merged.markerImageUrl || merged.guideImage || merged.imageUrl;
+  const bgImage = merged.backgroundImage || merged.background || merged.bg;
+
   return {
-    backgroundColor: merged.backgroundColor,
+    backgroundColor: merged.backgroundColor || merged.bgColor,
     textColor: merged.textColor,
+    background: bgImage,
     mode: merged.mode || (direct.mode),
     title: merged.title || merged.surfaceDetection?.title || merged.worldTracking?.title,
     description: merged.description || merged.surfaceDetection?.description || merged.worldTracking?.description,
     message: merged.message, // 旧API互換
-    marker: markerSrc ? { src: markerSrc } : undefined
+    marker: markerSrc ? { src: markerSrc } : undefined,
+    // apply-project-design.jsとの互換性
+    markerImage: markerSrc
   };
 }
 

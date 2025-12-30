@@ -3230,11 +3230,35 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         } else {
           console.log('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
           // 2) マーカー画像から .patt を生成
-          const rawUrl = currentProject?.markerImage || currentProject?.markerImageUrl || currentProject?.marker?.url || null;
+          // 複数の場所からマーカー画像URLを探す
+          const rawUrl = currentProject?.markerImage
+            || currentProject?.markerImageUrl
+            || currentProject?.marker?.url
+            || currentProject?.marker?.src
+            || currentProject?.guide?.marker?.src
+            || currentProject?.guide?.markerImage
+            || currentProject?.screens?.[0]?.marker?.src
+            || null;
           console.log('🔍 マーカー画像URL:', rawUrl);
+
           if (rawUrl) {
-            // 絶対URL化
-            const absUrl = (() => { try { return new URL(rawUrl, currentProject.__sourceUrl || location.href).href; } catch { return rawUrl; } })();
+            // 絶対URL化（プロジェクトの__sourceUrlを基準に）
+            const baseUrl = currentProject.__sourceUrl || location.href;
+            let absUrl;
+            try {
+              // 相対パス（assets/marker.png等）を絶対URLに変換
+              if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:') || rawUrl.startsWith('data:')) {
+                absUrl = rawUrl;
+              } else if (rawUrl.startsWith('/')) {
+                absUrl = new URL(rawUrl, location.origin).href;
+              } else {
+                // プロジェクトフォルダからの相対パス
+                const projectFolder = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+                absUrl = new URL(rawUrl, projectFolder).href;
+              }
+            } catch {
+              absUrl = rawUrl;
+            }
             console.log('🔗 絶対URL化されたマーカー画像:', absUrl);
             console.log('🔄 マーカーパターン生成開始...');
             const patternString = await generateMarkerPatternFromImage(absUrl).catch((err) => {
@@ -3251,7 +3275,21 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
               console.warn('⚠️ マーカーパターン生成に失敗しました');
             }
           } else {
-            console.warn('⚠️ マーカー画像URLが見つかりません');
+            console.warn('⚠️ マーカー画像URLが見つかりません - フォールバック画像を使用します');
+            // フォールバック: サンプル画像からパターンを生成
+            try {
+              const fallbackUrl = '/assets/sample.png';
+              console.log('🔄 フォールバック画像からマーカーパターン生成:', fallbackUrl);
+              const patternString = await generateMarkerPatternFromImage(fallbackUrl);
+              if (patternString) {
+                const patt = createPatternBlob(patternString);
+                markerUrlOption = patt.url;
+                markerPatternCleanup = patt.revoke;
+                console.log('✅ フォールバック画像からマーカーパターン生成成功');
+              }
+            } catch (fallbackErr) {
+              console.error('❌ フォールバック画像からのパターン生成も失敗:', fallbackErr);
+            }
           }
         }
       } catch (genErr) {
