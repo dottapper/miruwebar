@@ -1333,6 +1333,23 @@ export default function showARViewer(container) {
       height: 100%;
       z-index: 1;
       overflow: hidden;
+      background: #000; /* カメラが表示されるまでのフォールバック */
+    }
+    
+    /* カメラ映像のスタイルを確実に適用 */
+    .ar-host video,
+    .ar-host canvas {
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      z-index: 0 !important;
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      background: #000 !important;
     }
 
     .ar-start-screen {
@@ -1837,7 +1854,20 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         break;
 
       case screenStates.AR:
-        // AR画面
+        // AR画面 - 他の画面を確実に非表示にして、ARコンテンツを表示
+        // スタート画面、ローディング画面、ガイド画面を非表示
+        if (startScreen) startScreen.style.display = 'none';
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        if (guideScreen) guideScreen.style.display = 'none';
+        
+        // ARホストコンテナを確実に表示
+        if (arHost) {
+          arHost.style.display = 'block';
+          arHost.style.zIndex = '1';
+          arHost.style.visibility = 'visible';
+        }
+        
+        // マーカーガイドの表示
         if (hasCustomMarkerGuide) {
           // プロジェクトのカスタムガイドを優先表示
           if (guideScreen) guideScreen.style.display = 'flex';
@@ -1855,6 +1885,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             console.warn('⚠️ AR画面要素が見つかりません');
           }
         }
+        console.log('✅ AR画面を表示（他の画面を非表示）');
         break;
 
       case screenStates.ERROR:
@@ -3230,15 +3261,20 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       console.log('🎯 最終的なmarkerUrlOption:', markerUrlOption);
 
-      // markerUrlOptionがnullの場合は、既定のHiroマーカー(.patt)を使う
-      // undefinedではなくnullを渡すことで、MarkerARがデフォルト値を使うようになる
+      // ⚠️ 重要: HIROマーカーへのフォールバック禁止 (docs/MARKER_POLICY.md 参照)
+      // カスタムマーカーが設定されていない場合は警告を表示
+      if (!markerUrlOption) {
+        console.warn('⚠️ カスタムマーカーが設定されていません');
+        console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください');
+      }
+      
       const finalMarkerUrl = markerUrlOption || null;
       console.log('🎯 AREngineAdapter.create()に渡すmarkerUrl:', finalMarkerUrl);
 
       const arEngine = await AREngineAdapter.create({
         container: arHost,
         preferredEngine: 'marker',
-        // MarkerAR にカスタムマーカーを渡す（nullなら既定の /arjs/patt.hiro にフォールバック）
+        // MarkerAR にカスタムマーカーを渡す（nullならサンプル画像にフォールバック）
         markerUrl: finalMarkerUrl
       });
 
@@ -3357,7 +3393,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (guideDescription) guideDescription.textContent = '床や机の表面を見つけて、画面をタップして配置してください';
     } else {
       if (guideTitle) guideTitle.textContent = 'マーカーをスキャンしてください';
-      if (guideDescription) guideDescription.textContent = 'Hiroマーカーをカメラにかざしてください';
+      if (guideDescription) guideDescription.textContent = 'マーカー画像をカメラにかざしてください';
     }
 
     // 画面状態遷移を強制（ガイドを可視化）

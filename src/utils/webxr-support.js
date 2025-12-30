@@ -163,7 +163,7 @@ export function getRecommendedFallback(support) {
       type: 'marker',
       message: 'iPhone SafariではマーカーARが利用可能です',
       action: 'マーカーARでスキャン開始',
-      detail: 'Hiroマーカーをカメラにかざしてください'
+      detail: 'マーカー画像をカメラにかざしてください'
     };
   }
 

@@ -1,24 +1,29 @@
-Place AR.js assets here for offline/local usage:
+AR.js Assets - ローカルオフライン使用
 
-Required files:
- - camera_para.dat (ARToolKit camera parameters)
- - patt.hiro (default marker pattern) or your custom .patt
+=== ⚠️ 重要: HIROマーカー使用禁止 ===
+このプロジェクトでは、patt.hiro（HIROマーカー）の使用を禁止しています。
+ユーザーがアップロードしたカスタム画像のみをマーカーとして使用します。
+詳細は docs/MARKER_POLICY.md を参照してください。
 
-Recommended sources (pick one and download):
- - Primary CDN (may be flaky):
-   - https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/camera_para.dat
-   - https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/three.js/data/patt.hiro
- - Fallback (raw GitHub):
-   - https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/camera_para.dat
-   - https://raw.githubusercontent.com/artoolkitx/jsartoolkit5/master/examples/Three.js/data/patt.hiro
+patt.hiro ファイルは互換性テスト用に残していますが、
+本番環境では使用されません。
 
-After placing, they will be served at:
- - /arjs/camera_para.dat
- - /arjs/patt.hiro
+=== 必須ファイル ===
+- camera_para.dat: ARToolKit カメラパラメータ
+  ※ このファイルはAR.jsの初期化に必要です
 
-These paths are used automatically by the MarkerAR implementation.
+=== カスタムマーカー ===
+カスタムマーカーは以下の流れで処理されます：
+1. ユーザーが画像をアップロード
+2. src/utils/marker-utils.js で .patt 形式に変換
+3. Blob URL として MarkerAR に渡される
 
-Notes:
- - If a CDN returns an HTML error page (e.g. "Couldn't find the requested file"), the app now detects and skips it.
- - Valid file sizes are typically >1KB for `camera_para.dat` and >256B for `patt.hiro`.
- - If you replace these files, make sure your server serves them as static files without redirects.
+=== 提供されるパス ===
+- /arjs/camera_para.dat - カメラパラメータ（必須）
+- /arjs/patt.hiro - HIROマーカー（使用禁止・互換性テスト用）
+- /arjs/ar-threex.js - AR.jsライブラリ
+
+=== 注意事項 ===
+- CDNがHTMLエラーページを返す場合、アプリはそれを検出してスキップします
+- camera_para.dat は通常 1KB以上のサイズが必要です
+- サーバーはこれらのファイルをリダイレクトなしで静的配信する必要があります

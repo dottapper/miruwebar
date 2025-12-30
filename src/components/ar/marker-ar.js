@@ -20,10 +20,11 @@ export class MarkerAR extends AREngineInterface {
       'markerUrlの型': typeof options.markerUrl,
       'markerUrlが存在': !!options.markerUrl
     });
-    this.options = {
+      this.options = {
       sourceType: 'webcam',
       // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
-      markerUrl: options.markerUrl || '/arjs/patt.hiro',
+      // nullの場合は後でresolveAssetUrlで解決される
+      markerUrl: options.markerUrl !== undefined ? options.markerUrl : null,
       // カメラパラメータ（まずローカル同梱を優先し、CDNはフォールバック）
       cameraParametersUrl: options.cameraParametersUrl || '/arjs/camera_para.dat',
       worldScale: options.worldScale || 1.0,
@@ -167,13 +168,26 @@ export class MarkerAR extends AREngineInterface {
         'https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/camera_para.dat',
         'https://jeromeetienne.github.io/AR.js/data/camera_para.dat'
       ]);
-      this.options.markerUrl = await this.resolveAssetUrl([
-        '/arjs/patt.hiro',
-        this.options.markerUrl, // カスタム指定があれば次候補
-        'https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/patt.hiro',
-        'https://cdn.jsdelivr.net/npm/ar.js@2.2.2/data/patt.hiro', 
-        'https://jeromeetienne.github.io/AR.js/data/patt.hiro'
-      ]);
+      // マーカーURL解決（カスタムマーカー必須 - HIROマーカーへのフォールバック禁止）
+      // ⚠️ 重要: docs/MARKER_POLICY.md を参照
+      const markerCandidates = [];
+      if (this.options.markerUrl) {
+        // カスタムマーカーを最優先
+        markerCandidates.push(this.options.markerUrl);
+      }
+      // フォールバックはプロジェクト内のサンプル画像のみ（HIROマーカー禁止）
+      markerCandidates.push(
+        '/assets/sample.png',
+        '/assets/logo.png'
+      );
+      
+      // カスタムマーカーが設定されていない場合は警告を表示
+      if (!this.options.markerUrl) {
+        console.warn('⚠️ カスタムマーカーが設定されていません。サンプル画像を使用します。');
+        console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください。');
+      }
+      
+      this.options.markerUrl = await this.resolveAssetUrl(markerCandidates);
       console.log('✅ アセットURL解決完了');
 
       this.dlog('🔗 解決したアセットURL:', {
@@ -482,7 +496,8 @@ export class MarkerAR extends AREngineInterface {
                 camEl.style.display = 'block';
                 camEl.style.visibility = 'visible';
                 camEl.style.opacity = '1';
-                camEl.style.backgroundColor = 'transparent'; // 背景を透明に
+                camEl.style.backgroundColor = '#000'; // 背景を黒に（カメラが表示されるまでのフォールバック）
+                camEl.style.pointerEvents = 'none'; // タッチイベントを透過
                 
                 // コンテナの最初の子要素として挿入（最背面）
                 if (this.container.firstChild) {
@@ -498,18 +513,49 @@ export class MarkerAR extends AREngineInterface {
                 camEl.style.display = 'block';
                 camEl.style.visibility = 'visible';
                 camEl.style.opacity = '1';
+                camEl.style.position = 'absolute';
+                camEl.style.top = '0';
+                camEl.style.left = '0';
+                camEl.style.width = '100%';
+                camEl.style.height = '100%';
+                camEl.style.objectFit = 'cover';
+                camEl.style.backgroundColor = '#000';
+                camEl.style.pointerEvents = 'none';
               } else {
                 console.error('❌ カメラDOM要素が存在しません');
               }
-              // iOS/Safari での再生ガード
+              // iOS/Safari での再生ガード（強化版）
               if (camEl && typeof camEl.play === 'function') {
-                const tryPlay = async () => {
-                  try { await camEl.play(); } catch (e) { console.warn('⚠️ カメラ映像の再生に失敗（再試行）:', e?.message); }
+                const tryPlay = async (retryCount = 0) => {
+                  try {
+                    if (camEl.paused) {
+                      await camEl.play();
+                      console.log('✅ カメラ映像の再生成功');
+                    } else {
+                      console.log('ℹ️ カメラ映像は既に再生中');
+                    }
+                  } catch (e) {
+                    console.warn(`⚠️ カメラ映像の再生に失敗（試行 ${retryCount + 1}/3）:`, e?.message);
+                    if (retryCount < 2) {
+                      setTimeout(() => tryPlay(retryCount + 1), 500);
+                    } else {
+                      console.error('❌ カメラ映像の再生に3回失敗しました');
+                    }
+                  }
                 };
-                camEl.addEventListener('loadedmetadata', tryPlay, { once: true });
-                camEl.addEventListener('canplay', tryPlay, { once: true });
+                
+                // 複数のイベントで再生を試行
+                camEl.addEventListener('loadedmetadata', () => tryPlay(), { once: true });
+                camEl.addEventListener('canplay', () => tryPlay(), { once: true });
+                camEl.addEventListener('loadeddata', () => tryPlay(), { once: true });
+                
                 // すでにメタデータがあれば即再生
-                tryPlay();
+                if (camEl.readyState >= 2) {
+                  tryPlay();
+                } else {
+                  // メタデータがまだない場合、少し待ってから再試行
+                  setTimeout(() => tryPlay(), 100);
+                }
               }
             } catch (e) {
               console.warn('⚠️ カメラDOM要素の配置に失敗（続行）:', e);

@@ -1,4 +1,4 @@
-import "./chunk-VUNV25KB.js";
+import "./chunk-KVCYZR2Q.js";
 
 // node_modules/uuid/dist/esm-browser/max.js
 var max_default = "ffffffff-ffff-ffff-ffff-ffffffffffff";

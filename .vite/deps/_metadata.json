@@ -1,37 +1,43 @@
 {
-  "hash": "05e2f60a",
+  "hash": "b6f05c01",
   "configHash": "1732d227",
-  "lockfileHash": "1a41da97",
-  "browserHash": "c9053165",
+  "lockfileHash": "03b8d09c",
+  "browserHash": "7ea69638",
   "optimized": {
     "uuid": {
       "src": "../../node_modules/uuid/dist/esm-browser/index.js",
       "file": "uuid.js",
-      "fileHash": "31076dbd",
+      "fileHash": "bbd2c324",
       "needsInterop": false
     },
     "idb-keyval": {
       "src": "../../node_modules/idb-keyval/dist/index.js",
       "file": "idb-keyval.js",
-      "fileHash": "a3823dfd",
+      "fileHash": "193ece9a",
       "needsInterop": false
     },
     "qrcode": {
       "src": "../../node_modules/qrcode/lib/browser.js",
       "file": "qrcode.js",
-      "fileHash": "d77c1f73",
+      "fileHash": "7e47e25c",
       "needsInterop": true
     },
     "jszip": {
       "src": "../../node_modules/jszip/dist/jszip.min.js",
       "file": "jszip.js",
-      "fileHash": "37e8927b",
+      "fileHash": "84c533a8",
       "needsInterop": true
+    },
+    "@ar-js-org/ar.js-threejs": {
+      "src": "../../node_modules/@ar-js-org/ar.js-threejs/dist/ar.mjs",
+      "file": "@ar-js-org_ar__js-threejs.js",
+      "fileHash": "ae8f64e8",
+      "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-VUNV25KB": {
-      "file": "chunk-VUNV25KB.js"
+    "chunk-KVCYZR2Q": {
+      "file": "chunk-KVCYZR2Q.js"
     }
   }
 }
