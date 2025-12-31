@@ -346,6 +346,13 @@ async function bootFromQR() {
   if (__booted) return;
   __booted = true;
 
+  // ★ projectSrcの存在チェック（早期リターン）
+  const projectSrc = getProjectSrc();
+  if (!projectSrc) {
+    console.info('[BOOT] projectSrc not found, skipping bootFromQR');
+    return;
+  }
+
   try {
     const project = await loadProjectFromQR();
     if (!project) {
