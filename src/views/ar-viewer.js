@@ -136,6 +136,25 @@ import { extractDesign } from '../utils/design-extractor.js';
     }
   });
 
+  // console.error もキャプチャ
+  const originalConsoleError = console.error;
+  console.error = function(...args) {
+    originalConsoleError.apply(console, args);
+    log('');
+    log('❌ Console Error:');
+    args.forEach(arg => {
+      if (arg instanceof Error) {
+        log('  ' + arg.name + ': ' + arg.message);
+        if (arg.stack) {
+          const stackLines = arg.stack.split('\n').slice(0, 3);
+          stackLines.forEach(line => log('    ' + line.trim()));
+        }
+      } else {
+        log('  ' + String(arg));
+      }
+    });
+  };
+
   // 閉じるボタンを追加
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '✕ 閉じる';
