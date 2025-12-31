@@ -21,10 +21,15 @@ import { extractDesign } from '../utils/design-extractor.js';
 // ============================================================
 (function deepDiag(){
   const box = document.createElement('pre');
-  box.style.cssText = 'position:fixed;inset:auto 8px 8px 8px;z-index:99998;max-height:45vh;overflow:auto;background:rgba(0,0,0,.85);color:#0f0;padding:10px;font:12px/1.5 monospace;border:1px solid #0f0';
-  box.textContent = '[diag] running...\n';
+  box.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;z-index:99998;max-height:50vh;overflow:auto;background:rgba(0,0,0,.95);color:#0ff;padding:12px;font:13px/1.6 monospace;border:2px solid #0ff;border-radius:8px;box-shadow:0 4px 12px rgba(0,255,255,0.3)';
+  box.textContent = '[🔍 診断パネル] 初期化中...\n\n';
   document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(box));
-  const log=(...a)=>{ console.log('[diag]',...a); box.textContent += a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ')+'\n'; };
+  const log=(...a)=>{
+    console.log('[diag]',...a);
+    const msg = a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ')+'\n';
+    box.textContent += msg;
+    box.scrollTop = box.scrollHeight; // 自動スクロール
+  };
 
   try {
     const href = window.location.href;
@@ -85,14 +90,33 @@ import { extractDesign } from '../utils/design-extractor.js';
         } catch(e) { log('!! JSON parse error=', String(e)); }
       } catch(e) { log('!! GET error=', String(e)); }
     }
-    // 診断プローブは ?debug=diag パラメータがある場合のみ実行（重複fetch回避）
-    const enableDiag = getParam('debug') === 'diag';
-    if (enableDiag) {
+    // 診断プローブは常に実行（デバッグのため）
+    log('🔍 プロジェクト読み込み開始...');
+    if (srcUrl) {
       probe(srcUrl);
-    } else {
-      log('diag probe disabled (add ?debug=diag to enable)');
     }
-  } catch(e) { console.error(e); }
+
+    // bootFromQR完了を監視
+    window.addEventListener('bootFromQRCompleted', (e) => {
+      log('✅ bootFromQR完了:', e.detail);
+    });
+
+    // 初期化の進行状況を監視
+    setInterval(() => {
+      const status = {
+        '__bootFromQR_completed': !!window.__bootFromQR_completed,
+        '__project': !!window.__project,
+        '__viewer_booted': !!window.__viewer_booted
+      };
+      if (Object.values(status).some(v => v)) {
+        log('📊 初期化状態:', status);
+      }
+    }, 2000);
+
+  } catch(e) {
+    log('❌ 診断エラー:', String(e));
+    console.error(e);
+  }
 })();
 // ============================================================
 
@@ -1681,6 +1705,7 @@ export default function showARViewer(container) {
 
 // 統合ARビューアの初期化関数
 async function initIntegratedARViewer(container, projectSrc, options = {}) {
+  console.log('[🚀 initIntegratedARViewer] 開始:', { projectSrc, options });
   arViewerLogger.info('ARビューア初期化開始:', { projectSrc, options });
   const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false, engineOverride = null } = options;
   const loadingScreen = container.querySelector('#ar-loading-screen');
