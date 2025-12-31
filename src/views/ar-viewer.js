@@ -213,7 +213,8 @@ import { extractDesign } from '../utils/design-extractor.js';
       log('');
       log('🌐 プロジェクト読み込み中...');
       try {
-        const r = await fetchOnce(u, {cache:'no-store'});
+        // 診断用なので通常のfetchを使用（fetchOnceはキャッシュに登録されて本番ロードをブロックする）
+        const r = await fetch(u, {cache:'no-store'});
         log('  ✅ HTTP ' + r.status + ' ' + r.statusText);
         const txt = await r.text();
         try {
