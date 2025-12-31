@@ -47,21 +47,36 @@ import { extractDesign } from '../utils/design-extractor.js';
   `.replace(/\s+/g, ' ');
   box.textContent = '[🔍 診断パネル] 初期化中...\n\n';
 
-  // DOM準備を確実に待つ
+  // DOM準備を確実に待つ（複数の方法で試行）
   const appendBox = () => {
     if (document.body) {
-      document.body.appendChild(box);
+      // 既存の診断パネルがあれば削除
+      const existing = document.getElementById('deep-diag-panel');
+      if (existing) existing.remove();
+
+      document.body.insertBefore(box, document.body.firstChild);
       console.log('[diag] 診断パネル表示完了');
+
+      // 強制的に最前面に表示
+      setTimeout(() => {
+        box.style.zIndex = '2147483647';
+        box.style.display = 'block';
+      }, 100);
     } else {
       setTimeout(appendBox, 50);
     }
   };
 
+  // 即座に試行
+  appendBox();
+
+  // DOMContentLoadedでも試行
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', appendBox);
-  } else {
-    appendBox();
   }
+
+  // window.onloadでも試行
+  window.addEventListener('load', appendBox);
 
   let logBuffer = [];
   const log=(...a)=>{
@@ -224,8 +239,26 @@ import { extractDesign } from '../utils/design-extractor.js';
 
   } catch(e) {
     log('❌ 診断エラー:', String(e));
-    console.error(e);
+    console.error('[diag] 診断エラー:', e);
   }
+
+  // 5秒後にパネルが表示されていなければコンソールに警告
+  setTimeout(() => {
+    const panel = document.getElementById('deep-diag-panel');
+    if (!panel || !document.body.contains(panel)) {
+      console.error('❌❌❌ 診断パネルが表示されていません！ ❌❌❌');
+      console.error('コンソールログを確認してください。');
+      console.error('[diag]で検索すると診断情報が見つかります。');
+
+      // 最後の手段：alertで表示
+      const srcParam = new URLSearchParams(window.location.search).get('src') ||
+                       new URLSearchParams(window.location.hash.split('?')[1] || '').get('src');
+
+      if (!srcParam) {
+        alert('❌ エラー検出\n\nプロジェクトURL(src)が見つかりません。\n\nQRコードを再度スキャンしてください。');
+      }
+    }
+  }, 5000);
 })();
 // ============================================================
 
