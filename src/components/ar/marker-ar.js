@@ -384,30 +384,37 @@ export class MarkerAR extends AREngineInterface {
       window_REVISION: window.THREE.REVISION
     });
 
-    // AR.js が既に読み込まれているかチェック（index.htmlで読み込み済みのはず）
+    // AR.js が既に読み込まれているかチェック
     if (window.THREEx && window.THREEx.ArToolkitSource) {
       console.log('📦 AR.js は既に読み込み済み (window.THREEx.ArToolkitSource available)');
       return;
     }
 
-    // index.htmlでの読み込みを待つ（最大3秒）
-    console.log('⏳ AR.jsライブラリの読み込みを待機中...');
-    const maxWait = 3000;
-    const startTime = Date.now();
-
-    while (!window.THREEx || !window.THREEx.ArToolkitSource) {
-      if (Date.now() - startTime > maxWait) {
-        console.error('❌ AR.jsライブラリが3秒待っても読み込まれませんでした');
-        console.error('📍 確認事項:');
-        console.error('  - index.htmlに <script src="/arjs/ar-threex.js"></script> が存在するか');
-        console.error('  - /arjs/ar-threex.js ファイルが存在するか');
-        console.error('  - ブラウザコンソールに読み込みエラーが出ていないか');
-        throw new Error('AR.js ライブラリの読み込みに失敗しました (タイムアウト)');
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
+    // Three.js が確実に設定された後に ar-threex.js を動的に読み込む
+    console.log('📦 AR.js ライブラリを動的読み込み開始...');
+    
+    // window.THREE が確実に設定されていることを確認
+    if (!window.THREE || !window.THREE.EventDispatcher) {
+      throw new Error('Three.js が正しく設定されていません。window.THREE.EventDispatcher が見つかりません。');
     }
 
-    console.log('✅ AR.js ライブラリ読み込み成功 (THREEx available)');
+    try {
+      // ar-threex.js を動的に読み込む
+      await this.loadScript('/arjs/ar-threex.js');
+      console.log('✅ AR.js ライブラリ読み込み成功 (THREEx available)');
+      
+      // 読み込み後の確認
+      if (!window.THREEx || !window.THREEx.ArToolkitSource) {
+        throw new Error('AR.js ライブラリの読み込みは完了しましたが、THREEx.ArToolkitSource が見つかりません。');
+      }
+    } catch (error) {
+      console.error('❌ AR.js ライブラリの読み込みに失敗しました:', error);
+      console.error('📍 確認事項:');
+      console.error('  - /arjs/ar-threex.js ファイルが存在するか');
+      console.error('  - Three.js が正しく読み込まれているか');
+      console.error('  - ブラウザコンソールに読み込みエラーが出ていないか');
+      throw new Error(`AR.js ライブラリの読み込みに失敗しました: ${error.message}`);
+    }
   }
 
   /**
