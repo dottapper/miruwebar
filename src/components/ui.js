@@ -799,6 +799,10 @@ export async function showQRCodeModal(options = {}) {
           modelData: projectData.modelData || [],
           loadingScreen: projectData.loadingScreen || null,
           startScreen: projectData.startScreen || null,
+          guideScreen: projectData.guideScreen || null,
+          theme: projectData.theme || null,
+          markerImage: projectData.markerImage || projectData.markerImageUrl || null,
+          markerPattern: projectData.markerPattern || null,
           arSettings: projectData.arSettings || {}
         });
 
