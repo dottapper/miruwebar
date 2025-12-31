@@ -63,20 +63,39 @@ import { extractDesign } from '../utils/design-extractor.js';
     appendBox();
   }
 
+  let logBuffer = [];
   const log=(...a)=>{
     console.log('[diag]',...a);
-    const msg = a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ')+'\n';
-    box.textContent += msg;
-    box.scrollTop = box.scrollHeight; // 自動スクロール
+    const msg = a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ');
+    logBuffer.push(msg);
+
+    // 最新20行のみ表示（スクロール削減）
+    if (logBuffer.length > 20) {
+      logBuffer = logBuffer.slice(-20);
+    }
+
+    box.textContent = '[🔍 診断パネル - 問題診断中]\n\n' + logBuffer.join('\n');
+    box.scrollTop = box.scrollHeight;
   };
+
+  // 閉じるボタンを追加
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ 閉じる';
+  closeBtn.style.cssText = 'position:absolute;top:8px;right:8px;padding:4px 12px;background:#ff4444;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;z-index:1';
+  closeBtn.onclick = () => box.style.display = 'none';
+  box.style.position = 'relative';
+  setTimeout(() => box.appendChild(closeBtn), 100);
 
   try {
     const href = window.location.href;
     const search = new URL(href).search;
     const hash = window.location.hash;
-    log('href=',href);
-    log('search=',search || '(empty)');
-    log('hash=',hash || '(empty)');
+    log('========================================');
+    log('📍 URL情報:');
+    log('  Full URL: ' + href.substring(0, 100) + (href.length > 100 ? '...' : ''));
+    log('  Query: ' + (search || '(なし)'));
+    log('  Hash: ' + (hash || '(なし)'));
+    log('========================================');
 
     function getParam(name){
       const u = new URL(window.location.href);
@@ -92,98 +111,114 @@ import { extractDesign } from '../utils/design-extractor.js';
       return null;
     }
     const raw = getParam('src');
-    log('param.src(raw)=', String(raw));
+    log('');
+    log('🔍 プロジェクトソース:');
+    if (raw) {
+      log('  ✅ srcパラメータ検出');
+      log('  URL: ' + String(raw).substring(0, 80) + '...');
+    } else {
+      log('  ❌ srcパラメータなし');
+      log('  → これが原因で初期化できません');
+    }
 
     let srcUrl = null;
     if (raw) {
-      try { srcUrl = new URL(raw, window.location.origin).toString(); }
-      catch(e) { log('!! new URL failed:', String(e)); }
-    }
-    log('param.src(normalized)=', String(srcUrl));
-
-    if (srcUrl) {
-      const so = (new URL(srcUrl)).origin === window.location.origin;
-      log('sameOrigin=', String(so), 'origin=', (new URL(srcUrl)).origin, 'self=', window.location.origin);
-    } else {
-      log('!! srcUrl が空。URL生成/ハッシュ位置を再確認');
+      try {
+        srcUrl = new URL(raw, window.location.origin).toString();
+        log('  ✅ URL正規化成功');
+      } catch(e) {
+        log('  ❌ URL正規化失敗: ' + String(e));
+      }
     }
 
     async function probe(u){
       if (!u) return;
-      try {
-        const h = await fetchOnce(u, {method:'HEAD', cache:'no-store'});
-        log('HEAD status=', h.status, h.statusText);
-      } catch(e) { log('!! HEAD error=', String(e)); }
+      log('');
+      log('🌐 プロジェクト読み込み中...');
       try {
         const r = await fetchOnce(u, {cache:'no-store'});
-        log('GET status=', r.status, r.statusText, 'content-type=', r.headers.get('content-type'));
+        log('  ✅ HTTP ' + r.status + ' ' + r.statusText);
         const txt = await r.text();
-        log('body(first 300)=\n' + txt.slice(0,300));
         try {
           const json = JSON.parse(txt);
-          log('json.keys=', Object.keys(json).slice(0,20));
+          log('  ✅ JSON解析成功');
           const required = ['version','screens','theme','start'];
           const missing = required.filter(k=> !(k in json));
-          if (missing.length) log('!! schema missing=', missing);
-          else log('schema OK (required fields present)');
-        } catch(e) { log('!! JSON parse error=', String(e)); }
-      } catch(e) { log('!! GET error=', String(e)); }
+          if (missing.length) {
+            log('  ❌ 必須フィールド不足: ' + missing.join(', '));
+          } else {
+            log('  ✅ スキーマ検証OK');
+            log('  プロジェクト情報:');
+            log('    - version: ' + json.version);
+            log('    - theme: ' + (json.theme?.name || '(なし)'));
+          }
+        } catch(e) {
+          log('  ❌ JSON解析エラー: ' + String(e));
+          log('  レスポンス(先頭): ' + txt.slice(0, 100));
+        }
+      } catch(e) {
+        log('  ❌ 読み込みエラー: ' + String(e));
+      }
     }
-    // 診断プローブは常に実行（デバッグのため）
-    log('🔍 プロジェクト読み込み開始...');
-
-    // 初期診断情報を表示
-    log('📋 初期診断:');
-    log('  - URLにsrcパラメータあり:', !!raw);
-    log('  - 正規化されたsrcURL:', srcUrl || '(なし)');
-
-    if (!srcUrl) {
-      log('❌ 致命的エラー: srcパラメータが見つかりません');
-      log('');
-      log('確認事項:');
-      log('1. URLに ?src=... パラメータが含まれているか');
-      log('2. ハッシュ内に ?src=... パラメータがあるか (#/viewer?src=...)');
-      log('');
-      log('現在のURL形式:', window.location.href);
-    }
-
     if (srcUrl) {
       probe(srcUrl);
+    } else {
+      log('');
+      log('❌ エラー: プロジェクトURLが見つかりません');
+      log('');
+      log('💡 解決方法:');
+      log('  1. QRコードを再度スキャンしてください');
+      log('  2. URLに ?src=... が含まれているか確認');
+      log('');
     }
 
     // bootFromQR完了を監視
     window.addEventListener('bootFromQRCompleted', (e) => {
-      log('✅ bootFromQR完了:', e.detail);
+      log('');
+      log('========================================');
+      log('✅ プロジェクト初期化完了！');
+      log('========================================');
     });
 
-    // 初期化の進行状況を監視（3秒後から開始）
+    // 初期化の進行状況を監視
     let checkCount = 0;
+    let lastStatus = '';
     const checkInterval = setInterval(() => {
       checkCount++;
-      const status = {
-        '__bootFromQR_completed': !!window.__bootFromQR_completed,
-        '__project': !!window.__project,
-        '__viewer_booted': !!window.__viewer_booted
-      };
+      const bootCompleted = !!window.__bootFromQR_completed;
+      const projectLoaded = !!window.__project;
+      const viewerBooted = !!window.__viewer_booted;
 
-      const hasAnyProgress = Object.values(status).some(v => v);
+      const statusStr = `boot:${bootCompleted} proj:${projectLoaded} view:${viewerBooted}`;
 
-      if (hasAnyProgress) {
-        log(`📊 初期化状態 (${checkCount}回目):`, status);
-      } else if (checkCount >= 3) {
-        log(`⚠️ 警告: ${checkCount * 2}秒経過しても初期化が開始されません`);
-        log('考えられる原因:');
-        log('  - bootFromQR関数が実行されていない');
-        log('  - srcパラメータが正しく取得できていない');
-        log('  - プロジェクトの読み込みでエラーが発生している');
+      // 状態が変化した時だけログ出力
+      if (statusStr !== lastStatus) {
+        log('');
+        log(`⏱️  ${checkCount * 2}秒経過 - 状態:`);
+        if (bootCompleted) log('  ✅ bootFromQR完了');
+        if (projectLoaded) log('  ✅ プロジェクト読み込み完了');
+        if (viewerBooted) log('  ✅ ビューア起動完了');
+
+        if (!bootCompleted && !projectLoaded) {
+          log('  ⏳ 初期化待機中...');
+        }
+
+        lastStatus = statusStr;
+      }
+
+      // 15秒経過しても進展がない場合
+      if (checkCount >= 7 && !bootCompleted && !projectLoaded) {
+        log('');
+        log('⚠️ 初期化が進んでいません');
+        log('');
+        log('💡 上記の診断情報をスクリーンショットで');
+        log('   開発者に送信してください');
+        clearInterval(checkInterval);
       }
 
       // 10回チェックしたら停止
       if (checkCount >= 10) {
         clearInterval(checkInterval);
-        if (!hasAnyProgress) {
-          log('❌ 初期化タイムアウト: 20秒経過しても初期化されませんでした');
-        }
       }
     }, 2000);
 
