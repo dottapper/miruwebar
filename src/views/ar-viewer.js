@@ -93,6 +93,28 @@ import { extractDesign } from '../utils/design-extractor.js';
     box.scrollTop = box.scrollHeight;
   };
 
+  // グローバルエラーをキャッチ
+  window.addEventListener('error', (event) => {
+    log('');
+    log('❌ JavaScript エラー:');
+    log('  メッセージ: ' + event.message);
+    log('  ファイル: ' + event.filename);
+    log('  行: ' + event.lineno + ':' + event.colno);
+    if (event.error && event.error.stack) {
+      log('  スタック: ' + event.error.stack.split('\n').slice(0, 3).join('\n           '));
+    }
+  });
+
+  // Promise拒否をキャッチ
+  window.addEventListener('unhandledrejection', (event) => {
+    log('');
+    log('❌ Promise拒否:');
+    log('  理由: ' + (event.reason?.message || String(event.reason)));
+    if (event.reason?.stack) {
+      log('  スタック: ' + event.reason.stack.split('\n').slice(0, 3).join('\n           '));
+    }
+  });
+
   // 閉じるボタンを追加
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '✕ 閉じる';
