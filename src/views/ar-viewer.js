@@ -22,96 +22,6 @@ const dlog = (...args) => { if (IS_DEBUG) arViewerLogger.debug(...args); };
 
 const arViewerLogger = createLogger('ARViewer');
 
-// マーカーコントローラーの簡易実装（前方定義）
-const markerController = {
-  patterns: new Map(),
-  initialized: true, // 初期化フラグ
-
-  async addPattern(patternBlob) {
-    if (!this.initialized) {
-      throw new Error('markerController is not initialized');
-    }
-    if (!patternBlob) {
-      throw new Error('markerController.addPattern: patternBlob is required');
-    }
-    if (!patternBlob.size) {
-      throw new Error('markerController.addPattern: patternBlob must have size property');
-    }
-
-    try {
-      const patternId = `marker_${Date.now()}`;
-      this.patterns.set(patternId, {
-        type: 'pattern',
-        data: patternBlob,
-        timestamp: Date.now()
-      });
-      arViewerLogger.info(`[AR] pattern added: ${patternId}, size: ${patternBlob.size} bytes`);
-      return patternId;
-    } catch (error) {
-      arViewerLogger.error('[AR] Failed to add pattern:', error);
-      throw new Error(`markerController.addPattern failed: ${error.message}`);
-    }
-  },
-
-  async addImageMarker(imageData) {
-    if (!this.initialized) {
-      throw new Error('markerController is not initialized');
-    }
-    if (!imageData) {
-      throw new Error('markerController.addImageMarker: imageData is required');
-    }
-
-    try {
-      const markerId = `image_${Date.now()}`;
-      this.patterns.set(markerId, {
-        type: typeof imageData === 'string' ? 'url' : 'bitmap',
-        data: imageData,
-        timestamp: Date.now()
-      });
-
-      if (typeof imageData === 'string') {
-        arViewerLogger.info(`[AR] image marker (URL) added: ${markerId}, url: ${imageData}`);
-      } else if (imageData.width && imageData.height) {
-        arViewerLogger.info(`[AR] image marker (bitmap) added: ${markerId}, size: ${imageData.width}x${imageData.height}`);
-      } else {
-        arViewerLogger.info(`[AR] image marker added: ${markerId}`);
-      }
-      return markerId;
-    } catch (error) {
-      arViewerLogger.error('[AR] Failed to add image marker:', error);
-      throw new Error(`markerController.addImageMarker failed: ${error.message}`);
-    }
-  },
-
-  update() {
-    // マーカー検出の更新処理
-    // 実際のARライブラリに応じて実装
-    // 現在は何もしない（プレースホルダー）
-  },
-
-  getPattern(patternId) {
-    const pattern = this.patterns.get(patternId);
-    return pattern ? pattern.data : null;
-  },
-
-  getPatternInfo(patternId) {
-    return this.patterns.get(patternId);
-  },
-
-  removePattern(patternId) {
-    return this.patterns.delete(patternId);
-  },
-
-  // デバッグ用：登録済みパターン一覧
-  listPatterns() {
-    const list = [];
-    for (const [id, info] of this.patterns) {
-      list.push({ id, type: info.type, timestamp: info.timestamp });
-    }
-    return list;
-  }
-};
-
 let __booted = false;
 
 function navigateBackOrHome() {
@@ -129,17 +39,17 @@ function navigateBackOrHome() {
 
 // ★ スタートUI乗っ取り版（デザインを"本当に"表示させる）
 function __takeoverStartUI(project){
-  arViewerLogger.info('🔍 __takeoverStartUI 呼び出し:', { project });
+  dlog('🔍 __takeoverStartUI 呼び出し:', { project });
 
   const p = project || window.__project || {};
 
   // extractDesignで正規化されたデータを使用
   const { startScreen } = extractDesign(p);
-  arViewerLogger.info('🔍 正規化されたstartScreen:', startScreen);
+  dlog('🔍 正規化されたstartScreen:', startScreen);
 
   // 旧形式との互換性のため、両方のパスをチェック
   const start = p.start || p.startScreen || {};
-  arViewerLogger.info('🔍 生のstart設定:', start);
+  dlog('🔍 生のstart設定:', start);
 
   // 既存があれば消す
   document.getElementById('__dev_applied_proof__')?.remove();
@@ -161,14 +71,14 @@ function __takeoverStartUI(project){
     root.style.backgroundImage = `url(${bgImage})`;
     root.style.backgroundSize = 'cover';
     root.style.backgroundPosition = 'center';
-    arViewerLogger.info('✅ 背景画像を適用:', bgImage);
+    dlog('✅ 背景画像を適用:', bgImage);
   }
 
   // 背景色
   const bgColor = startScreen?.backgroundColor || start?.backgroundColor;
   if (bgColor) {
     root.style.backgroundColor = bgColor;
-    arViewerLogger.info('✅ 背景色を適用:', bgColor);
+    dlog('✅ 背景色を適用:', bgColor);
   }
 
   // タイトル
@@ -181,7 +91,7 @@ function __takeoverStartUI(project){
     `font-size:${32 * titleSize}px`,
     'font-weight:700','margin:0','text-shadow:0 2px 6px rgba(0,0,0,.4)'
   ].join(';');
-  arViewerLogger.info('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
+  dlog('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
 
   // 位置（%をvhで近似）
   const wrap = document.createElement('div');
@@ -200,7 +110,7 @@ function __takeoverStartUI(project){
     'border:none','cursor:pointer','box-shadow:0 8px 24px rgba(0,0,0,.25)',
     `background:${buttonColor}`,`color:${buttonTextColor}`,'font-size:16px','font-weight:600'
   ].join(';');
-  arViewerLogger.info('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
+  dlog('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
 
   btn.onclick = async (e)=>{
     e.stopPropagation();
@@ -748,162 +658,6 @@ async function normalizeProject(project, baseHref) {
   return project;
 }
 
-// ===== 1) pattern 生成 → 登録 =====
-async function prepareMarkerPipeline(project) {
-  console.time('[AR] pattern');
-
-  try {
-    // 画像取得
-    arViewerLogger.info('[AR] fetching marker image:', project.markerImageUrl);
-    const res = await fetchOnce(project.markerImageUrl, { mode: 'cors' });
-    if (!res.ok) {
-      throw new Error(`marker image fetch failed: ${res.status} ${res.statusText} - ${project.markerImageUrl}`);
-    }
-    
-    const imgBlob = await res.blob();
-    arViewerLogger.info('[AR] image blob size:', imgBlob.size, 'type:', imgBlob.type);
-
-    // 画像形式の検証
-    if (!imgBlob.type.startsWith('image/')) {
-      arViewerLogger.warn(`[AR] unexpected content type: ${imgBlob.type}, trying fallback`);
-      
-      // HTMLページが返された場合（404エラーなど）はフォールバック画像を使用
-      if (imgBlob.type === 'text/html') {
-        arViewerLogger.info('[AR] HTML response detected, trying fallback markers');
-        
-        // 複数のフォールバック画像を試す
-        const fallbackPaths = [
-          DEFAULT_MARKER_PATH,
-          '/assets/logo.png',
-          '/assets/main-low.jpg'
-        ];
-        
-        for (const fallbackPath of fallbackPaths) {
-          try {
-            const fallbackUrl = absolutizeUrl(fallbackPath, new URL('.', project.__sourceUrl || location.href));
-            arViewerLogger.info('[AR] trying fallback:', fallbackUrl);
-            
-            const fallbackRes = await fetchOnce(fallbackUrl, { mode: 'cors' });
-            if (fallbackRes.ok) {
-              const fallbackBlob = await fallbackRes.blob();
-              if (fallbackBlob.type.startsWith('image/')) {
-                arViewerLogger.info('[AR] using fallback marker image:', fallbackPath);
-                // フォールバック画像で処理を継続
-                const img = await createImageBitmap(fallbackBlob, {
-                  imageOrientation: 'none',
-                  premultiplyAlpha: 'none'
-                });
-
-                // markerController初期化チェック
-                if (!markerController || typeof markerController.addImageMarker !== 'function') {
-                  throw new Error('markerController is not properly initialized');
-                }
-                await markerController.addImageMarker(img);
-                console.timeEnd('[AR] pattern');
-                arViewerLogger.info('[AR] marker registered (fallback)');
-                return;
-              }
-            }
-          } catch (fallbackError) {
-            arViewerLogger.warn('[AR] fallback image failed:', fallbackPath, fallbackError);
-          }
-        }
-        
-        throw new Error('すべてのフォールバック画像の読み込みに失敗しました');
-      }
-      
-      throw new Error(`invalid image type: ${imgBlob.type}. Expected image/* but got ${imgBlob.type}. URL may be incorrect or return an error page.`);
-    }
-
-    // 可能なら .patt へ（存在しない場合は imageBitmap で代替）
-    let pattBlob = null;
-    if (typeof imageUrlToPatternBlob === 'function') {
-      try {
-        pattBlob = await imageUrlToPatternBlob(project.markerImageUrl);
-        arViewerLogger.info('[AR] patt blob size', pattBlob?.size);
-      } catch (e) {
-        arViewerLogger.warn('[AR] pattern encoder missing/fail, fallback to imageBitmap', e);
-      }
-    }
-
-    // 登録：addPattern(pattBlob) or addImageMarker(imageBitmap) のどちらかに対応
-    if (pattBlob && typeof markerController?.addPattern === 'function') {
-      await markerController.addPattern(pattBlob);
-    } else if (typeof markerController?.addImageMarker === 'function') {
-      try {
-        // より安全な画像デコード
-        const img = await createImageBitmap(imgBlob, {
-          imageOrientation: 'none',
-          premultiplyAlpha: 'none'
-        });
-        await markerController.addImageMarker(img);
-        arViewerLogger.info('[AR] image marker created successfully');
-      } catch (decodeError) {
-        arViewerLogger.error('[AR] image decode failed:', decodeError);
-        // フォールバック: 画像URLを直接保存
-        await markerController.addImageMarker(project.markerImageUrl);
-        arViewerLogger.info('[AR] fallback: using image URL directly');
-      }
-    } else if (typeof markerController?.addPattern === 'function') {
-      // ライブラリが .patt しか受けないのに encoder が無い場合は明示的に失敗
-      throw new Error('pattern encoder not wired: addPattern requires .patt');
-    } else {
-      arViewerLogger.warn('[AR] markerController has no addPattern/addImageMarker');
-      // 最低限の登録（URLのみ）
-      if (typeof markerController?.addImageMarker === 'function') {
-        await markerController.addImageMarker(project.markerImageUrl);
-      }
-    }
-
-    console.timeEnd('[AR] pattern');
-    arViewerLogger.info('[AR] marker registered');
-    
-  } catch (error) {
-    console.timeEnd('[AR] pattern');
-    arViewerLogger.error('[AR] prepareMarkerPipeline failed:', error);
-    
-    // より詳細なエラー情報を提供
-    if (error.name === 'InvalidStateError') {
-      throw new Error(`画像のデコードに失敗しました。画像形式を確認してください: ${project.markerImageUrl}`);
-    } else if (error.message.includes('fetch failed')) {
-      throw new Error(`画像の取得に失敗しました。URLとCORS設定を確認してください: ${project.markerImageUrl}`);
-    } else {
-      throw error;
-    }
-  }
-}
-
-// ===== 2) ローディング → ガイドへ（状態機械経路では不要） =====
-async function loadingToMarkerGuide() {
-  const project = window.__project;
-  if (!project) return;
-  if ((project.type || project.mode) !== 'marker') return;
-
-  try {
-    await prepareMarkerPipeline(project);
-  } catch (e) {
-    arViewerLogger.error('[AR] prepareMarkerPipeline failed', e);
-    alert('マーカーの準備に失敗しました（patternエンコーダ or 画像URL/CORS を確認）');
-    return;
-  }
-
-  // UI遷移
-  try {
-    if (typeof setGuideMode === 'function') setGuideMode('marker');
-    showMarkerGuideScreen && showMarkerGuideScreen();
-  } catch {}
-  arViewerLogger.info('[FLOW] marker guide shown');
-}
-
-// マーカーガイド画面を表示（状態機械経路では不要）
-function showMarkerGuideScreen() {
-  arViewerLogger.info('[FLOW] showing marker guide screen');
-  // 既存のガイド画面表示ロジックを使用
-  if (typeof showScreen === 'function') {
-    showScreen('guide');
-  }
-}
-
 // === 4) onStartClick の先頭付近を差し替え ===
 // ★ 再入禁止フラグ（グローバル）
 let __onStartClickRunning = false;
@@ -1115,11 +869,9 @@ function startRenderLoop(tick) {
 
 async function runMarkerShowtime(project) {
   await ensureRenderer(); 
-  await ensureBasics(); 
+  await ensureBasics();
   await ensureLights();
 
-  console.time('[AR] models');
-  
   // モデル読み込みを個別に処理し、失敗したモデルがあっても他のモデルは読み込む
   const modelPromises = (project.models || []).map(async (modelCfg, index) => {
     try {
@@ -1159,8 +911,7 @@ async function runMarkerShowtime(project) {
   } else {
     successfulModels.forEach(o => __anchor.add(o));
   }
-  
-  console.timeEnd('[AR] models');
+
   arViewerLogger.info('[AR] models attached', {
     successful: successfulModels.length,
     failed: failedModels.length,
@@ -1169,11 +920,9 @@ async function runMarkerShowtime(project) {
 
   // 毎フレーム、検出更新
   startRenderLoop(() => {
-    if (typeof markerController?.update === 'function') markerController.update();
+    // ARエンジンの更新はARエンジン内部で処理される
   });
 }
-
-// markerControllerは前方（26-89行目）で定義済み
 
 // ガイドの「開始」押下で 3D 表示開始
 function bindGuideStartButton() {
@@ -2612,24 +2361,24 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ★★★ スタート画面レイアウト関数を定義 ★★★
       function layoutStartScreen() {
         if (!startScreen || !ss) {
-          arViewerLogger.info('❌ スタート画面レイアウトスキップ - startScreen:', !!startScreen, 'ss:', !!ss);
+          dlog('❌ スタート画面レイアウトスキップ - startScreen:', !!startScreen, 'ss:', !!ss);
           return;
         }
-        
-        arViewerLogger.info('🔄 スタート画面レイアウト実行');
-        arViewerLogger.info('🔍 適用する設定:', ss);
-        
+
+        dlog('🔄 スタート画面レイアウト実行');
+        dlog('🔍 適用する設定:', ss);
+
         // スタート画面を表示
         showScreen(screenStates.START);
-        
+
         // 背景
-        arViewerLogger.info('🎨 背景色適用チェック:', ss.backgroundColor, 'startScreen要素:', !!startScreen);
+        dlog('🎨 背景色適用チェック:', ss.backgroundColor, 'startScreen要素:', !!startScreen);
         if (ss.backgroundColor && startScreen) {
           startScreen.style.setProperty('background', ss.backgroundColor, 'important');
-          arViewerLogger.info('🎨 背景色適用実行:', ss.backgroundColor);
-          arViewerLogger.info('🔍 適用後の背景色:', window.getComputedStyle(startScreen).backgroundColor);
+          dlog('🎨 背景色適用実行:', ss.backgroundColor);
+          dlog('🔍 適用後の背景色:', window.getComputedStyle(startScreen).backgroundColor);
         } else {
-          arViewerLogger.info('❌ 背景色適用スキップ - backgroundColor:', ss.backgroundColor, 'startScreen:', !!startScreen);
+          dlog('❌ 背景色適用スキップ - backgroundColor:', ss.backgroundColor, 'startScreen:', !!startScreen);
         }
       // タイトル
       if (startTitle) {
@@ -2651,7 +2400,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startTitle.style.setProperty('width', '90%', 'important');
           startTitle.style.setProperty('text-align', 'center', 'important');
           startTitle.style.setProperty('z-index', '9999', 'important');
-          arViewerLogger.info('🎨 タイトル位置適用 (コンテナ基準%):', `${tpos}%`, 'titlePosition:', ss.titlePosition);
+          dlog('🎨 タイトル位置適用 (コンテナ基準%):', `${tpos}%`, 'titlePosition:', ss.titlePosition);
         } else {
           // デフォルトは中央揃え（flexセンター）
           startTitle.style.position = '';
@@ -2673,10 +2422,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           // プレビューに合わせて不要な影は付けない
           startTitle.style.setProperty('text-shadow', 'none', 'important');
           startTitle.style.setProperty('margin', '0', 'important');
-          arViewerLogger.info('🎨 タイトルフォントサイズ適用 (!important):', `${computedSize}px`, 'titleSize:', ts);
-          arViewerLogger.info('🔍 startTitle要素:', startTitle, 'computed style:', window.getComputedStyle(startTitle).fontSize);
+          dlog('🎨 タイトルフォントサイズ適用 (!important):', `${computedSize}px`, 'titleSize:', ts);
+          dlog('🔍 startTitle要素:', startTitle, 'computed style:', window.getComputedStyle(startTitle).fontSize);
         } else {
-          arViewerLogger.info('❌ タイトルサイズ適用スキップ - titleSize:', ss.titleSize, 'type:', typeof ss.titleSize);
+          dlog('❌ タイトルサイズ適用スキップ - titleSize:', ss.titleSize, 'type:', typeof ss.titleSize);
         }
       }
       // ロゴ
@@ -2702,8 +2451,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         startLogo.style.height = `${logoWidth}px`;
         startLogo.style.objectFit = 'contain';
         startLogo.style.zIndex = '1202';
-        arViewerLogger.info('🎨 ロゴサイズ適用:', `${logoWidth}px`, 'logoSize:', ss.logoSize);
-        arViewerLogger.info('🔍 ロゴ要素:', startLogo, 'computed maxWidth:', window.getComputedStyle(startLogo).maxWidth);
+        dlog('🎨 ロゴサイズ適用:', `${logoWidth}px`, 'logoSize:', ss.logoSize);
+        dlog('🔍 ロゴ要素:', startLogo, 'computed maxWidth:', window.getComputedStyle(startLogo).maxWidth);
       }
       // CTA
       if (startCTA) {
@@ -2721,7 +2470,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('transform', 'translateX(-50%)', 'important');
           startCTA.style.setProperty('top', `${bpos}%`, 'important');
           startCTA.style.setProperty('z-index', '9999', 'important');
-          arViewerLogger.info('🎨 ボタン位置適用 (コンテナ基準%):', `${bpos}%`, 'buttonPosition:', ss.buttonPosition);
+          dlog('🎨 ボタン位置適用 (コンテナ基準%):', `${bpos}%`, 'buttonPosition:', ss.buttonPosition);
         } else {
           startCTA.style.position = '';
           startCTA.style.left = '';
@@ -2740,11 +2489,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('padding', `${padY}px ${padX}px`, 'important');
           startCTA.style.setProperty('border-radius', '8px', 'important');
           startCTA.style.setProperty('box-shadow', '0 2px 8px rgba(0,0,0,0.2)', 'important');
-          
-          arViewerLogger.info('🎨 ボタンサイズ適用（エディター準拠）:', `${fontSize}px`, 'buttonSize:', ss.buttonSize, 'padding:', `${padY}px ${padX}px`);
-          arViewerLogger.info('🔍 ボタン要素:', startCTA, 'computed fontSize:', window.getComputedStyle(startCTA).fontSize, 'computed padding:', window.getComputedStyle(startCTA).padding);
+
+          dlog('🎨 ボタンサイズ適用（エディター準拠）:', `${fontSize}px`, 'buttonSize:', ss.buttonSize, 'padding:', `${padY}px ${padX}px`);
+          dlog('🔍 ボタン要素:', startCTA, 'computed fontSize:', window.getComputedStyle(startCTA).fontSize, 'computed padding:', window.getComputedStyle(startCTA).padding);
         } else {
-          arViewerLogger.info('❌ ボタンサイズ適用スキップ - buttonSize:', ss.buttonSize, 'type:', typeof ss.buttonSize);
+          dlog('❌ ボタンサイズ適用スキップ - buttonSize:', ss.buttonSize, 'type:', typeof ss.buttonSize);
         }
       }
       

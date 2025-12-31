@@ -208,3 +208,4 @@ if (useBlobStorage) {
    - Vercelの利点（CDN、自動デプロイなど）を失う
 
 **結論: Vercel Blob Storageの実装を推奨します。**
+

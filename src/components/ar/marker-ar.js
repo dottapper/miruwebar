@@ -18,13 +18,13 @@ export class MarkerAR extends AREngineInterface {
     super(options);
     this.IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
     this.dlog = (...args) => { if (this.IS_DEBUG) markerARLogger.debug(...args); };
-    markerARLogger.info('🎯 MarkerAR初期化開始 (iPhone対応)', options);
-    markerARLogger.info('🔍 markerUrl受け取り確認:', {
+    markerARLogger.info('🎯 MarkerAR初期化開始 (iPhone対応)');
+    this.dlog('🔍 markerUrl受け取り確認:', {
       '渡されたmarkerUrl': options.markerUrl,
       'markerUrlの型': typeof options.markerUrl,
       'markerUrlが存在': !!options.markerUrl
     });
-      this.options = {
+    this.options = {
       sourceType: 'webcam',
       // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
       // nullの場合は後でresolveAssetUrlで解決される
@@ -77,9 +77,8 @@ export class MarkerAR extends AREngineInterface {
     // AR.js は markerRoot の matrix を直接更新するため、autoUpdate をオフにする
     try { this.markerRoot.matrixAutoUpdate = false; } catch (_) {}
     
-    // モデル管理（動的初期化でバージョン統一）
+    // モデル管理（init()で動的初期化）
     this.modelLoader = null;
-    this._initGLTFLoader();
     this.loadedModel = null; // 後方互換用（最後に読んだモデル）
     this.loadedModels = [];  // 読み込まれた全モデル（準備済み）
     this.placedModel = null; // 互換用（配置済みのルート）
@@ -145,7 +144,7 @@ export class MarkerAR extends AREngineInterface {
     this.renderer.shadowMap.enabled = false;
 
     try {
-      markerARLogger.info('🔍 初期化デバッグ:', {
+      this.dlog('🔍 初期化デバッグ:', {
         container: !!this.container,
         _T: !!this._T,
         scene: !!this.scene,
@@ -798,18 +797,16 @@ export class MarkerAR extends AREngineInterface {
 
     // マーカー検出イベント
     let wasVisible = false;
-    let debugCounter = 0;
     let lastDebugTime = Date.now();
 
     const checkMarkerVisibility = () => {
       const isVisible = this.markerRoot.visible;
 
       // デバッグ出力（3秒に1回）
-      debugCounter++;
       const now = Date.now();
-      if (now - lastDebugTime > 3000) {
+      if (this.IS_DEBUG && now - lastDebugTime > 3000) {
         lastDebugTime = now;
-        markerARLogger.info('🔍 MarkerAR デバッグ:', {
+        this.dlog('🔍 MarkerAR デバッグ:', {
           マーカー可視: isVisible,
           ARコンテキスト: !!this.arToolkitContext,
           ARコンテキスト初期化済: !!(this.arToolkitContext && this.arToolkitContext._arContext),
@@ -830,7 +827,7 @@ export class MarkerAR extends AREngineInterface {
         markerARLogger.info('🎯 マーカーを発見しました！');
         
         // 自動でモデル/デバッグキューブを配置
-        markerARLogger.info('🔍 モデル配置判定:', {
+        this.dlog('🔍 モデル配置判定:', {
           forceDebugCube: this.options.forceDebugCube,
           loadedModel: !!this.loadedModel,
           loadedModelsCount: this.loadedModels?.length || 0,
@@ -1083,21 +1080,13 @@ export class MarkerAR extends AREngineInterface {
       // 横一列に並べる（複数モデル視認性）
       m.position.x = offsetX;
       group.add(m);
-      
-      // テスト用: モデルの隣に大きな赤いキューブを配置
-      const testCube = new this._T.Mesh(
-        new this._T.BoxGeometry(0.5, 0.5, 0.5),
-        new this._T.MeshBasicMaterial({ color: 0xff0000, wireframe: true })
-      );
-      testCube.position.set(offsetX, 0.25, -0.5);
-      group.add(testCube);
-      
+
       const maxEdge = Math.max(
         Math.abs(b.max.x - b.min.x),
         Math.abs(b.max.y - b.min.y),
         Math.abs(b.max.z - b.min.z)
       );
-      offsetX += (maxEdge + gap + 0.5); // テストキューブ分も考慮
+      offsetX += (maxEdge + gap);
     }
 
     this.markerRoot.add(group);
@@ -1182,9 +1171,9 @@ export class MarkerAR extends AREngineInterface {
   }
 
   /**
-   * クリーンアップ
+   * クリーンアップ（WebXRAR と統一）
    */
-  dispose() {
+  cleanup() {
     markerARLogger.info('🧹 MarkerAR クリーンアップ開始');
 
     // インターバル・タイマーの停止
@@ -1247,6 +1236,13 @@ export class MarkerAR extends AREngineInterface {
   }
 
   /**
+   * 後方互換性のための dispose メソッド（cleanup のエイリアス）
+   */
+  dispose() {
+    this.cleanup();
+  }
+
+  /**
    * デバッグ情報取得
    */
   getDebugInfo() {
@@ -1289,12 +1285,10 @@ export class MarkerAR extends AREngineInterface {
     // 1) 既存の初期化（AR.js起動・レンダリング・コントロール設定）
     await this.init();
 
-    // 1.5) GLTFLoaderの初期化を確実に完了させる
+    // 1.5) GLTFLoaderの初期化を確実に完了させる（init()で失敗した場合のフォールバック）
     if (!this.modelLoader) {
-      markerARLogger.info('🔄 GLTFLoader未初期化のため再初期化を実行');
+      this.dlog('🔄 GLTFLoader未初期化のため再初期化を実行');
       await this._initGLTFLoader();
-      // 少し待機してローダーの準備を確認
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     // 2) プロジェクトのモデルを事前読み込み（URLは __sourceUrl を基準に絶対化）
