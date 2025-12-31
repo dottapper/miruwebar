@@ -79,17 +79,25 @@ import { extractDesign } from '../utils/design-extractor.js';
   window.addEventListener('load', appendBox);
 
   let logBuffer = [];
+  let errorBuffer = []; // エラーメッセージは別途保持
   const log=(...a)=>{
     console.log('[diag]',...a);
     const msg = a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ');
-    logBuffer.push(msg);
 
-    // 最新20行のみ表示（スクロール削減）
-    if (logBuffer.length > 20) {
-      logBuffer = logBuffer.slice(-20);
+    // エラーメッセージは別バッファに保存
+    if (msg.includes('❌')) {
+      errorBuffer.push(msg);
+    } else {
+      logBuffer.push(msg);
+      // 通常ログは最新20行のみ
+      if (logBuffer.length > 20) {
+        logBuffer = logBuffer.slice(-20);
+      }
     }
 
-    box.textContent = '[🔍 診断パネル - 問題診断中]\n\n' + logBuffer.join('\n');
+    // エラーを先頭に、通常ログを後に表示
+    const allLogs = [...errorBuffer, ...logBuffer];
+    box.textContent = '[🔍 診断パネル - 問題診断中]\n\n' + allLogs.join('\n');
     box.scrollTop = box.scrollHeight;
   };
 
