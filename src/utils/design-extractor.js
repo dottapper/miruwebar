@@ -16,8 +16,8 @@ function shallowMerge(...parts) {
 
 function normalizeStartScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.startScreen || {};
-  // templateSettings を最優先、次にプロジェクト直下（start / startScreen）
-  const merged = shallowMerge(base, direct, tpl);
+  // プロジェクト直下（start / startScreen）を最優先、templateSettingsは補完のみ
+  const merged = shallowMerge(base, tpl, direct);
 
   // backgroundImageとbackgroundの両方をサポート（backgroundImageを優先）
   const bgImage = merged.backgroundImage || merged.background || merged.bg;
@@ -44,7 +44,7 @@ function normalizeStartScreen({ tpl = {}, direct = {} }) {
 
 function normalizeLoadingScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.loadingScreen || {};
-  // templateSettings を最優先、次にプロジェクト直下（loading / loadingScreen）
+  // プロジェクト直下（loading / loadingScreen）を最優先、templateSettingsは補完のみ
   const tplMapped = {
     backgroundColor: tpl.backgroundColor || tpl.bgColor,
     textColor: tpl.textColor,
@@ -65,13 +65,14 @@ function normalizeLoadingScreen({ tpl = {}, direct = {} }) {
     logo: direct.logo || direct.image,
     background: direct.background || direct.backgroundImage
   };
-  const merged = shallowMerge(base, directMapped, tplMapped);
+  const merged = shallowMerge(base, tplMapped, directMapped);
   return merged;
 }
 
 function normalizeGuideScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.guideScreen || {};
-  const merged = shallowMerge(base, direct, tpl);
+  // プロジェクト直下（guide / guideScreen）を最優先、templateSettingsは補完のみ
+  const merged = shallowMerge(base, tpl, direct);
   // marker画像と文言にフォーカスして正規化
   const markerSrc = merged.marker?.src || merged.markerImage || merged.markerImageUrl || merged.guideImage || merged.imageUrl;
   const bgImage = merged.backgroundImage || merged.background || merged.bg;
