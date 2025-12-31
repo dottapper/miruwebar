@@ -4,7 +4,10 @@
 import * as THREE from 'three';
 import { AREngineInterface } from '../../utils/ar-engine-adapter.js';
 import { generateMarkerPatternFromImage, createPatternBlob } from '../../utils/marker-utils.js';
+import { createLogger } from '../../utils/logger.js';
 // GLTFLoaderは動的インポートで統一バージョンを使用
+
+const markerARLogger = createLogger('MarkerAR');
 
 /**
  * AR.js を使用したマーカーベースAR
@@ -14,9 +17,9 @@ export class MarkerAR extends AREngineInterface {
   constructor(options = {}) {
     super(options);
     this.IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-    this.dlog = (...args) => { if (this.IS_DEBUG) console.log(...args); };
-    console.log('🎯 MarkerAR初期化開始 (iPhone対応)', options);
-    console.log('🔍 markerUrl受け取り確認:', {
+    this.dlog = (...args) => { if (this.IS_DEBUG) markerARLogger.debug(...args); };
+    markerARLogger.info('🎯 MarkerAR初期化開始 (iPhone対応)', options);
+    markerARLogger.info('🔍 markerUrl受け取り確認:', {
       '渡されたmarkerUrl': options.markerUrl,
       'markerUrlの型': typeof options.markerUrl,
       'markerUrlが存在': !!options.markerUrl
@@ -45,7 +48,7 @@ export class MarkerAR extends AREngineInterface {
     // window.THREEは初期化時に確実に統一バージョンを設定
     if (typeof window !== 'undefined') {
       window.THREE = THREE;
-      console.log('✅ Three.js 0.165統一: ESM版をwindow.THREEに設定完了');
+      markerARLogger.info('✅ Three.js 0.165統一: ESM版をwindow.THREEに設定完了');
     }
     this.scene = new this._T.Scene();
     this.camera = new this._T.Camera();
@@ -97,7 +100,7 @@ export class MarkerAR extends AREngineInterface {
    */
   async _initGLTFLoader() {
     try {
-      console.log('🔄 GLTFLoader動的初期化開始（バージョン統一）');
+      markerARLogger.info('🔄 GLTFLoader動的初期化開始（バージョン統一）');
       
       // ESM版GLTFLoaderを動的インポート
       const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
@@ -105,14 +108,14 @@ export class MarkerAR extends AREngineInterface {
       // 統一されたThree.jsインスタンスでGLTFLoader作成
       this.modelLoader = new GLTFLoader();
       
-      console.log('✅ GLTFLoader初期化成功（統一バージョン0.165）');
-      console.log('🔍 Three.js統一状況:', {
+      markerARLogger.info('✅ GLTFLoader初期化成功（統一バージョン0.165）');
+      markerARLogger.info('🔍 Three.js統一状況:', {
         esm: this._T.REVISION,
         window: typeof window !== 'undefined' && window.THREE ? window.THREE.REVISION : 'なし'
       });
       
     } catch (e) {
-      console.error('❌ GLTFLoader動的初期化失敗:', e);
+      markerARLogger.error('❌ GLTFLoader動的初期化失敗:', e);
       this.modelLoader = null;
     }
   }
@@ -122,11 +125,11 @@ export class MarkerAR extends AREngineInterface {
    * AR.js マーカーAR を初期化
    */
   async init() {
-    console.log('🚀 MarkerAR初期化開始');
+    markerARLogger.info('🚀 MarkerAR初期化開始');
 
     // 既に初期化済みまたは初期化中の場合は処理をスキップ
     if (this.isInitialized || this.isInitializing) {
-      console.warn('⚠️ MarkerAR は既に初期化済みまたは初期化中です');
+      markerARLogger.warn('⚠️ MarkerAR は既に初期化済みまたは初期化中です');
       return this.isInitialized;
     }
 
@@ -142,7 +145,7 @@ export class MarkerAR extends AREngineInterface {
     this.renderer.shadowMap.enabled = false;
 
     try {
-      console.log('🔍 初期化デバッグ:', {
+      markerARLogger.info('🔍 初期化デバッグ:', {
         container: !!this.container,
         _T: !!this._T,
         scene: !!this.scene,
@@ -151,17 +154,17 @@ export class MarkerAR extends AREngineInterface {
         modelLoader: !!this.modelLoader
       });
       // AR.js の動的読み込み
-      console.log('📦 AR.js ライブラリ読み込み開始');
+      markerARLogger.info('📦 AR.js ライブラリ読み込み開始');
       await this.loadARjsLibrary();
-      console.log('✅ AR.js ライブラリ読み込み完了');
+      markerARLogger.info('✅ AR.js ライブラリ読み込み完了');
 
       // レンダラー設定
-      console.log('🖥️ レンダラー設定開始');
+      markerARLogger.info('🖥️ レンダラー設定開始');
       this.setupRenderer();
-      console.log('✅ レンダラー設定完了');
+      markerARLogger.info('✅ レンダラー設定完了');
 
       // 必要アセットURLを解決（ローカル > CDN 順に）
-      console.log('🔗 アセットURL解決開始');
+      markerARLogger.info('🔗 アセットURL解決開始');
       this.options.cameraParametersUrl = await this.resolveAssetUrl([
         '/arjs/camera_para.dat',
         this.options.cameraParametersUrl,
@@ -172,7 +175,7 @@ export class MarkerAR extends AREngineInterface {
       // マーカーURL解決（カスタムマーカー必須 - HIROマーカーへのフォールバック禁止）
       // ⚠️ 重要: docs/MARKER_POLICY.md を参照
       // ⚠️ AR.jsは.pattファイルを必要とするため、画像から変換が必要
-      console.log('🔍 マーカーURL処理開始:', {
+      markerARLogger.info('🔍 マーカーURL処理開始:', {
         渡されたmarkerUrl: this.options.markerUrl,
         isBlobUrl: this.options.markerUrl?.startsWith?.('blob:')
       });
@@ -181,7 +184,7 @@ export class MarkerAR extends AREngineInterface {
 
       // 既にBlob URL（.patt形式）が渡されている場合はそのまま使用
       if (this.options.markerUrl && this.options.markerUrl.startsWith('blob:')) {
-        console.log('✅ 既に.patt形式のBlob URLが渡されました');
+        markerARLogger.info('✅ 既に.patt形式のBlob URLが渡されました');
         finalPatternUrl = this.options.markerUrl;
       } else {
         // 画像URLから.pattを生成する必要がある
@@ -197,33 +200,33 @@ export class MarkerAR extends AREngineInterface {
 
         // カスタムマーカーが設定されていない場合は警告を表示
         if (!this.options.markerUrl) {
-          console.warn('⚠️ カスタムマーカーが設定されていません。サンプル画像を使用します。');
-          console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください。');
+          markerARLogger.warn('⚠️ カスタムマーカーが設定されていません。サンプル画像を使用します。');
+          markerARLogger.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください。');
         }
 
         // 画像URLを解決
         const resolvedImageUrl = await this.resolveAssetUrl(markerImageCandidates);
-        console.log('🔗 マーカー画像URL解決:', resolvedImageUrl);
+        markerARLogger.info('🔗 マーカー画像URL解決:', resolvedImageUrl);
 
         // 画像から.pattパターンを生成
         if (resolvedImageUrl) {
           try {
-            console.log('🔄 マーカーパターン生成開始...');
+            markerARLogger.info('🔄 マーカーパターン生成開始...');
             const patternString = await generateMarkerPatternFromImage(resolvedImageUrl);
             if (patternString) {
               const pattBlob = createPatternBlob(patternString);
               finalPatternUrl = pattBlob.url;
               // クリーンアップ用に保存
               this._patternBlobRevoke = pattBlob.revoke;
-              console.log('✅ マーカーパターン生成成功:', {
+              markerARLogger.info('✅ マーカーパターン生成成功:', {
                 パターン長: patternString.length,
                 BlobURL: finalPatternUrl
               });
             } else {
-              console.error('❌ マーカーパターン生成失敗: パターン文字列が空');
+              markerARLogger.error('❌ マーカーパターン生成失敗: パターン文字列が空');
             }
           } catch (patternError) {
-            console.error('❌ マーカーパターン生成エラー:', patternError);
+            markerARLogger.error('❌ マーカーパターン生成エラー:', patternError);
           }
         }
       }
@@ -231,13 +234,13 @@ export class MarkerAR extends AREngineInterface {
       // 最終的なパターンURLを設定
       if (finalPatternUrl) {
         this.options.markerUrl = finalPatternUrl;
-        console.log('✅ マーカーパターンURL設定完了:', finalPatternUrl);
+        markerARLogger.info('✅ マーカーパターンURL設定完了:', finalPatternUrl);
       } else {
-        console.error('❌ マーカーパターンの準備に失敗しました');
+        markerARLogger.error('❌ マーカーパターンの準備に失敗しました');
         throw new Error('マーカーパターンの準備に失敗しました。マーカー画像を確認してください。');
       }
 
-      console.log('✅ アセットURL解決完了');
+      markerARLogger.info('✅ アセットURL解決完了');
 
       this.dlog('🔗 解決したアセットURL:', {
         cameraParametersUrl: this.options.cameraParametersUrl,
@@ -245,19 +248,19 @@ export class MarkerAR extends AREngineInterface {
       });
 
       // ARToolkitSource 初期化（カメラ）
-      console.log('📹 ARToolkitSource 初期化開始');
+      markerARLogger.info('📹 ARToolkitSource 初期化開始');
       await this.initARToolkitSource();
-      console.log('✅ ARToolkitSource 初期化完了');
+      markerARLogger.info('✅ ARToolkitSource 初期化完了');
 
       // ARToolkitContext 初期化（マーカー検出）
-      console.log('🎯 ARToolkitContext 初期化開始');
+      markerARLogger.info('🎯 ARToolkitContext 初期化開始');
       await this.initARToolkitContext();
-      console.log('✅ ARToolkitContext 初期化完了');
+      markerARLogger.info('✅ ARToolkitContext 初期化完了');
 
       // マーカーコントロール設定
       this.dlog('🔧 マーカーコントロール設定開始');
       this.setupMarkerControls();
-      console.log('✅ マーカーコントロール設定完了');
+      markerARLogger.info('✅ マーカーコントロール設定完了');
 
       // アニメーションループ開始
       this.startRenderLoop();
@@ -269,7 +272,7 @@ export class MarkerAR extends AREngineInterface {
       return true;
 
     } catch (error) {
-      console.error('❌ MarkerAR初期化失敗:', {
+      markerARLogger.error('❌ MarkerAR初期化失敗:', {
         エラーメッセージ: error.message,
         エラータイプ: error.name,
         スタックトレース: error.stack,
@@ -312,7 +315,7 @@ export class MarkerAR extends AREngineInterface {
           fetchOptions.mode = 'cors';
         }
 
-        console.log('🔍 アセット確認:', url, isLocalUrl ? '(ローカル)' : '(外部)');
+        markerARLogger.info('🔍 アセット確認:', url, isLocalUrl ? '(ローカル)' : '(外部)');
 
         const res = await fetch(url, fetchOptions);
         if (res.ok) {
@@ -332,29 +335,29 @@ export class MarkerAR extends AREngineInterface {
                   text.includes('<html') ||
                   text.includes('not found') ||
                   text.includes('404')) {
-                console.warn('⚠️ アセット内容がエラーページの可能性のためスキップ:', url);
+                markerARLogger.warn('⚠️ アセット内容がエラーページの可能性のためスキップ:', url);
                 continue;
               }
             } catch {}
 
-            console.log('✅ アセット到達・サイズOK:', url, size, 'bytes');
+            markerARLogger.info('✅ アセット到達・サイズOK:', url, size, 'bytes');
             return url;
           } else {
-            console.warn('⚠️ アセットサイズが小さすぎます。スキップ:', url, size, 'bytes');
+            markerARLogger.warn('⚠️ アセットサイズが小さすぎます。スキップ:', url, size, 'bytes');
           }
         } else {
-          console.warn('⚠️ アセット到達失敗:', url, res.status);
+          markerARLogger.warn('⚠️ アセット到達失敗:', url, res.status);
         }
       } catch (e) {
-        console.warn('⚠️ アセット到達エラー:', url, e?.message);
+        markerARLogger.warn('⚠️ アセット到達エラー:', url, e?.message);
         // CORSエラーの場合はローカルURLを優先的に探す
         if (e.message.includes('CORS') && !url.startsWith('/')) {
-          console.log('🔄 CORSエラー検知、引き続きローカルURLを探索');
+          markerARLogger.info('🔄 CORSエラー検知、引き続きローカルURLを探索');
         }
       }
     }
 
-    console.log('📋 利用可能な候補:', candidates);
+    markerARLogger.info('📋 利用可能な候補:', candidates);
     // 最後の候補（失敗時はAR.js側でエラーになる）
     return candidates.find(Boolean);
   }
@@ -364,7 +367,7 @@ export class MarkerAR extends AREngineInterface {
    */
   async loadARjsLibrary() {
     // Three.js 0.165統一: ESM版をwindow.THREEに設定
-    console.log('🔧 Three.js 0.165統一: ESM版をグローバルに設定');
+    markerARLogger.info('🔧 Three.js 0.165統一: ESM版をグローバルに設定');
     window.THREE = THREE;
     
     // 現代のThree.jsには removeFromParent が標準で存在するが、安全のためチェック
@@ -375,23 +378,23 @@ export class MarkerAR extends AREngineInterface {
           if (this.parent) this.parent.remove(this);
           return this;
         };
-        console.log('🧩 three.Object3D.removeFromParent ポリフィル適用');
+        markerARLogger.info('🧩 three.Object3D.removeFromParent ポリフィル適用');
       }
     } catch (_) {}
     
-    console.log('✅ Three.js統一完了:', {
+    markerARLogger.info('✅ Three.js統一完了:', {
       ESM_REVISION: THREE.REVISION,
       window_REVISION: window.THREE.REVISION
     });
 
     // AR.js が既に読み込まれているかチェック
     if (window.THREEx && window.THREEx.ArToolkitSource) {
-      console.log('📦 AR.js は既に読み込み済み (window.THREEx.ArToolkitSource available)');
+      markerARLogger.info('📦 AR.js は既に読み込み済み (window.THREEx.ArToolkitSource available)');
       return;
     }
 
     // Three.js が確実に設定された後に ar-threex.js を動的に読み込む
-    console.log('📦 AR.js ライブラリを動的読み込み開始...');
+    markerARLogger.info('📦 AR.js ライブラリを動的読み込み開始...');
     
     // window.THREE が確実に設定されていることを確認
     if (!window.THREE || !window.THREE.EventDispatcher) {
@@ -401,18 +404,18 @@ export class MarkerAR extends AREngineInterface {
     try {
       // ar-threex.js を動的に読み込む
       await this.loadScript('/arjs/ar-threex.js');
-      console.log('✅ AR.js ライブラリ読み込み成功 (THREEx available)');
+      markerARLogger.info('✅ AR.js ライブラリ読み込み成功 (THREEx available)');
       
       // 読み込み後の確認
       if (!window.THREEx || !window.THREEx.ArToolkitSource) {
         throw new Error('AR.js ライブラリの読み込みは完了しましたが、THREEx.ArToolkitSource が見つかりません。');
       }
     } catch (error) {
-      console.error('❌ AR.js ライブラリの読み込みに失敗しました:', error);
-      console.error('📍 確認事項:');
-      console.error('  - /arjs/ar-threex.js ファイルが存在するか');
-      console.error('  - Three.js が正しく読み込まれているか');
-      console.error('  - ブラウザコンソールに読み込みエラーが出ていないか');
+      markerARLogger.error('❌ AR.js ライブラリの読み込みに失敗しました:', error);
+      markerARLogger.error('📍 確認事項:');
+      markerARLogger.error('  - /arjs/ar-threex.js ファイルが存在するか');
+      markerARLogger.error('  - Three.js が正しく読み込まれているか');
+      markerARLogger.error('  - ブラウザコンソールに読み込みエラーが出ていないか');
       throw new Error(`AR.js ライブラリの読み込みに失敗しました: ${error.message}`);
     }
   }
@@ -457,7 +460,7 @@ export class MarkerAR extends AREngineInterface {
         this.renderer.setClearColor(0x000000, 0);
       }
     } catch (e) {
-      console.warn('⚠️ レンダラーサイズ/クリア設定で警告（続行）:', e?.message);
+      markerARLogger.warn('⚠️ レンダラーサイズ/クリア設定で警告（続行）:', e?.message);
     }
     this.renderer.domElement.style.position = 'absolute';
     this.renderer.domElement.style.top = '0px';
@@ -476,7 +479,7 @@ export class MarkerAR extends AREngineInterface {
       if (this.renderer.alpha !== undefined) debugInfo.alpha = this.renderer.alpha;
       // getClearAlpha() と getClearColor() は互換性問題があるためスキップ
     } catch (e) {
-      console.warn('⚠️ レンダラー詳細情報取得でエラー（続行）:', e.message);
+      markerARLogger.warn('⚠️ レンダラー詳細情報取得でエラー（続行）:', e.message);
     }
     
     this.dlog('🖥️ レンダラー設定完了（透明度強化）:', debugInfo);
@@ -487,9 +490,9 @@ export class MarkerAR extends AREngineInterface {
    * iPhone Safari 用に最適化
    */
   initARToolkitSource() {
-    console.log('🚨🚨🚨 initARToolkitSource() 関数呼び出し確認');
+    markerARLogger.info('🚨🚨🚨 initARToolkitSource() 関数呼び出し確認');
     return new Promise((resolve, reject) => {
-      console.log('📹 カメラアクセス初期化開始（iPhone Safari 最適化）');
+      markerARLogger.info('📹 カメラアクセス初期化開始（iPhone Safari 最適化）');
 
       // iPhone Safari 用の制約を明示的に設定
       const sourceConfig = {
@@ -508,13 +511,13 @@ export class MarkerAR extends AREngineInterface {
 
       // iPhone Safari では初期化前に少し待機
       setTimeout(() => {
-        console.log('📹 ArToolkitSource.init() 実行開始');
+        markerARLogger.info('📹 ArToolkitSource.init() 実行開始');
         
         this.arToolkitSource.init(
           // 成功コールバック
           () => {
-            console.log('✅ ArToolkitSource 初期化成功');
-            console.log('📹 カメラ準備状況:', {
+            markerARLogger.info('✅ ArToolkitSource 初期化成功');
+            markerARLogger.info('📹 カメラ準備状況:', {
               ready: this.arToolkitSource.ready,
               domElement: !!this.arToolkitSource.domElement,
               videoWidth: this.arToolkitSource.domElement?.videoWidth,
@@ -524,7 +527,7 @@ export class MarkerAR extends AREngineInterface {
             try {
               // カメラ映像（video/canvas）をDOMに追加して背面に表示
               const camEl = this.arToolkitSource.domElement;
-              console.log('🎥 カメラDOM要素詳細:', {
+              markerARLogger.info('🎥 カメラDOM要素詳細:', {
                 要素存在: !!camEl,
                 要素タイプ: camEl?.tagName,
                 親要素存在: !!camEl?.parentNode,
@@ -536,7 +539,7 @@ export class MarkerAR extends AREngineInterface {
               });
               
               if (camEl && !camEl.parentNode) {
-                console.log('📺 カメラ映像をDOMに追加中...');
+                markerARLogger.info('📺 カメラ映像をDOMに追加中...');
                 camEl.setAttribute('playsinline', 'true');
                 camEl.setAttribute('muted', 'true');
                 camEl.setAttribute('autoplay', 'true');
@@ -561,9 +564,9 @@ export class MarkerAR extends AREngineInterface {
                 } else {
                   this.container.appendChild(camEl);
                 }
-                console.log('✅ カメラ映像DOM追加完了');
+                markerARLogger.info('✅ カメラ映像DOM追加完了');
               } else if (camEl?.parentNode) {
-                console.log('📺 カメラ映像は既にDOMに存在');
+                markerARLogger.info('📺 カメラ映像は既にDOMに存在');
                 // 既存要素のスタイルも修正
                 camEl.style.zIndex = '0';
                 camEl.style.display = 'block';
@@ -578,7 +581,7 @@ export class MarkerAR extends AREngineInterface {
                 camEl.style.backgroundColor = '#000';
                 camEl.style.pointerEvents = 'none';
               } else {
-                console.error('❌ カメラDOM要素が存在しません');
+                markerARLogger.error('❌ カメラDOM要素が存在しません');
               }
               // iOS/Safari での再生ガード（強化版）
               if (camEl && typeof camEl.play === 'function') {
@@ -586,16 +589,16 @@ export class MarkerAR extends AREngineInterface {
                   try {
                     if (camEl.paused) {
                       await camEl.play();
-                      console.log('✅ カメラ映像の再生成功');
+                      markerARLogger.info('✅ カメラ映像の再生成功');
                     } else {
-                      console.log('ℹ️ カメラ映像は既に再生中');
+                      markerARLogger.info('ℹ️ カメラ映像は既に再生中');
                     }
                   } catch (e) {
-                    console.warn(`⚠️ カメラ映像の再生に失敗（試行 ${retryCount + 1}/3）:`, e?.message);
+                    markerARLogger.warn(`⚠️ カメラ映像の再生に失敗（試行 ${retryCount + 1}/3）:`, e?.message);
                     if (retryCount < 2) {
                       setTimeout(() => tryPlay(retryCount + 1), 500);
                     } else {
-                      console.error('❌ カメラ映像の再生に3回失敗しました');
+                      markerARLogger.error('❌ カメラ映像の再生に3回失敗しました');
                     }
                   }
                 };
@@ -614,7 +617,7 @@ export class MarkerAR extends AREngineInterface {
                 }
               }
             } catch (e) {
-              console.warn('⚠️ カメラDOM要素の配置に失敗（続行）:', e);
+              markerARLogger.warn('⚠️ カメラDOM要素の配置に失敗（続行）:', e);
             }
 
             // サイズ調整
@@ -626,8 +629,8 @@ export class MarkerAR extends AREngineInterface {
           },
           // エラーコールバック
           (error) => {
-            console.error('❌ ArToolkitSource 初期化失敗:', error);
-            console.error('❌ エラー詳細:', {
+            markerARLogger.error('❌ ArToolkitSource 初期化失敗:', error);
+            markerARLogger.error('❌ エラー詳細:', {
               name: error?.name,
               message: error?.message,
               code: error?.code
@@ -655,7 +658,7 @@ export class MarkerAR extends AREngineInterface {
    * ARToolkitContext 初期化（マーカー検出）
    */
   initARToolkitContext() {
-    console.log('🎯 initARToolkitContext() 開始');
+    markerARLogger.info('🎯 initARToolkitContext() 開始');
     return new Promise((resolve, reject) => {
       this.dlog('🎯 マーカー検出システム初期化開始');
 
@@ -671,7 +674,7 @@ export class MarkerAR extends AREngineInterface {
         imageSmoothingEnabled: false
       };
 
-      console.log('🔧 ARコンテキスト設定:', contextConfig);
+      markerARLogger.info('🔧 ARコンテキスト設定:', contextConfig);
       this.arToolkitContext = new window.THREEx.ArToolkitContext(contextConfig);
 
       let callbackExecuted = false;
@@ -695,7 +698,7 @@ export class MarkerAR extends AREngineInterface {
         cleanup();
 
         this.arContextInitialized = true;
-        console.log('✅ ARコンテキスト初期化完了:', {
+        markerARLogger.info('✅ ARコンテキスト初期化完了:', {
           初期化時間: `${Date.now() - initStartTime}ms`,
           arController: !!this.arToolkitContext.arController
         });
@@ -708,7 +711,7 @@ export class MarkerAR extends AREngineInterface {
             this.dlog('✅ カメラ投影行列設定完了');
           }
         } catch (projError) {
-          console.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
+          markerARLogger.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
         }
 
         resolve();
@@ -718,7 +721,7 @@ export class MarkerAR extends AREngineInterface {
       if (this.IS_DEBUG) {
         checkInterval = setInterval(() => {
           const elapsed = Date.now() - initStartTime;
-          console.log(`🔄 AR初期化進捗 (${elapsed}ms):`, {
+          markerARLogger.info(`🔄 AR初期化進捗 (${elapsed}ms):`, {
             arController: !!this.arToolkitContext?.arController,
             callbackExecuted
           });
@@ -729,7 +732,7 @@ export class MarkerAR extends AREngineInterface {
       try {
         this.arToolkitContext.init(onInitSuccess);
       } catch (initError) {
-        console.error('❌ ARコンテキスト init() 呼び出しエラー:', initError);
+        markerARLogger.error('❌ ARコンテキスト init() 呼び出しエラー:', initError);
         cleanup();
         reject(new Error(`ARコンテキスト初期化エラー: ${initError.message}`));
         return;
@@ -738,17 +741,17 @@ export class MarkerAR extends AREngineInterface {
       // 3秒後: 内部状態をチェックして準備ができていれば強制完了
       forceSuccessTimeoutId = setTimeout(() => {
         if (!callbackExecuted) {
-          console.log('🔄 3秒経過、AR.js内部状態をチェック...');
+          markerARLogger.info('🔄 3秒経過、AR.js内部状態をチェック...');
 
           // AR.jsが内部的に初期化されているかチェック
           const hasArController = !!this.arToolkitContext?.arController;
           const hasArContext = !!this.arToolkitContext?._arContext;
 
           if (hasArController || hasArContext) {
-            console.log('✅ AR.jsは内部的に初期化済み、強制的に成功扱い');
+            markerARLogger.info('✅ AR.jsは内部的に初期化済み、強制的に成功扱い');
             onInitSuccess();
           } else {
-            console.log('⏳ AR.jsはまだ初期化中、さらに待機...');
+            markerARLogger.info('⏳ AR.jsはまだ初期化中、さらに待機...');
           }
         }
       }, 3000);
@@ -756,7 +759,7 @@ export class MarkerAR extends AREngineInterface {
       // 10秒後: まだ完了していなければ強制的に成功扱い（AR.jsコールバック問題対策）
       errorTimeoutId = setTimeout(() => {
         if (!callbackExecuted) {
-          console.warn('⚠️ ARコンテキスト初期化が10秒経過、強制的に続行します');
+          markerARLogger.warn('⚠️ ARコンテキスト初期化が10秒経過、強制的に続行します');
           onInitSuccess();
         }
       }, 10000);
@@ -767,9 +770,9 @@ export class MarkerAR extends AREngineInterface {
    * マーカーコントロール設定
    */
   setupMarkerControls() {
-    console.log('🔧 マーカーコントロール設定');
-    console.log('🎯 使用するマーカーURL:', this.options.markerUrl);
-    console.log('🎯 マーカーURL詳細:', {
+    markerARLogger.info('🔧 マーカーコントロール設定');
+    markerARLogger.info('🎯 使用するマーカーURL:', this.options.markerUrl);
+    markerARLogger.info('🎯 マーカーURL詳細:', {
       '完全なURL': this.options.markerUrl,
       'URLの長さ': this.options.markerUrl?.length,
       'Blobか': this.options.markerUrl?.startsWith?.('blob:')
@@ -806,7 +809,7 @@ export class MarkerAR extends AREngineInterface {
       const now = Date.now();
       if (now - lastDebugTime > 3000) {
         lastDebugTime = now;
-        console.log('🔍 MarkerAR デバッグ:', {
+        markerARLogger.info('🔍 MarkerAR デバッグ:', {
           マーカー可視: isVisible,
           ARコンテキスト: !!this.arToolkitContext,
           ARコンテキスト初期化済: !!(this.arToolkitContext && this.arToolkitContext._arContext),
@@ -824,10 +827,10 @@ export class MarkerAR extends AREngineInterface {
       if (isVisible && !wasVisible) {
         // マーカー発見
         this.isMarkerVisible = true;
-        console.log('🎯 マーカーを発見しました！');
+        markerARLogger.info('🎯 マーカーを発見しました！');
         
         // 自動でモデル/デバッグキューブを配置
-        console.log('🔍 モデル配置判定:', {
+        markerARLogger.info('🔍 モデル配置判定:', {
           forceDebugCube: this.options.forceDebugCube,
           loadedModel: !!this.loadedModel,
           loadedModelsCount: this.loadedModels?.length || 0,
@@ -836,18 +839,18 @@ export class MarkerAR extends AREngineInterface {
         
         // sample.glbテスト用：モデルがあれば優先的に表示
         if ((this.loadedModel || this.loadedModels?.length > 0) && !this.placedModel) {
-          console.log('📦 保存モデルを自動配置中...');
+          markerARLogger.info('📦 保存モデルを自動配置中...');
           this.placeModel();
         } else if (this.options.forceDebugCube && !this.placedModel) {
           // テストフラグが立っている場合はキューブを出す
-          console.log('🧪 テスト: 強制デバッグキューブを配置');
+          markerARLogger.info('🧪 テスト: 強制デバッグキューブを配置');
           this.placeDebugCube();
         } else if (!this.loadedModel && (!this.loadedModels || this.loadedModels.length === 0) && !this.placedModel) {
           // モデルが全くない場合のフォールバック
-          console.log('🧪 フォールバック: デバッグ用キューブを配置');
+          markerARLogger.info('🧪 フォールバック: デバッグ用キューブを配置');
           this.placeDebugCube();
         } else {
-          console.warn('⚠️ どの配置条件にも該当しませんでした', {
+          markerARLogger.warn('⚠️ どの配置条件にも該当しませんでした', {
             loadedModel: !!this.loadedModel,
             loadedModelsCount: this.loadedModels?.length || 0,
             placedModel: !!this.placedModel
@@ -858,7 +861,7 @@ export class MarkerAR extends AREngineInterface {
       } else if (!isVisible && wasVisible) {
         // マーカー消失
         this.isMarkerVisible = false;
-        console.log('❌ マーカーを見失いました');
+        markerARLogger.info('❌ マーカーを見失いました');
         if (this.onMarkerLost) this.onMarkerLost();
       }
       
@@ -868,14 +871,14 @@ export class MarkerAR extends AREngineInterface {
     // 定期的にマーカー可視性をチェック（dispose時に停止するためIDを保存）
     this.visibilityCheckInterval = setInterval(checkMarkerVisibility, 100);
 
-    console.log('✅ マーカーコントロール設定完了');
+    markerARLogger.info('✅ マーカーコントロール設定完了');
   }
 
   /**
    * アニメーションループ開始
    */
   startRenderLoop() {
-    console.log('🎬 アニメーションループ開始');
+    markerARLogger.info('🎬 アニメーションループ開始');
 
     const animate = () => {
       requestAnimationFrame(animate);
@@ -909,7 +912,7 @@ export class MarkerAR extends AREngineInterface {
             const now = Date.now();
             if (!this._lastDebugLog || now - this._lastDebugLog > 5000) {
               this._lastDebugLog = now;
-              console.log('🎬 レンダリング状態:', {
+              markerARLogger.info('🎬 レンダリング状態:', {
                 markerVisible: this.isMarkerVisible,
                 markerChildren: this.markerRoot.children.length,
                 cameraMatrix: this.camera.matrix.elements.slice(0, 4),
@@ -924,7 +927,7 @@ export class MarkerAR extends AREngineInterface {
         if (!error.message.includes('detectMarker') && 
             !error.message.includes('ARToolKit') && 
             !error.message.includes('ARController')) {
-          console.warn('⚠️ アニメーションループエラー:', error.message);
+          markerARLogger.warn('⚠️ アニメーションループエラー:', error.message);
         }
         // エラーが発生してもループを継続
       }
@@ -937,13 +940,13 @@ export class MarkerAR extends AREngineInterface {
    * 3Dモデルを読み込み
    */
   async loadModel(modelUrl) {
-    console.log('📂 3Dモデル読み込み開始:', modelUrl);
-    console.log('📂 現在のloadedModels:', this.loadedModels.length, '個');
+    markerARLogger.info('📂 3Dモデル読み込み開始:', modelUrl);
+    markerARLogger.info('📂 現在のloadedModels:', this.loadedModels.length, '個');
 
     return new Promise((resolve, reject) => {
       // GLTFLoader 準備確認
       if (!this.modelLoader) {
-        console.warn('⚠️ GLTFLoader 未準備のためモデルを読めません');
+        markerARLogger.warn('⚠️ GLTFLoader 未準備のためモデルを読めません');
         reject(new Error('GLTFLoader is not available'));
         return;
       }
@@ -951,7 +954,7 @@ export class MarkerAR extends AREngineInterface {
       this.modelLoader.load(
         modelUrl,
         (gltf) => {
-          console.log('✅ 3Dモデル読み込み完了');
+          markerARLogger.info('✅ 3Dモデル読み込み完了');
           
           const model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
           if (!model) {
@@ -974,7 +977,7 @@ export class MarkerAR extends AREngineInterface {
           const scale = targetEdge / Math.max(size.x, size.y, size.z || 1);
           model.scale.setScalar(scale);
           
-          console.log('🔍 モデルサイズ調整:', {
+          markerARLogger.info('🔍 モデルサイズ調整:', {
             元サイズ: { x: size.x, y: size.y, z: size.z },
             ターゲットサイズ: targetEdge,
             スケール: scale,
@@ -989,13 +992,13 @@ export class MarkerAR extends AREngineInterface {
           this.loadedModel = model.clone();
           this.loadedModels.push(model.clone());
           
-          console.log('🎯 3Dモデル準備完了');
+          markerARLogger.info('🎯 3Dモデル準備完了');
           if (this.onModelLoaded) this.onModelLoaded(model);
 
           // マーカーが既に可視かつ未配置なら即時配置（初回検出が先だったケースを救済）
           try {
             if (this.isMarkerVisible && !this.placedModel) {
-              console.log('📌 マーカー可視中のためモデルを即時配置');
+              markerARLogger.info('📌 マーカー可視中のためモデルを即時配置');
               this.placeModel();
             }
           } catch (_) {}
@@ -1004,10 +1007,10 @@ export class MarkerAR extends AREngineInterface {
         },
         (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
-          console.log(`📊 モデル読み込み進捗: ${percent}%`);
+          markerARLogger.info(`📊 モデル読み込み進捗: ${percent}%`);
         },
         (error) => {
-          console.error('❌ 3Dモデル読み込み失敗:', error);
+          markerARLogger.error('❌ 3Dモデル読み込み失敗:', error);
           reject(error);
         }
       );
@@ -1037,7 +1040,7 @@ export class MarkerAR extends AREngineInterface {
       this.markerRoot.add(cube);
       this.placedModel = cube;
       
-      console.log('🧊 デバッグ用キューブを配置しました', {
+      markerARLogger.info('🧊 デバッグ用キューブを配置しました', {
         サイズ: size,
         位置: cube.position.toArray(),
         スケール: cube.scale.toArray(),
@@ -1045,7 +1048,7 @@ export class MarkerAR extends AREngineInterface {
       });
       return cube;
     } catch (e) {
-      console.warn('⚠️ デバッグ用キューブ配置に失敗:', e?.message || e);
+      markerARLogger.warn('⚠️ デバッグ用キューブ配置に失敗:', e?.message || e);
       return null;
     }
   }
@@ -1055,10 +1058,10 @@ export class MarkerAR extends AREngineInterface {
    */
   placeModel() {
     // forceDebugCubeが有効でもモデル表示を優先（sample.glbテスト用）
-    console.log('📦 placeModel() 実行開始');
+    markerARLogger.info('📦 placeModel() 実行開始');
 
     if (!this.loadedModels || this.loadedModels.length === 0) {
-      console.warn('⚠️ 配置可能なモデルがありません');
+      markerARLogger.warn('⚠️ 配置可能なモデルがありません');
       return null;
     }
 
@@ -1101,7 +1104,7 @@ export class MarkerAR extends AREngineInterface {
     this.placedGroup = group;
     this.placedModel = group; // 後方互換
     
-    console.log('🎯 マーカー上にモデルを配置しました（', this.loadedModels.length, '個）', {
+    markerARLogger.info('🎯 マーカー上にモデルを配置しました（', this.loadedModels.length, '個）', {
       グループ子要素数: group.children.length,
       マーカールート子要素数: this.markerRoot.children.length,
       グループ表示: group.visible,
@@ -1118,7 +1121,7 @@ export class MarkerAR extends AREngineInterface {
     if (this.placedModel) {
       this.markerRoot.remove(this.placedModel);
       this.placedModel = null;
-      console.log('🗑️ 配置されたモデルを削除しました');
+      markerARLogger.info('🗑️ 配置されたモデルを削除しました');
     }
   }
 
@@ -1140,7 +1143,7 @@ export class MarkerAR extends AREngineInterface {
       camEl.style.width = '100vw';
       camEl.style.height = '100svh'; /* iOS Safari対応: アドレスバー変動を考慮 */
       camEl.style.objectFit = 'cover';
-      console.log('📐 カメラ映像サイズ調整:', {
+      markerARLogger.info('📐 カメラ映像サイズ調整:', {
         カメラ実サイズ: `${sourceWidth}x${sourceHeight}`,
         表示サイズ: '100vw x 100svh (iOS Safari対応)'
       });
@@ -1168,10 +1171,10 @@ export class MarkerAR extends AREngineInterface {
         }
       }
     } catch (e) {
-      console.warn('⚠️ リサイズ処理で警告（続行）:', e?.message || e);
+      markerARLogger.warn('⚠️ リサイズ処理で警告（続行）:', e?.message || e);
     }
 
-    console.log('📐 リサイズ完了:', { 
+    markerARLogger.info('📐 リサイズ完了:', { 
       containerWidth, 
       containerHeight, 
       videoSize: `${sourceWidth}x${sourceHeight}` 
@@ -1182,20 +1185,20 @@ export class MarkerAR extends AREngineInterface {
    * クリーンアップ
    */
   dispose() {
-    console.log('🧹 MarkerAR クリーンアップ開始');
+    markerARLogger.info('🧹 MarkerAR クリーンアップ開始');
 
     // インターバル・タイマーの停止
     if (this.visibilityCheckInterval) {
       clearInterval(this.visibilityCheckInterval);
       this.visibilityCheckInterval = null;
-      console.log('✅ マーカー可視性チェック インターバル停止');
+      markerARLogger.info('✅ マーカー可視性チェック インターバル停止');
     }
 
     // リサイズイベントリスナーの削除
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
       this.resizeHandler = null;
-      console.log('✅ リサイズイベントリスナー削除');
+      markerARLogger.info('✅ リサイズイベントリスナー削除');
     }
 
     // モデル削除
@@ -1233,14 +1236,14 @@ export class MarkerAR extends AREngineInterface {
     if (this._patternBlobRevoke) {
       try {
         this._patternBlobRevoke();
-        console.log('✅ パターンBlob URL解放');
+        markerARLogger.info('✅ パターンBlob URL解放');
       } catch (e) {
-        console.warn('⚠️ パターンBlob URL解放エラー:', e);
+        markerARLogger.warn('⚠️ パターンBlob URL解放エラー:', e);
       }
       this._patternBlobRevoke = null;
     }
 
-    console.log('✅ MarkerAR クリーンアップ完了');
+    markerARLogger.info('✅ MarkerAR クリーンアップ完了');
   }
 
   /**
@@ -1261,7 +1264,7 @@ export class MarkerAR extends AREngineInterface {
    * AREngineInterface 実装: 初期化
    */
   async initialize() {
-    console.log('🚀 MarkerAR初期化開始');
+    markerARLogger.info('🚀 MarkerAR初期化開始');
     this.isInitialized = true;
     return true;
   }
@@ -1274,8 +1277,8 @@ export class MarkerAR extends AREngineInterface {
       await this.initialize();
     }
     this.isRunning = true;
-    console.log('▶️ MarkerAR開始');
-    console.log('🔍 projectData受け取り確認:', {
+    markerARLogger.info('▶️ MarkerAR開始');
+    markerARLogger.info('🔍 projectData受け取り確認:', {
       'projectDataが存在': !!projectData,
       'projectDataの型': typeof projectData,
       'モデル数': projectData?.models?.length || 0,
@@ -1288,7 +1291,7 @@ export class MarkerAR extends AREngineInterface {
 
     // 1.5) GLTFLoaderの初期化を確実に完了させる
     if (!this.modelLoader) {
-      console.log('🔄 GLTFLoader未初期化のため再初期化を実行');
+      markerARLogger.info('🔄 GLTFLoader未初期化のため再初期化を実行');
       await this._initGLTFLoader();
       // 少し待機してローダーの準備を確認
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -1303,7 +1306,7 @@ export class MarkerAR extends AREngineInterface {
 
       const models = Array.isArray(projectData?.models) ? projectData.models : [];
       if (models.length > 0) {
-        console.log('📦 プロジェクトモデル読み込み開始:', models.length);
+        markerARLogger.info('📦 プロジェクトモデル読み込み開始:', models.length);
         for (const m of models) {
           const url = absolutize(m.url || m.src || m.href);
           if (!url) continue;
@@ -1314,21 +1317,21 @@ export class MarkerAR extends AREngineInterface {
               // this.loadModel 内で this.loadedModels に追加する設計に合わせる
             }
           } catch (e) {
-            console.warn('⚠️ モデル読み込み失敗をスキップ:', url, e?.message || e);
+            markerARLogger.warn('⚠️ モデル読み込み失敗をスキップ:', url, e?.message || e);
           }
         }
-        console.log('✅ プロジェクトモデル読み込み完了:', this.loadedModels?.length || 0);
+        markerARLogger.info('✅ プロジェクトモデル読み込み完了:', this.loadedModels?.length || 0);
       } else {
-        console.log('ℹ️ プロジェクトにモデルがありません');
+        markerARLogger.info('ℹ️ プロジェクトにモデルがありません');
       }
 
       // 3) 既にマーカーが見えていれば配置を実行
       if (this.isMarkerVisible && (this.loadedModels?.length || 0) > 0) {
-        console.log('🎯 既にマーカー可視 → モデルを配置');
+        markerARLogger.info('🎯 既にマーカー可視 → モデルを配置');
         this.placeModel();
       }
     } catch (e) {
-      console.warn('⚠️ モデル事前読み込み処理で警告:', e?.message || e);
+      markerARLogger.warn('⚠️ モデル事前読み込み処理で警告:', e?.message || e);
     }
   }
 
@@ -1337,7 +1340,7 @@ export class MarkerAR extends AREngineInterface {
    */
   async stop() {
     this.isRunning = false;
-    console.log('⏹️ MarkerAR停止');
+    markerARLogger.info('⏹️ MarkerAR停止');
     if (this.arToolkitSource) {
       this.arToolkitSource.onResize = null;
     }
@@ -1350,7 +1353,7 @@ export class MarkerAR extends AREngineInterface {
     await this.stop();
     this.cleanup();
     this.isInitialized = false;
-    console.log('🗑️ MarkerAR破棄完了');
+    markerARLogger.info('🗑️ MarkerAR破棄完了');
   }
 
   /**

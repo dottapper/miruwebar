@@ -18,9 +18,100 @@ import { extractDesign } from '../utils/design-extractor.js';
 
 // DEBUG ログ制御
 const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
+const dlog = (...args) => { if (IS_DEBUG) arViewerLogger.debug(...args); };
 
 const arViewerLogger = createLogger('ARViewer');
+
+// マーカーコントローラーの簡易実装（前方定義）
+const markerController = {
+  patterns: new Map(),
+  initialized: true, // 初期化フラグ
+
+  async addPattern(patternBlob) {
+    if (!this.initialized) {
+      throw new Error('markerController is not initialized');
+    }
+    if (!patternBlob) {
+      throw new Error('markerController.addPattern: patternBlob is required');
+    }
+    if (!patternBlob.size) {
+      throw new Error('markerController.addPattern: patternBlob must have size property');
+    }
+
+    try {
+      const patternId = `marker_${Date.now()}`;
+      this.patterns.set(patternId, {
+        type: 'pattern',
+        data: patternBlob,
+        timestamp: Date.now()
+      });
+      arViewerLogger.info(`[AR] pattern added: ${patternId}, size: ${patternBlob.size} bytes`);
+      return patternId;
+    } catch (error) {
+      arViewerLogger.error('[AR] Failed to add pattern:', error);
+      throw new Error(`markerController.addPattern failed: ${error.message}`);
+    }
+  },
+
+  async addImageMarker(imageData) {
+    if (!this.initialized) {
+      throw new Error('markerController is not initialized');
+    }
+    if (!imageData) {
+      throw new Error('markerController.addImageMarker: imageData is required');
+    }
+
+    try {
+      const markerId = `image_${Date.now()}`;
+      this.patterns.set(markerId, {
+        type: typeof imageData === 'string' ? 'url' : 'bitmap',
+        data: imageData,
+        timestamp: Date.now()
+      });
+
+      if (typeof imageData === 'string') {
+        arViewerLogger.info(`[AR] image marker (URL) added: ${markerId}, url: ${imageData}`);
+      } else if (imageData.width && imageData.height) {
+        arViewerLogger.info(`[AR] image marker (bitmap) added: ${markerId}, size: ${imageData.width}x${imageData.height}`);
+      } else {
+        arViewerLogger.info(`[AR] image marker added: ${markerId}`);
+      }
+      return markerId;
+    } catch (error) {
+      arViewerLogger.error('[AR] Failed to add image marker:', error);
+      throw new Error(`markerController.addImageMarker failed: ${error.message}`);
+    }
+  },
+
+  update() {
+    // マーカー検出の更新処理
+    // 実際のARライブラリに応じて実装
+    // 現在は何もしない（プレースホルダー）
+  },
+
+  getPattern(patternId) {
+    const pattern = this.patterns.get(patternId);
+    return pattern ? pattern.data : null;
+  },
+
+  getPatternInfo(patternId) {
+    return this.patterns.get(patternId);
+  },
+
+  removePattern(patternId) {
+    return this.patterns.delete(patternId);
+  },
+
+  // デバッグ用：登録済みパターン一覧
+  listPatterns() {
+    const list = [];
+    for (const [id, info] of this.patterns) {
+      list.push({ id, type: info.type, timestamp: info.timestamp });
+    }
+    return list;
+  }
+};
+
 let __booted = false;
 
 function navigateBackOrHome() {
@@ -38,17 +129,17 @@ function navigateBackOrHome() {
 
 // ★ スタートUI乗っ取り版（デザインを"本当に"表示させる）
 function __takeoverStartUI(project){
-  console.log('🔍 __takeoverStartUI 呼び出し:', { project });
+  arViewerLogger.info('🔍 __takeoverStartUI 呼び出し:', { project });
 
   const p = project || window.__project || {};
 
   // extractDesignで正規化されたデータを使用
   const { startScreen } = extractDesign(p);
-  console.log('🔍 正規化されたstartScreen:', startScreen);
+  arViewerLogger.info('🔍 正規化されたstartScreen:', startScreen);
 
   // 旧形式との互換性のため、両方のパスをチェック
   const start = p.start || p.startScreen || {};
-  console.log('🔍 生のstart設定:', start);
+  arViewerLogger.info('🔍 生のstart設定:', start);
 
   // 既存があれば消す
   document.getElementById('__dev_applied_proof__')?.remove();
@@ -70,14 +161,14 @@ function __takeoverStartUI(project){
     root.style.backgroundImage = `url(${bgImage})`;
     root.style.backgroundSize = 'cover';
     root.style.backgroundPosition = 'center';
-    console.log('✅ 背景画像を適用:', bgImage);
+    arViewerLogger.info('✅ 背景画像を適用:', bgImage);
   }
 
   // 背景色
   const bgColor = startScreen?.backgroundColor || start?.backgroundColor;
   if (bgColor) {
     root.style.backgroundColor = bgColor;
-    console.log('✅ 背景色を適用:', bgColor);
+    arViewerLogger.info('✅ 背景色を適用:', bgColor);
   }
 
   // タイトル
@@ -90,7 +181,7 @@ function __takeoverStartUI(project){
     `font-size:${32 * titleSize}px`,
     'font-weight:700','margin:0','text-shadow:0 2px 6px rgba(0,0,0,.4)'
   ].join(';');
-  console.log('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
+  arViewerLogger.info('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
 
   // 位置（%をvhで近似）
   const wrap = document.createElement('div');
@@ -109,7 +200,7 @@ function __takeoverStartUI(project){
     'border:none','cursor:pointer','box-shadow:0 8px 24px rgba(0,0,0,.25)',
     `background:${buttonColor}`,`color:${buttonTextColor}`,'font-size:16px','font-weight:600'
   ].join(';');
-  console.log('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
+  arViewerLogger.info('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
 
   btn.onclick = async (e)=>{
     e.stopPropagation();
@@ -142,19 +233,19 @@ function __takeoverStartUI(project){
   root.appendChild(tag);
 
   document.body.appendChild(root);
-  console.info('[TAKEOVER] start UI mounted');
+  arViewerLogger.info('[TAKEOVER] start UI mounted');
 }
 
 function __showLoadingUI(project){
-  console.log('🔍 __showLoadingUI 呼び出し:', { project });
+  arViewerLogger.info('🔍 __showLoadingUI 呼び出し:', { project });
 
   // extractDesignで正規化されたデータを使用
   const { loadingScreen } = extractDesign(project);
-  console.log('🔍 正規化されたloadingScreen:', loadingScreen);
+  arViewerLogger.info('🔍 正規化されたloadingScreen:', loadingScreen);
 
   // 旧形式との互換性のため、両方のパスをチェック
   const l = project?.loading || project?.loadingScreen || {};
-  console.log('🔍 生のloading設定:', l);
+  arViewerLogger.info('🔍 生のloading設定:', l);
 
   // 既存を消す
   document.getElementById('__takeover_loading__')?.remove();
@@ -171,7 +262,7 @@ function __showLoadingUI(project){
 
   // ロゴ/画像を表示
   const logoSrc = loadingScreen?.logo || loadingScreen?.image || l?.image || l?.logo;
-  console.log('🔍 ローディング画像URL:', logoSrc);
+  arViewerLogger.info('🔍 ローディング画像URL:', logoSrc);
 
   if (logoSrc){
     const img = document.createElement('img');
@@ -179,7 +270,7 @@ function __showLoadingUI(project){
     img.alt = 'loading';
     img.style.cssText = 'width:120px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))';
     box.appendChild(img);
-    console.log('✅ ローディング画像を追加:', logoSrc);
+    arViewerLogger.info('✅ ローディング画像を追加:', logoSrc);
   }
 
   const msg = document.createElement('div');
@@ -195,21 +286,21 @@ function __showLoadingUI(project){
   box.appendChild(msg);
 
   document.body.appendChild(box);
-  console.log('✅ __takeover_loading__ を表示');
+  arViewerLogger.info('✅ __takeover_loading__ を表示');
   // 少なくとも一瞬は見えるようタイムアウト解除は別で
   setTimeout(()=>box.remove(), 800);
 }
 
 function __showGuideUI(project){
-  console.log('🔍 __showGuideUI 呼び出し:', { project });
+  arViewerLogger.info('🔍 __showGuideUI 呼び出し:', { project });
 
   // extractDesignで正規化されたデータを使用
   const { guideScreen } = extractDesign(project);
-  console.log('🔍 正規化されたguideScreen:', guideScreen);
+  arViewerLogger.info('🔍 正規化されたguideScreen:', guideScreen);
 
   // 旧形式との互換性のため、両方のパスをチェック
   const g = project?.guide || project?.guideScreen || {};
-  console.log('🔍 生のguide設定:', g);
+  arViewerLogger.info('🔍 生のguide設定:', g);
 
   document.getElementById('__takeover_guide__')?.remove();
 
@@ -230,7 +321,7 @@ function __showGuideUI(project){
     g?.markerImage ||
     g?.marker?.image;
 
-  console.log('🔍 マーカー画像URL:', markerSrc);
+  arViewerLogger.info('🔍 マーカー画像URL:', markerSrc);
 
   if (markerSrc){
     const img = document.createElement('img');
@@ -238,9 +329,9 @@ function __showGuideUI(project){
     img.alt = 'marker';
     img.style.cssText = 'width:72px;height:auto;border-radius:8px';
     box.appendChild(img);
-    console.log('✅ マーカー画像を追加:', markerSrc);
+    arViewerLogger.info('✅ マーカー画像を追加:', markerSrc);
   } else {
-    console.warn('⚠️ マーカー画像が見つかりません');
+    arViewerLogger.warn('⚠️ マーカー画像が見つかりません');
   }
 
   const msg = document.createElement('div');
@@ -255,7 +346,7 @@ function __showGuideUI(project){
   box.appendChild(msg);
 
   document.body.appendChild(box);
-  console.log('✅ __takeover_guide__ を表示');
+  arViewerLogger.info('✅ __takeover_guide__ を表示');
 }
 
 // Expose minimal UI hooks for the takeover injector
@@ -269,7 +360,7 @@ try {
 async function loadProjectFromQR() {
   const projectSrc = getProjectSrc();
   if (!projectSrc) {
-    console.error('[FLOW] no project src');
+    arViewerLogger.error('[FLOW] no project src');
     if (DEV_STRICT_MODE) {
       throw new Error('STRICT MODE: No project src from URL. Built-in sample loading is disabled.');
     }
@@ -278,16 +369,16 @@ async function loadProjectFromQR() {
 
   // キャッシュチェック
   if (typeof window !== 'undefined' && window.__project && window.__projectSrc === projectSrc) {
-    console.info('[FLOW] Using cached project');
+    arViewerLogger.info('[FLOW] Using cached project');
     return window.__project;
   }
 
   try {
-    console.info('[FLOW] Fetching project from:', projectSrc);
+    arViewerLogger.info('[FLOW] Fetching project from:', projectSrc);
     const response = await fetchOnce(projectSrc, { cache: 'no-store' });
 
     if (!response.ok) {
-      console.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
+      arViewerLogger.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
       if (DEV_STRICT_MODE) {
         throw new Error(`STRICT MODE: Project fetch failed (${response.status}). No fallback allowed.`);
       }
@@ -298,7 +389,7 @@ async function loadProjectFromQR() {
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('text/html')) {
       const text = await response.text();
-      console.error('[FLOW] HTMLレスポンスが返されました:', {
+      arViewerLogger.error('[FLOW] HTMLレスポンスが返されました:', {
         url: projectSrc,
         contentType,
         preview: text.substring(0, 200)
@@ -312,7 +403,7 @@ async function loadProjectFromQR() {
     const project = await response.json();
 
     if (!project || typeof project !== 'object') {
-      console.error('[FLOW] Invalid project.json (not an object)');
+      arViewerLogger.error('[FLOW] Invalid project.json (not an object)');
       if (DEV_STRICT_MODE) {
         throw new Error('STRICT MODE: Invalid project.json. No fallback allowed.');
       }
@@ -329,10 +420,10 @@ async function loadProjectFromQR() {
     // 初期セットアップでガイドモードを矯正
     forceGuideModeIfMarker(project);
 
-    console.info('[FLOW] Project loaded successfully');
+    arViewerLogger.info('[FLOW] Project loaded successfully');
     return project;
   } catch (error) {
-    console.error('[FLOW] project fetch error', error);
+    arViewerLogger.error('[FLOW] project fetch error', error);
     if (DEV_STRICT_MODE) {
       throw error;
     }
@@ -343,7 +434,7 @@ async function loadProjectFromQR() {
 async function bootFromQR() {
   // ★ 再入禁止ガード
   if (typeof window !== 'undefined' && window.__viewer_booted) {
-    console.warn('[BOOT] ⚠️ Duplicate boot attempt blocked');
+    arViewerLogger.warn('[BOOT] ⚠️ Duplicate boot attempt blocked');
     return;
   }
   if (typeof window !== 'undefined') {
@@ -356,14 +447,14 @@ async function bootFromQR() {
   // ★ projectSrcの存在チェック（早期リターン）
   const projectSrc = getProjectSrc();
   if (!projectSrc) {
-    console.info('[BOOT] projectSrc not found, skipping bootFromQR');
+    arViewerLogger.info('[BOOT] projectSrc not found, skipping bootFromQR');
     return;
   }
 
   try {
     const project = await loadProjectFromQR();
     if (!project) {
-      console.error('[FLOW] no project');
+      arViewerLogger.error('[FLOW] no project');
       if (DEV_STRICT_MODE) {
         throw new Error('STRICT MODE: Failed to load project. No fallback allowed.');
       }
@@ -379,11 +470,11 @@ async function bootFromQR() {
       window.__projectSrc = getProjectSrc();
     }
 
-    console.info('[FLOW] project loaded', project);
+    arViewerLogger.info('[FLOW] project loaded', project);
 
     // ★ プロジェクトデザインを確実に適用
     await applyProjectDesign(project);
-    console.info('[APPLY] Design applied on boot');
+    arViewerLogger.info('[APPLY] Design applied on boot');
 
     // ★ スタートUI乗っ取り（統合UI）はデフォルト無効化
     try {
@@ -395,10 +486,10 @@ async function bootFromQR() {
           __takeoverStartUI(project);
         }
       } else {
-        console.info('[FLOW] takeover UI disabled by flag');
+        arViewerLogger.info('[FLOW] takeover UI disabled by flag');
       }
     } catch (e) {
-      console.warn('[FLOW] takeover UI call skipped', e);
+      arViewerLogger.warn('[FLOW] takeover UI call skipped', e);
     }
 
     // ★ bootFromQR 完了後に initIntegratedARViewer を実行
@@ -413,7 +504,7 @@ async function bootFromQR() {
       setTimeout(reportFetchStats, 1000);
     }
   } catch (error) {
-    console.error('[FLOW] project boot error', error);
+    arViewerLogger.error('[FLOW] project boot error', error);
     if (DEV_STRICT_MODE) {
       throw error;
     }
@@ -439,18 +530,18 @@ function forceGuideModeIfMarker(project) {
       if (typeof setGuideMode === 'function') setGuideMode('marker');
       if (!project.guide) project.guide = {};
       project.guide.mode = 'marker';
-      console.info('[FLOW] guideMode forced at setup -> marker');
+      arViewerLogger.info('[FLOW] guideMode forced at setup -> marker');
     } catch (e) {
-      console.warn('[FLOW] guideMode force at setup skipped', e);
+      arViewerLogger.warn('[FLOW] guideMode force at setup skipped', e);
     }
   }
 }
 
 
 function bindStartButtonOnce() {
-  console.log('[FLOW] bindStartButtonOnce called');
-  console.log('[FLOW] document ready state:', document.readyState);
-  console.log('[FLOW] document body:', document.body);
+  arViewerLogger.info('[FLOW] bindStartButtonOnce called');
+  arViewerLogger.info('[FLOW] document ready state:', document.readyState);
+  arViewerLogger.info('[FLOW] document body:', document.body);
   
   const btn =
     document.querySelector('[data-role="start-button"]') ||
@@ -460,19 +551,19 @@ function bindStartButtonOnce() {
     document.querySelector('button');
 
   if (!btn) { 
-    console.error('[FLOW] start button not found'); 
-    console.log('Available buttons:', document.querySelectorAll('button'));
-    console.log('Available elements with data-role:', document.querySelectorAll('[data-role]'));
-    console.log('Available elements with id containing start:', document.querySelectorAll('[id*="start"]'));
+    arViewerLogger.error('[FLOW] start button not found'); 
+    arViewerLogger.info('Available buttons:', document.querySelectorAll('button'));
+    arViewerLogger.info('Available elements with data-role:', document.querySelectorAll('[data-role]'));
+    arViewerLogger.info('Available elements with id containing start:', document.querySelectorAll('[id*="start"]'));
     return; 
   }
   if (btn.__bound) {
-    console.log('[FLOW] button already bound');
+    arViewerLogger.info('[FLOW] button already bound');
     return;
   }
   btn.__bound = true;
   btn.addEventListener('click', onStartClick, { once: true });
-  console.log('[FLOW] start button bound successfully:', btn);
+  arViewerLogger.info('[FLOW] start button bound successfully:', btn);
 }
 
 // === 2) marker画像URLの deep search ===
@@ -539,18 +630,18 @@ function absolutizeUrl(u, base) { try { return new URL(u, base).href; } catch { 
 
 async function verifyReachable(url) {
   try {
-    console.log('[AR] verifying URL:', url);
+    arViewerLogger.info('[AR] verifying URL:', url);
     const res = await fetchOnce(url, { method: 'GET', mode: 'cors' });
     if (!res.ok) {
-      console.warn(`[AR] URL not reachable: ${res.status} ${res.statusText}`);
+      arViewerLogger.warn(`[AR] URL not reachable: ${res.status} ${res.statusText}`);
       return false;
     }
     const ct = res.headers.get('content-type') || '';
     const isImage = ct.includes('image') || /\.(png|jpg|jpeg|gif|webp)$/i.test(url);
-    console.log(`[AR] content-type: ${ct}, isImage: ${isImage}`);
+    arViewerLogger.info(`[AR] content-type: ${ct}, isImage: ${isImage}`);
     return isImage;
   } catch (error) {
-    console.warn('[AR] URL verification failed:', error);
+    arViewerLogger.warn('[AR] URL verification failed:', error);
     return false;
   }
 }
@@ -583,7 +674,7 @@ async function normalizeProject(project, baseHref) {
 
   // ★ type/mode自動推定（未設定時）
   if (!project.type && !project.mode) {
-    console.warn('[FLOW] type/mode未設定、自動推定を試行');
+    arViewerLogger.warn('[FLOW] type/mode未設定、自動推定を試行');
     
     // マーカー画像の有無をチェック
     const markerCandidates = deepFindMarkerImageUrl(project);
@@ -592,25 +683,25 @@ async function normalizeProject(project, baseHref) {
     
     if (hasMarkerImage || hasMarkerPattern) {
       project.type = 'marker';
-      console.info('[FLOW] type自動推定: marker（マーカー画像/パターンが存在）');
+      arViewerLogger.info('[FLOW] type自動推定: marker（マーカー画像/パターンが存在）');
     } else {
       // デフォルト: markerless（WebXR）
       project.type = 'markerless';
-      console.info('[FLOW] type自動推定: markerless（デフォルト）');
+      arViewerLogger.info('[FLOW] type自動推定: markerless（デフォルト）');
     }
   }
 
   // models の絶対化と検証
   project.models = (project.models || []).map((m, index) => {
     const absoluteUrl = abs(m.url);
-    console.log(`🔍 モデル ${index + 1} URL検証:`, {
+    arViewerLogger.info(`🔍 モデル ${index + 1} URL検証:`, {
       original: m.url,
       absolute: absoluteUrl,
       valid: !!absoluteUrl
     });
     
     if (!absoluteUrl) {
-      console.warn(`⚠️ モデル ${index + 1} のURLが無効です:`, m.url);
+      arViewerLogger.warn(`⚠️ モデル ${index + 1} のURLが無効です:`, m.url);
     }
     
     return { ...m, url: absoluteUrl };
@@ -618,12 +709,12 @@ async function normalizeProject(project, baseHref) {
 
   // marker 探索
   const candidates = deepFindMarkerImageUrl(project);
-  console.info('[FLOW] marker candidates', candidates);
+  arViewerLogger.info('[FLOW] marker candidates', candidates);
   let picked = candidates[0]?.url || null;
   
   // 古いパスを新しいパスに置き換え
   if (picked && (picked.includes('/assets/marker/default-marker.png') || picked.includes('default-marker.png'))) {
-    console.warn('[FLOW] 古いマーカーパスを検出、新しいパスに置き換え:', picked, '->', DEFAULT_MARKER_PATH);
+    arViewerLogger.warn('[FLOW] 古いマーカーパスを検出、新しいパスに置き換え:', picked, '->', DEFAULT_MARKER_PATH);
     picked = DEFAULT_MARKER_PATH;
   }
   
@@ -634,18 +725,18 @@ async function normalizeProject(project, baseHref) {
   if (t === 'marker') {
     if (!picked) {
       const fb = abs(DEFAULT_MARKER_PATH);
-      console.warn('[FLOW] markerImageUrl not found. fallback ->', fb);
+      arViewerLogger.warn('[FLOW] markerImageUrl not found. fallback ->', fb);
       picked = fb;
     }
     
     // 到達性チェック（フォールバック画像も含めて）
     const ok = await verifyReachable(picked);
     if (!ok) {
-      console.warn('[FLOW] primary marker not reachable, trying fallback');
+      arViewerLogger.warn('[FLOW] primary marker not reachable, trying fallback');
       const fallback = abs(DEFAULT_MARKER_PATH);
       const fallbackOk = await verifyReachable(fallback);
       if (fallbackOk) {
-        console.log('[FLOW] using fallback marker');
+        arViewerLogger.info('[FLOW] using fallback marker');
         picked = fallback;
       } else {
         throw new Error('marker image not reachable (CORS/404): ' + picked + ' (fallback also failed)');
@@ -663,22 +754,22 @@ async function prepareMarkerPipeline(project) {
 
   try {
     // 画像取得
-    console.log('[AR] fetching marker image:', project.markerImageUrl);
+    arViewerLogger.info('[AR] fetching marker image:', project.markerImageUrl);
     const res = await fetchOnce(project.markerImageUrl, { mode: 'cors' });
     if (!res.ok) {
       throw new Error(`marker image fetch failed: ${res.status} ${res.statusText} - ${project.markerImageUrl}`);
     }
     
     const imgBlob = await res.blob();
-    console.log('[AR] image blob size:', imgBlob.size, 'type:', imgBlob.type);
+    arViewerLogger.info('[AR] image blob size:', imgBlob.size, 'type:', imgBlob.type);
 
     // 画像形式の検証
     if (!imgBlob.type.startsWith('image/')) {
-      console.warn(`[AR] unexpected content type: ${imgBlob.type}, trying fallback`);
+      arViewerLogger.warn(`[AR] unexpected content type: ${imgBlob.type}, trying fallback`);
       
       // HTMLページが返された場合（404エラーなど）はフォールバック画像を使用
       if (imgBlob.type === 'text/html') {
-        console.log('[AR] HTML response detected, trying fallback markers');
+        arViewerLogger.info('[AR] HTML response detected, trying fallback markers');
         
         // 複数のフォールバック画像を試す
         const fallbackPaths = [
@@ -690,26 +781,31 @@ async function prepareMarkerPipeline(project) {
         for (const fallbackPath of fallbackPaths) {
           try {
             const fallbackUrl = absolutizeUrl(fallbackPath, new URL('.', project.__sourceUrl || location.href));
-            console.log('[AR] trying fallback:', fallbackUrl);
+            arViewerLogger.info('[AR] trying fallback:', fallbackUrl);
             
             const fallbackRes = await fetchOnce(fallbackUrl, { mode: 'cors' });
             if (fallbackRes.ok) {
               const fallbackBlob = await fallbackRes.blob();
               if (fallbackBlob.type.startsWith('image/')) {
-                console.log('[AR] using fallback marker image:', fallbackPath);
+                arViewerLogger.info('[AR] using fallback marker image:', fallbackPath);
                 // フォールバック画像で処理を継続
                 const img = await createImageBitmap(fallbackBlob, {
                   imageOrientation: 'none',
                   premultiplyAlpha: 'none'
                 });
+
+                // markerController初期化チェック
+                if (!markerController || typeof markerController.addImageMarker !== 'function') {
+                  throw new Error('markerController is not properly initialized');
+                }
                 await markerController.addImageMarker(img);
                 console.timeEnd('[AR] pattern');
-                console.info('[AR] marker registered (fallback)');
+                arViewerLogger.info('[AR] marker registered (fallback)');
                 return;
               }
             }
           } catch (fallbackError) {
-            console.warn('[AR] fallback image failed:', fallbackPath, fallbackError);
+            arViewerLogger.warn('[AR] fallback image failed:', fallbackPath, fallbackError);
           }
         }
         
@@ -724,9 +820,9 @@ async function prepareMarkerPipeline(project) {
     if (typeof imageUrlToPatternBlob === 'function') {
       try {
         pattBlob = await imageUrlToPatternBlob(project.markerImageUrl);
-        console.info('[AR] patt blob size', pattBlob?.size);
+        arViewerLogger.info('[AR] patt blob size', pattBlob?.size);
       } catch (e) {
-        console.warn('[AR] pattern encoder missing/fail, fallback to imageBitmap', e);
+        arViewerLogger.warn('[AR] pattern encoder missing/fail, fallback to imageBitmap', e);
       }
     }
 
@@ -741,18 +837,18 @@ async function prepareMarkerPipeline(project) {
           premultiplyAlpha: 'none'
         });
         await markerController.addImageMarker(img);
-        console.log('[AR] image marker created successfully');
+        arViewerLogger.info('[AR] image marker created successfully');
       } catch (decodeError) {
-        console.error('[AR] image decode failed:', decodeError);
+        arViewerLogger.error('[AR] image decode failed:', decodeError);
         // フォールバック: 画像URLを直接保存
         await markerController.addImageMarker(project.markerImageUrl);
-        console.log('[AR] fallback: using image URL directly');
+        arViewerLogger.info('[AR] fallback: using image URL directly');
       }
     } else if (typeof markerController?.addPattern === 'function') {
       // ライブラリが .patt しか受けないのに encoder が無い場合は明示的に失敗
       throw new Error('pattern encoder not wired: addPattern requires .patt');
     } else {
-      console.warn('[AR] markerController has no addPattern/addImageMarker');
+      arViewerLogger.warn('[AR] markerController has no addPattern/addImageMarker');
       // 最低限の登録（URLのみ）
       if (typeof markerController?.addImageMarker === 'function') {
         await markerController.addImageMarker(project.markerImageUrl);
@@ -760,11 +856,11 @@ async function prepareMarkerPipeline(project) {
     }
 
     console.timeEnd('[AR] pattern');
-    console.info('[AR] marker registered');
+    arViewerLogger.info('[AR] marker registered');
     
   } catch (error) {
     console.timeEnd('[AR] pattern');
-    console.error('[AR] prepareMarkerPipeline failed:', error);
+    arViewerLogger.error('[AR] prepareMarkerPipeline failed:', error);
     
     // より詳細なエラー情報を提供
     if (error.name === 'InvalidStateError') {
@@ -786,7 +882,7 @@ async function loadingToMarkerGuide() {
   try {
     await prepareMarkerPipeline(project);
   } catch (e) {
-    console.error('[AR] prepareMarkerPipeline failed', e);
+    arViewerLogger.error('[AR] prepareMarkerPipeline failed', e);
     alert('マーカーの準備に失敗しました（patternエンコーダ or 画像URL/CORS を確認）');
     return;
   }
@@ -796,12 +892,12 @@ async function loadingToMarkerGuide() {
     if (typeof setGuideMode === 'function') setGuideMode('marker');
     showMarkerGuideScreen && showMarkerGuideScreen();
   } catch {}
-  console.info('[FLOW] marker guide shown');
+  arViewerLogger.info('[FLOW] marker guide shown');
 }
 
 // マーカーガイド画面を表示（状態機械経路では不要）
 function showMarkerGuideScreen() {
-  console.log('[FLOW] showing marker guide screen');
+  arViewerLogger.info('[FLOW] showing marker guide screen');
   // 既存のガイド画面表示ロジックを使用
   if (typeof showScreen === 'function') {
     showScreen('guide');
@@ -815,7 +911,7 @@ let __onStartClickRunning = false;
 async function onStartClick() {
   // ★ 再入禁止ガード
   if (__onStartClickRunning) {
-    console.warn('[FLOW] onStartClick already running, ignoring duplicate call');
+    arViewerLogger.warn('[FLOW] onStartClick already running, ignoring duplicate call');
     return;
   }
   __onStartClickRunning = true;
@@ -829,19 +925,19 @@ async function onStartClick() {
     
     // ★ type/mode自動推定済みであれば使用、未設定なら警告
     if (!project.type && !project.mode) {
-      console.warn('[FLOW] type/mode未設定、normalizeProjectで自動推定されるはず');
+      arViewerLogger.warn('[FLOW] type/mode未設定、normalizeProjectで自動推定されるはず');
     }
 
     // URL正規化＋marker特定（type自動推定含む）
     try {
       await normalizeProject(project, project.__sourceUrl || location.href);
-      console.info('[FLOW] urls resolved', {
+      arViewerLogger.info('[FLOW] urls resolved', {
         type: project.type || project.mode,
         markerImageUrl: project.markerImageUrl,
         models: (project.models || []).map(m => m.url)
       });
     } catch (e) {
-      console.error('[FLOW] normalize failed', e);
+      arViewerLogger.error('[FLOW] normalize failed', e);
       alert('マーカー画像の特定/取得に失敗（URLやCORS設定を確認）');
       return;
     }
@@ -859,13 +955,13 @@ async function onStartClick() {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }});
       if (typeof attachStreamToVideo === 'function') attachStreamToVideo(stream);
     } catch (e) {
-      console.error('[FLOW] camera error', e);
+      arViewerLogger.error('[FLOW] camera error', e);
       alert('カメラ権限が必要です（HTTPSが必要な場合があります）');
       return;
     }
 
     if (typeof showLoadingScreen === 'function') showLoadingScreen(project.loadingScreen);
-    console.info('[FLOW] loading ready');
+    arViewerLogger.info('[FLOW] loading ready');
   } finally {
     // ★ 処理完了後にフラグをリセット（次回呼び出しを許可）
     setTimeout(() => {
@@ -924,7 +1020,7 @@ async function loadGLB(cfg) {
   }
   
   try {
-    console.log('🔄 3Dモデル読み込み開始:', cfg.url);
+    arViewerLogger.info('🔄 3Dモデル読み込み開始:', cfg.url);
     
     // まず実際のファイルを取得してHTMLかどうかをチェック
     const response = await fetchOnce(cfg.url, {
@@ -942,7 +1038,7 @@ async function loadGLB(cfg) {
     const contentType = response.headers.get('content-type');
     const contentLength = response.headers.get('content-length');
     
-    console.log('📄 レスポンス情報:', {
+    arViewerLogger.info('📄 レスポンス情報:', {
       contentType,
       contentLength,
       status: response.status
@@ -951,7 +1047,7 @@ async function loadGLB(cfg) {
     // HTMLレスポンスを検出
     if (contentType && contentType.includes('text/html')) {
       const text = await response.text();
-      console.error('❌ HTMLレスポンスが返されました:', {
+      arViewerLogger.error('❌ HTMLレスポンスが返されました:', {
         url: cfg.url,
         contentType,
         preview: text.substring(0, 200)
@@ -961,7 +1057,7 @@ async function loadGLB(cfg) {
     
     // 小さなファイルサイズの場合はHTMLの可能性が高い
     if (contentLength && parseInt(contentLength) < 1000) {
-      console.warn('⚠️ ファイルサイズが小さすぎます（HTMLの可能性）:', contentLength, 'bytes');
+      arViewerLogger.warn('⚠️ ファイルサイズが小さすぎます（HTMLの可能性）:', contentLength, 'bytes');
     }
     
     // GLTFLoaderで読み込み
@@ -978,10 +1074,10 @@ async function loadGLB(cfg) {
     obj.rotation.set(...(cfg.rotation || [0,0,0]));
     obj.traverse(n => { if (n.isMesh) n.frustumCulled = false; });
     
-    console.log('✅ 3Dモデル読み込み完了:', cfg.url);
+    arViewerLogger.info('✅ 3Dモデル読み込み完了:', cfg.url);
     return obj;
   } catch (error) {
-    console.error('❌ 3Dモデル読み込み失敗:', {
+    arViewerLogger.error('❌ 3Dモデル読み込み失敗:', {
       url: cfg.url,
       error: error.message,
       type: error.constructor.name,
@@ -1027,12 +1123,12 @@ async function runMarkerShowtime(project) {
   // モデル読み込みを個別に処理し、失敗したモデルがあっても他のモデルは読み込む
   const modelPromises = (project.models || []).map(async (modelCfg, index) => {
     try {
-      console.log(`🔄 モデル ${index + 1}/${project.models.length} 読み込み開始:`, modelCfg.url);
+      arViewerLogger.info(`🔄 モデル ${index + 1}/${project.models.length} 読み込み開始:`, modelCfg.url);
       const obj = await loadGLB(modelCfg);
-      console.log(`✅ モデル ${index + 1} 読み込み完了`);
+      arViewerLogger.info(`✅ モデル ${index + 1} 読み込み完了`);
       return { success: true, obj, index };
     } catch (error) {
-      console.error(`❌ モデル ${index + 1} 読み込み失敗:`, {
+      arViewerLogger.error(`❌ モデル ${index + 1} 読み込み失敗:`, {
         url: modelCfg.url,
         error: error.message,
         index
@@ -1046,11 +1142,11 @@ async function runMarkerShowtime(project) {
   const failedModels = results.filter(r => !r.success);
   
   if (failedModels.length > 0) {
-    console.warn(`⚠️ ${failedModels.length}個のモデル読み込みに失敗しました:`, failedModels.map(f => f.url));
+    arViewerLogger.warn(`⚠️ ${failedModels.length}個のモデル読み込みに失敗しました:`, failedModels.map(f => f.url));
     
     // 失敗したモデルの詳細情報を表示
     failedModels.forEach(failed => {
-      console.error(`❌ 失敗したモデル ${failed.index + 1}:`, {
+      arViewerLogger.error(`❌ 失敗したモデル ${failed.index + 1}:`, {
         url: failed.url,
         error: failed.error.message
       });
@@ -1058,14 +1154,14 @@ async function runMarkerShowtime(project) {
   }
   
   if (successfulModels.length === 0) {
-    console.warn('⚠️ すべてのモデル読み込みに失敗、デバッグキューブを追加');
+    arViewerLogger.warn('⚠️ すべてのモデル読み込みに失敗、デバッグキューブを追加');
     await addDebugCube();
   } else {
     successfulModels.forEach(o => __anchor.add(o));
   }
   
   console.timeEnd('[AR] models');
-  console.info('[AR] models attached', {
+  arViewerLogger.info('[AR] models attached', {
     successful: successfulModels.length,
     failed: failedModels.length,
     total: project.models?.length || 0
@@ -1077,65 +1173,7 @@ async function runMarkerShowtime(project) {
   });
 }
 
-// マーカーコントローラーの簡易実装
-const markerController = {
-  patterns: new Map(),
-  
-  async addPattern(patternBlob) {
-    const patternId = `marker_${Date.now()}`;
-    this.patterns.set(patternId, {
-      type: 'pattern',
-      data: patternBlob,
-      timestamp: Date.now()
-    });
-    console.log(`[AR] pattern added: ${patternId}, size: ${patternBlob.size} bytes`);
-    return patternId;
-  },
-  
-  async addImageMarker(imageData) {
-    const markerId = `image_${Date.now()}`;
-    this.patterns.set(markerId, {
-      type: typeof imageData === 'string' ? 'url' : 'bitmap',
-      data: imageData,
-      timestamp: Date.now()
-    });
-    
-    if (typeof imageData === 'string') {
-      console.log(`[AR] image marker (URL) added: ${markerId}, url: ${imageData}`);
-    } else {
-      console.log(`[AR] image marker (bitmap) added: ${markerId}, size: ${imageData.width}x${imageData.height}`);
-    }
-    return markerId;
-  },
-  
-  update() {
-    // マーカー検出の更新処理
-    // 実際のARライブラリに応じて実装
-    // 現在は何もしない（プレースホルダー）
-  },
-  
-  getPattern(patternId) {
-    const pattern = this.patterns.get(patternId);
-    return pattern ? pattern.data : null;
-  },
-  
-  getPatternInfo(patternId) {
-    return this.patterns.get(patternId);
-  },
-  
-  removePattern(patternId) {
-    return this.patterns.delete(patternId);
-  },
-  
-  // デバッグ用：登録済みパターン一覧
-  listPatterns() {
-    const list = [];
-    for (const [id, info] of this.patterns) {
-      list.push({ id, type: info.type, timestamp: info.timestamp });
-    }
-    return list;
-  }
-};
+// markerControllerは前方（26-89行目）で定義済み
 
 // ガイドの「開始」押下で 3D 表示開始
 function bindGuideStartButton() {
@@ -1150,7 +1188,7 @@ function bindGuideStartButton() {
       const startBtn = document.querySelector('#ar-start-btn');
       if (startBtn) startBtn.click();
     }, { once: true });
-    console.log('[FLOW] guide start button bound');
+    arViewerLogger.info('[FLOW] guide start button bound');
   }
 }
 
@@ -1177,8 +1215,8 @@ export default function showARViewer(container) {
   const forceDebugCube = ['on','1','true','yes'].includes((urlParams.get('cube')||'').toLowerCase());
   const forceNormalMaterial = ['normal','n','1','true','yes'].includes((urlParams.get('mat')||'').toLowerCase());
 
-  console.info('[showARViewer] projectSrc:', projectSrc);
-  console.info('[showARViewer] URL check:', {
+  arViewerLogger.info('[showARViewer] projectSrc:', projectSrc);
+  arViewerLogger.info('[showARViewer] URL check:', {
     'window.location.href': window.location.href,
     'window.location.search': window.location.search,
     'window.location.hash': window.location.hash,
@@ -1253,7 +1291,7 @@ export default function showARViewer(container) {
     const reloadBtn = container.querySelector('#viewer-reload-button');
     if (reloadBtn) reloadBtn.addEventListener('click', () => window.location.reload());
     return function cleanup() {
-      console.log('🧹 早期リターン: クリーンアップ不要');
+      arViewerLogger.info('🧹 早期リターン: クリーンアップ不要');
     };
   }
 
@@ -1628,28 +1666,28 @@ export default function showARViewer(container) {
                      container.querySelector('#ar-start-button');
     
     if (!startCTA) {
-      console.warn('[FLOW] start button not found yet');
+      arViewerLogger.warn('[FLOW] start button not found yet');
       return false; // 未発見
     }
     
     if (startCTA.__bound) {
-      console.log('[FLOW] start button already bound, skipping');
+      arViewerLogger.info('[FLOW] start button already bound, skipping');
       return true; // 既にバインド済み
     }
     
     // バインド実行
     startCTA.addEventListener('click', () => {
-      console.log('[FLOW] #ar-start-cta clicked, forwarding to #ar-start-btn');
+      arViewerLogger.info('[FLOW] #ar-start-cta clicked, forwarding to #ar-start-btn');
       const sb = container.querySelector('#ar-start-btn');
       if (sb) {
         sb.click();
       } else {
-        console.warn('[FLOW] #ar-start-btn not found');
+        arViewerLogger.warn('[FLOW] #ar-start-btn not found');
       }
     }, { once: true });
     
     startCTA.__bound = true;
-    console.log('[FLOW] start button bound successfully:', startCTA.id || startCTA.getAttribute('data-role'));
+    arViewerLogger.info('[FLOW] start button bound successfully:', startCTA.id || startCTA.getAttribute('data-role'));
     return true; // バインド成功
   };
 
@@ -1669,7 +1707,7 @@ export default function showARViewer(container) {
   // HTML生成直後にボタンのバインドを試行（1回目）
   setTimeout(() => {
     if (!bindStartButtonOnce()) {
-      console.log('[FLOW] early binding failed, will retry via observer');
+      arViewerLogger.info('[FLOW] early binding failed, will retry via observer');
     }
   }, 50);
   
@@ -1688,7 +1726,7 @@ export default function showARViewer(container) {
 
 // 統合ARビューアの初期化関数
 async function initIntegratedARViewer(container, projectSrc, options = {}) {
-  console.log('[🚀 initIntegratedARViewer] 開始:', { projectSrc, options });
+  arViewerLogger.info('[🚀 initIntegratedARViewer] 開始:', { projectSrc, options });
   arViewerLogger.info('ARビューア初期化開始:', { projectSrc, options });
   const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false, engineOverride = null } = options;
   const loadingScreen = container.querySelector('#ar-loading-screen');
@@ -1734,12 +1772,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   async function showScreen(state, options = {}) {
     if (currentScreenState === state && !options.force) {
-      console.log(`⚠️ 画面状態は既に ${state} です`);
+      arViewerLogger.info(`⚠️ 画面状態は既に ${state} です`);
       return;
     }
 
-    console.log(`🔄 画面状態を ${currentScreenState || 'null'} から ${state || 'null'} に変更`);
-    console.log(`🔍 showScreen呼び出し詳細:`, {
+    arViewerLogger.info(`🔄 画面状態を ${currentScreenState || 'null'} から ${state || 'null'} に変更`);
+    arViewerLogger.info(`🔍 showScreen呼び出し詳細:`, {
       要求状態: state,
       現在状態: currentScreenState,
       オプション: options,
@@ -1776,29 +1814,29 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (window.__project) {
             try { 
               await applyProjectDesign(window.__project, { screen: 'start' }); 
-              console.info('[APPLY] screen=start applied');
+              arViewerLogger.info('[APPLY] screen=start applied');
             } catch (e) { 
-              console.error('[APPLY] start pre-apply error', e); 
+              arViewerLogger.error('[APPLY] start pre-apply error', e); 
             }
             // 2) 描画確定後にもう一度適用
             requestAnimationFrame(() => {
               try { 
                 applyProjectDesign(window.__project, { screen: 'start' }); 
-                console.info('[APPLY] screen=start rAF applied');
+                arViewerLogger.info('[APPLY] screen=start rAF applied');
               } catch (e) { 
-                console.error('[APPLY] start rAF-apply error', e); 
+                arViewerLogger.error('[APPLY] start rAF-apply error', e); 
               }
             });
           }
           startScreen.style.display = 'flex';
-          console.log('✅ スタート画面を表示');
-          console.log('🔍 表示後の確認:', {
+          arViewerLogger.info('✅ スタート画面を表示');
+          arViewerLogger.info('🔍 表示後の確認:', {
             display: startScreen.style.display,
             computedDisplay: window.getComputedStyle(startScreen).display,
             visibility: window.getComputedStyle(startScreen).visibility
           });
         } else {
-          console.error('❌ startScreen要素が見つかりません');
+          arViewerLogger.error('❌ startScreen要素が見つかりません');
         }
         break;
 
@@ -1807,16 +1845,16 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (window.__project) {
             try { 
               await applyProjectDesign(window.__project, { screen: 'loading' }); 
-              console.info('[APPLY] screen=loading applied');
+              arViewerLogger.info('[APPLY] screen=loading applied');
             } catch (e) { 
-              console.error('[APPLY] loading pre-apply error', e); 
+              arViewerLogger.error('[APPLY] loading pre-apply error', e); 
             }
             requestAnimationFrame(() => {
               try { 
                 applyProjectDesign(window.__project, { screen: 'loading' }); 
-                console.info('[APPLY] screen=loading rAF applied');
+                arViewerLogger.info('[APPLY] screen=loading rAF applied');
               } catch (e) { 
-                console.error('[APPLY] loading rAF-apply error', e); 
+                arViewerLogger.error('[APPLY] loading rAF-apply error', e); 
               }
             });
           }
@@ -1827,14 +1865,14 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           loadingScreen.style.setProperty('width', '100vw', 'important');
           loadingScreen.style.setProperty('height', '100vh', 'important');
           loadingScreen.style.setProperty('z-index', '9999', 'important');
-          console.log('✅ ローディング画面を表示');
-          console.log('🔍 表示後の確認:', {
+          arViewerLogger.info('✅ ローディング画面を表示');
+          arViewerLogger.info('🔍 表示後の確認:', {
             display: loadingScreen.style.display,
             computedDisplay: window.getComputedStyle(loadingScreen).display,
             zIndex: window.getComputedStyle(loadingScreen).zIndex
           });
         } else {
-          console.error('❌ loadingScreen要素が見つかりません');
+          arViewerLogger.error('❌ loadingScreen要素が見つかりません');
         }
         break;
 
@@ -1843,28 +1881,28 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (window.__project) {
             try { 
               await applyProjectDesign(window.__project, { screen: 'guide' }); 
-              console.info('[APPLY] screen=guide applied');
+              arViewerLogger.info('[APPLY] screen=guide applied');
             } catch (e) { 
-              console.error('[APPLY] guide pre-apply error', e); 
+              arViewerLogger.error('[APPLY] guide pre-apply error', e); 
             }
             requestAnimationFrame(() => {
               try { 
                 applyProjectDesign(window.__project, { screen: 'guide' }); 
-                console.info('[APPLY] screen=guide rAF applied');
+                arViewerLogger.info('[APPLY] screen=guide rAF applied');
               } catch (e) { 
-                console.error('[APPLY] guide rAF-apply error', e); 
+                arViewerLogger.error('[APPLY] guide rAF-apply error', e); 
               }
             });
           }
           guideScreen.style.display = 'flex';
-          console.log('✅ ガイド画面を表示');
-          console.log('🔍 表示後の確認:', {
+          arViewerLogger.info('✅ ガイド画面を表示');
+          arViewerLogger.info('🔍 表示後の確認:', {
             display: guideScreen.style.display,
             computedDisplay: window.getComputedStyle(guideScreen).display,
             visibility: window.getComputedStyle(guideScreen).visibility
           });
         } else {
-          console.error('❌ guideScreen要素が見つかりません');
+          arViewerLogger.error('❌ guideScreen要素が見つかりません');
         }
         break;
 
@@ -1888,37 +1926,37 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (guideScreen) guideScreen.style.display = 'flex';
           if (markerGuide) markerGuide.style.display = 'none';
           if (markerGuideTips) markerGuideTips.style.display = 'none';
-          console.log('✅ カスタムガイドを表示（AR実行中の案内として使用）');
+          arViewerLogger.info('✅ カスタムガイドを表示（AR実行中の案内として使用）');
         } else {
           // 既定の正方形枠ガイド
           let arDisplayed = false;
           if (markerGuide) { markerGuide.style.display = 'block'; arDisplayed = true; }
           if (markerGuideTips) { markerGuideTips.style.display = 'block'; arDisplayed = true; }
           if (arDisplayed) {
-            console.log('✅ 既定ガイドを表示');
+            arViewerLogger.info('✅ 既定ガイドを表示');
           } else {
-            console.warn('⚠️ AR画面要素が見つかりません');
+            arViewerLogger.warn('⚠️ AR画面要素が見つかりません');
           }
         }
-        console.log('✅ AR画面を表示（他の画面を非表示）');
+        arViewerLogger.info('✅ AR画面を表示（他の画面を非表示）');
         break;
 
       case screenStates.ERROR:
         if (guideScreen) {
           guideScreen.style.display = 'flex';
-          console.log('✅ エラー時ガイド画面を表示');
+          arViewerLogger.info('✅ エラー時ガイド画面を表示');
         } else {
-          console.error('❌ エラー時にguideScreen要素が見つかりません');
+          arViewerLogger.error('❌ エラー時にguideScreen要素が見つかりません');
         }
         break;
 
       case null:
         // 全画面非表示（ARコンテンツ表示時）
-        console.log('✅ 全画面を非表示（ARコンテンツ表示）');
+        arViewerLogger.info('✅ 全画面を非表示（ARコンテンツ表示）');
         break;
 
       default:
-        console.warn(`⚠️ 不明な画面状態: ${state}`);
+        arViewerLogger.warn(`⚠️ 不明な画面状態: ${state}`);
         break;
     }
   }
@@ -1941,7 +1979,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (loadingMessageEl) loadingMessageEl.textContent = settings.loadingMessage;
       }
     } catch (error) {
-      console.warn('⚠️ ローディング画面適用中の警告:', error);
+      arViewerLogger.warn('⚠️ ローディング画面適用中の警告:', error);
     }
   }
 
@@ -2119,7 +2157,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   function updateStatus(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString();
-    if (IS_DEBUG) console.log(`[${timestamp}] ${message}`);
+    if (IS_DEBUG) arViewerLogger.info(`[${timestamp}] ${message}`);
     
     // ★★★ セキュリティ強化: DOM要素作成でXSS防止 ★★★
     statusText.textContent = ''; // クリア
@@ -2156,9 +2194,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     // プロジェクトデータは bootFromQR で既に取得済み（window.__project に保存）
     if (typeof window !== 'undefined' && window.__project) {
       currentProject = window.__project;
-      console.log('🗂️ bootFromQR で取得済みのプロジェクトを使用');
+      arViewerLogger.info('🗂️ bootFromQR で取得済みのプロジェクトを使用');
     } else {
-      console.error('[FLOW] ❌ プロジェクトが bootFromQR で読み込まれていません');
+      arViewerLogger.error('[FLOW] ❌ プロジェクトが bootFromQR で読み込まれていません');
       throw new Error('Project not loaded by bootFromQR. Check initialization flow.');
     }
     
@@ -2171,8 +2209,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     dlog('📁 読み込まれたプロジェクト:', currentProject);
     dlog('🔍 プロジェクトのloadingScreen:', currentProject.loadingScreen);
-    console.log('🔍 Project URL:', window.location.hash);
-    console.log('🔍 Full currentProject:', JSON.stringify(currentProject, null, 2));
 
     // 画面設定（ローディング/スタート/ガイド）の取得
     let ls = currentProject.loadingScreen || {};
@@ -2185,9 +2221,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       ss = { ...ss, ...(startScreen || {}) };
       ls = { ...ls, ...(loadingScreen || {}) };
       gs = { ...gs, ...(guideScreen || {}) };
-      console.log('🎯 normalized design extracted for viewer');
     } catch (e) {
-      console.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
+      arViewerLogger.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
     }
 
     // 追加補完: エディター保存のローカル設定（同一オリジンでの即時反映用）
@@ -2199,11 +2234,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         const editorSettings = JSON.parse(editorLocal);
         if (editorSettings.startScreen) {
           ss = { ...editorSettings.startScreen, ...ss };
-          console.log('🔄 editor local startScreen を補完適用');
         }
         if (editorSettings.loadingScreen) {
           ls = { ...editorSettings.loadingScreen, ...ls };
-          console.log('🔄 editor local loadingScreen を補完適用');
         }
         if (editorSettings.guideScreen) {
           // ネストを意識して浅い上書き
@@ -2214,31 +2247,21 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (editorSettings.guideScreen.worldTracking) {
             gs.worldTracking = { ...(editorSettings.guideScreen.worldTracking || {}), ...(gs.worldTracking || {}) };
           }
-          console.log('🔄 editor local guideScreen を補完適用');
         }
       }
     } catch (e) {
-      console.warn('⚠️ editor local settings の適用に失敗:', e);
+      arViewerLogger.warn('⚠️ editor local settings の適用に失敗:', e);
     }
     
     // project.jsonに埋め込まれた設定を最優先で適用
-    console.log('🔍 ss direct check:', ss);
-    console.log('🔍 ls.templateSettings check:', ls.templateSettings);
-    console.log('🔍 ls.editorSettings check:', ls.editorSettings);
-    console.log('🔍 FULL currentProject check:', JSON.stringify(currentProject, null, 2));
-    
+
     // 1. templateSettingsから設定を適用（最高優先度）
     if (ls.templateSettings) {
-      console.log('🎯 project.jsonに埋め込まれたtemplateSettingsを適用:', ls.templateSettings);
-      
       if (ls.templateSettings.startScreen) {
-        console.log('🎯 templateSettings.startScreen があります:', ls.templateSettings.startScreen);
-        console.log('🎯 適用前のss:', ss);
-        
         // 完全に上書きではなく、既存の設定に追加する形でマージ
         const templateStartScreen = ls.templateSettings.startScreen;
-        ss = { 
-          ...ss, 
+        ss = {
+          ...ss,
           ...templateStartScreen,
           // 位置とサイズの設定を明示的に適用
           titlePosition: templateStartScreen.titlePosition ?? ss.titlePosition,
@@ -2248,20 +2271,16 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           buttonSize: templateStartScreen.buttonSize ?? ss.buttonSize,
           logoSize: templateStartScreen.logoSize ?? ss.logoSize
         };
-        console.log('🎯 templateSettings.startScreenを適用（位置・サイズ設定含む）:', ss);
-        console.log('🎯 適用後の背景色 backgroundColor:', ss.backgroundColor);
-        console.log('🎯 適用後のボタンテキスト buttonText:', ss.buttonText);
-      } else {
-        console.log('❌ templateSettings.startScreen がありません');
+        dlog('🎯 templateSettings.startScreenを適用');
       }
       if (ls.templateSettings.loadingScreen) {
         // templateSettingsのloadingScreenを最優先でマージ
         ls = { ...ls, ...ls.templateSettings.loadingScreen };
-        console.log('🎯 templateSettings.loadingScreenを適用:', ls);
+        dlog('🎯 templateSettings.loadingScreenを適用');
       }
       if (ls.templateSettings.guideScreen) {
         gs = { ...gs, ...ls.templateSettings.guideScreen };
-        console.log('🎯 templateSettings.guideScreenを適用:', gs);
+        dlog('🎯 templateSettings.guideScreenを適用');
       }
     }
     
@@ -2270,38 +2289,32 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (currentProject?.startScreen) {
         // プロジェクト直下の値は不足補完として扱い、テンプレで上書きされた内容を壊さない
         ss = { ...currentProject.startScreen, ...ss };
-        console.log('📝 project.startScreen を適用 (不足補完優先):', currentProject.startScreen);
       }
       if (currentProject?.guideScreen) {
         gs = { ...currentProject.guideScreen, ...gs };
-        console.log('📝 project.guideScreen を適用 (不足補完優先):', currentProject.guideScreen);
       }
       if (currentProject?.loadingScreen) {
         // 既に ls は currentProject.loadingScreen を基にしている想定だが、念のため浅く統合
         ls = { ...currentProject.loadingScreen, ...ls };
-        console.log('📝 project.loadingScreen を再統合:', currentProject.loadingScreen);
       }
     } catch (_) {}
     
     // 2. editorSettingsの設定を強制適用（ユーザー設定を最優先）
     // ユーザーが意図して設定した値を反映させるため、ss/gs/lsを上書きする形に変更
     if (ls.editorSettings) {
-      console.log('🔄 editorSettingsの設定を適用（ユーザー設定優先）:', ls.editorSettings);
-      
       // startScreen設定
       if (ls.editorSettings.startScreen) {
         const es = ls.editorSettings.startScreen || {};
         // 既存の設定(ss)よりもエディタ設定(es)を優先
         ss = { ...ss, ...es };
-        console.log('🔄 editorSettings.startScreenを優先適用:', ss);
       }
-      
+
       // guideScreen設定
       if (ls.editorSettings.guideScreen) {
         const eg = ls.editorSettings.guideScreen || {};
         // 既存の設定(gs)よりもエディタ設定(eg)を優先
         gs = { ...gs, ...eg };
-        
+
         // ネストされたオブジェクトのマージ
         if (eg.surfaceDetection) {
           gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...eg.surfaceDetection };
@@ -2309,26 +2322,17 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (eg.worldTracking) {
           gs.worldTracking = { ...(gs.worldTracking || {}), ...eg.worldTracking };
         }
-        console.log('🔄 editorSettings.guideScreenを優先適用:', gs);
       }
-      
+
       // loadingScreen設定
       if (ls.editorSettings.loadingScreen) {
         const el = ls.editorSettings.loadingScreen || {};
         // 既存の設定(ls)よりもエディタ設定(el)を優先
         ls = { ...ls, ...el };
-        console.log('🔄 editorSettings.loadingScreenを優先適用:', ls);
       }
     }
     
     // 3. デフォルト設定でフォールバック（真っ白画面を防ぐ）
-    console.log('🔍 スタート画面設定チェック開始');
-    console.log('🔍 現在のss:', JSON.stringify(ss, null, 2));
-    console.log('🔍 ss.title:', ss.title);
-    console.log('🔍 ss.backgroundColor:', ss.backgroundColor);
-    
-    // 強制的にデフォルト設定を適用（設定が不完全な場合）
-    console.log('🚨 強制的にデフォルト設定を適用');
     const defaultSettings = {
       title: 'AR体験を開始',
       buttonText: '開始',
@@ -2344,10 +2348,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       logoPosition: 20
     };
     ss = { ...defaultSettings, ...ss };
-    console.log('✅ 強制適用後のss:', JSON.stringify(ss, null, 2));
-    
+
     if (!ls.backgroundColor && !ls.textColor) {
-      console.log('🔄 ローディング画面デフォルト設定でフォールバック');
       ls = {
         backgroundColor: '#1a1a1a',
         textColor: '#ffffff',
@@ -2357,49 +2359,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         ...ls
       };
     }
-    
-    console.log('🎯 最終的なstartScreen設定:', ss);
-    console.log('XXXXX このログが見えますか？ XXXXX');
-    
-    // 🚨 緊急修正: templateSettingsを強制的に適用
-    console.log('🔍 緊急修正の条件チェック:');
-    console.log('  - currentProject.loadingScreen:', !!currentProject.loadingScreen);
-    console.log('  - templateSettings:', !!currentProject.loadingScreen?.templateSettings);
-    console.log('  - startScreen:', !!currentProject.loadingScreen?.templateSettings?.startScreen);
-    
-    if (currentProject.loadingScreen?.templateSettings?.startScreen) {
-      console.log('🚨 緊急修正: templateSettingsを強制適用');
-      const forceTemplate = currentProject.loadingScreen.templateSettings.startScreen;
-      console.log('🚨 強制適用するデータ:', forceTemplate);
-      ss = { ...ss, ...forceTemplate };
-      console.log('🚨 強制適用後のss:', ss);
-    } else {
-      console.log('❌ 緊急修正の条件が満たされません');
-      // 直接的なパスも試してみる
-      if (currentProject.loadingScreen && currentProject.loadingScreen.templateSettings) {
-        console.log('🔄 別のパスを試します...');
-        const ts = currentProject.loadingScreen.templateSettings;
-        if (ts.startScreen) {
-          console.log('✅ 別のパスで発見! 適用します:', ts.startScreen);
-          ss = { ...ss, ...ts.startScreen };
-          console.log('✅ 別パス適用後のss:', ss);
-        }
-      }
-    }
-    console.log('🔍 詳細分析 - どの設定が実際に使われているか:');
-    console.log('  - currentProject.startScreen:', JSON.stringify(currentProject.startScreen, null, 2));
-    console.log('  - ls.templateSettings?.startScreen:', JSON.stringify(ls.templateSettings?.startScreen, null, 2));
-    console.log('  - ls.editorSettings?.startScreen:', JSON.stringify(ls.editorSettings?.startScreen, null, 2));
-    console.log('  - 最終的なss:', JSON.stringify(ss, null, 2));
-    console.log('🔍 ローディング画面設定の詳細分析:');
-    console.log('  - ls.templateSettings?.loadingScreen:', JSON.stringify(ls.templateSettings?.loadingScreen, null, 2));
-    console.log('  - 最終的なls:', JSON.stringify({ 
-      backgroundColor: ls.backgroundColor, 
-      textColor: ls.textColor, 
-      progressColor: ls.progressColor,
-      message: ls.message || ls.loadingMessage,
-      hasTemplateSettings: !!ls.templateSettings 
-    }, null, 2));
     
     // ビューア専用の状態管理を使用して設定を適用
     try {
@@ -2413,29 +2372,25 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (!ls.templateSettings?.loadingScreen) {
         // templateSettingsにローディング設定がない場合のみマージ
         ls = { ...mergedSettings.loadingScreen, ...ls };
-        console.log('🔄 統合システムでローディング画面設定を補完:', ls);
       }
       if (!ss.title && !ls.templateSettings?.startScreen) {
-        // スタート画面のタイトルがなく、templateSettingsにも設定がない場合のみマージ  
+        // スタート画面のタイトルがなく、templateSettingsにも設定がない場合のみマージ
         ss = { ...mergedSettings.startScreen, ...ss };
-        console.log('🔄 統合システムでスタート画面設定を補完:', ss);
       }
       if (!gs.message && !ls.templateSettings?.guideScreen) {
         // ガイド画面にメッセージがなく、templateSettingsにも設定がない場合のみマージ
         gs = { ...mergedSettings.guideScreen, ...gs };
-        console.log('🔄 統合システムでガイド画面設定を補完:', gs);
       }
-      
+
       dlog('🎨 統合システムでローディング画面設定を適用:', { ls, ss, gs, merged: mergedSettings });
     } catch (error) {
-      console.warn('統合システムの適用に失敗、従来の方法を使用:', error);
-      
+      arViewerLogger.warn('統合システムの適用に失敗、従来の方法を使用:', error);
+
       // フォールバック: templateSettingsを最優先にして、エディター保存形式も処理
       const editorSettings = ls.editorSettings || null;
-      
+
       // templateSettingsが存在する場合は、それを最優先で適用
       if (ls.templateSettings) {
-        console.log('🎯 フォールバック中でもtemplateSettingsを最優先適用');
         if (ls.templateSettings.loadingScreen && !ls.backgroundColor) {
           ls = { ...ls, ...ls.templateSettings.loadingScreen };
         }
@@ -2443,14 +2398,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           ss = { ...ss, ...ls.templateSettings.startScreen };
         }
       }
-      
+
       // その後でeditorSettingsから不足項目を補完
       if (!ss.title && !ls.templateSettings?.startScreen) {
         ss = currentProject.startScreen || (editorSettings?.startScreen || {});
       }
     }
-
-    console.log('🎨 最終的な設定:', { ls, ss, gs });
     
     // editorSettings をスコープ外でも使用するため、ここで定義
     const editorSettings = ls.editorSettings || null;
@@ -2487,7 +2440,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             }
           }
         } catch (e) {
-          console.warn('⚠️ localStorage補完失敗（プロジェクト設定を使用）:', e);
+          arViewerLogger.warn('⚠️ localStorage補完失敗（プロジェクト設定を使用）:', e);
         }
       } else {
         dlog('✅ 完全な設定がプロジェクトファイルに含まれています');
@@ -2526,7 +2479,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           dlog('🔄 editorSettings から不足項目を補完:', ls);
         }
       } catch (e) {
-        console.warn('⚠️ editorSettings の補完に失敗（継続）:', e);
+        arViewerLogger.warn('⚠️ editorSettings の補完に失敗（継続）:', e);
       }
 
       // メッセージ適用（小さめの説明文）
@@ -2611,7 +2564,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           dlog('🏷️ ロゴ表示:', { logoType, pos, px });
         }
       } catch (e) {
-        console.warn('⚠️ ロゴ適用失敗:', e);
+        arViewerLogger.warn('⚠️ ロゴ適用失敗:', e);
       }
 
       // テキスト位置（上から%）
@@ -2638,7 +2591,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             new Promise((_, reject) => setTimeout(() => reject(new Error('モデル読み込みタイムアウト')), 30000))
           ]);
         } catch (e) {
-          console.error('❌ モデル読み込みエラー（続行します）:', e);
+          arViewerLogger.error('❌ モデル読み込みエラー（続行します）:', e);
           updateStatus('⚠️ モデルの読み込みに時間がかかっていますが、続行します', 'warning');
           // エラーでも続行させる
         }
@@ -2659,24 +2612,24 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ★★★ スタート画面レイアウト関数を定義 ★★★
       function layoutStartScreen() {
         if (!startScreen || !ss) {
-          console.log('❌ スタート画面レイアウトスキップ - startScreen:', !!startScreen, 'ss:', !!ss);
+          arViewerLogger.info('❌ スタート画面レイアウトスキップ - startScreen:', !!startScreen, 'ss:', !!ss);
           return;
         }
         
-        console.log('🔄 スタート画面レイアウト実行');
-        console.log('🔍 適用する設定:', ss);
+        arViewerLogger.info('🔄 スタート画面レイアウト実行');
+        arViewerLogger.info('🔍 適用する設定:', ss);
         
         // スタート画面を表示
         showScreen(screenStates.START);
         
         // 背景
-        console.log('🎨 背景色適用チェック:', ss.backgroundColor, 'startScreen要素:', !!startScreen);
+        arViewerLogger.info('🎨 背景色適用チェック:', ss.backgroundColor, 'startScreen要素:', !!startScreen);
         if (ss.backgroundColor && startScreen) {
           startScreen.style.setProperty('background', ss.backgroundColor, 'important');
-          console.log('🎨 背景色適用実行:', ss.backgroundColor);
-          console.log('🔍 適用後の背景色:', window.getComputedStyle(startScreen).backgroundColor);
+          arViewerLogger.info('🎨 背景色適用実行:', ss.backgroundColor);
+          arViewerLogger.info('🔍 適用後の背景色:', window.getComputedStyle(startScreen).backgroundColor);
         } else {
-          console.log('❌ 背景色適用スキップ - backgroundColor:', ss.backgroundColor, 'startScreen:', !!startScreen);
+          arViewerLogger.info('❌ 背景色適用スキップ - backgroundColor:', ss.backgroundColor, 'startScreen:', !!startScreen);
         }
       // タイトル
       if (startTitle) {
@@ -2698,7 +2651,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startTitle.style.setProperty('width', '90%', 'important');
           startTitle.style.setProperty('text-align', 'center', 'important');
           startTitle.style.setProperty('z-index', '9999', 'important');
-          console.log('🎨 タイトル位置適用 (コンテナ基準%):', `${tpos}%`, 'titlePosition:', ss.titlePosition);
+          arViewerLogger.info('🎨 タイトル位置適用 (コンテナ基準%):', `${tpos}%`, 'titlePosition:', ss.titlePosition);
         } else {
           // デフォルトは中央揃え（flexセンター）
           startTitle.style.position = '';
@@ -2720,10 +2673,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           // プレビューに合わせて不要な影は付けない
           startTitle.style.setProperty('text-shadow', 'none', 'important');
           startTitle.style.setProperty('margin', '0', 'important');
-          console.log('🎨 タイトルフォントサイズ適用 (!important):', `${computedSize}px`, 'titleSize:', ts);
-          console.log('🔍 startTitle要素:', startTitle, 'computed style:', window.getComputedStyle(startTitle).fontSize);
+          arViewerLogger.info('🎨 タイトルフォントサイズ適用 (!important):', `${computedSize}px`, 'titleSize:', ts);
+          arViewerLogger.info('🔍 startTitle要素:', startTitle, 'computed style:', window.getComputedStyle(startTitle).fontSize);
         } else {
-          console.log('❌ タイトルサイズ適用スキップ - titleSize:', ss.titleSize, 'type:', typeof ss.titleSize);
+          arViewerLogger.info('❌ タイトルサイズ適用スキップ - titleSize:', ss.titleSize, 'type:', typeof ss.titleSize);
         }
       }
       // ロゴ
@@ -2749,8 +2702,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         startLogo.style.height = `${logoWidth}px`;
         startLogo.style.objectFit = 'contain';
         startLogo.style.zIndex = '1202';
-        console.log('🎨 ロゴサイズ適用:', `${logoWidth}px`, 'logoSize:', ss.logoSize);
-        console.log('🔍 ロゴ要素:', startLogo, 'computed maxWidth:', window.getComputedStyle(startLogo).maxWidth);
+        arViewerLogger.info('🎨 ロゴサイズ適用:', `${logoWidth}px`, 'logoSize:', ss.logoSize);
+        arViewerLogger.info('🔍 ロゴ要素:', startLogo, 'computed maxWidth:', window.getComputedStyle(startLogo).maxWidth);
       }
       // CTA
       if (startCTA) {
@@ -2768,7 +2721,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('transform', 'translateX(-50%)', 'important');
           startCTA.style.setProperty('top', `${bpos}%`, 'important');
           startCTA.style.setProperty('z-index', '9999', 'important');
-          console.log('🎨 ボタン位置適用 (コンテナ基準%):', `${bpos}%`, 'buttonPosition:', ss.buttonPosition);
+          arViewerLogger.info('🎨 ボタン位置適用 (コンテナ基準%):', `${bpos}%`, 'buttonPosition:', ss.buttonPosition);
         } else {
           startCTA.style.position = '';
           startCTA.style.left = '';
@@ -2788,10 +2741,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('border-radius', '8px', 'important');
           startCTA.style.setProperty('box-shadow', '0 2px 8px rgba(0,0,0,0.2)', 'important');
           
-          console.log('🎨 ボタンサイズ適用（エディター準拠）:', `${fontSize}px`, 'buttonSize:', ss.buttonSize, 'padding:', `${padY}px ${padX}px`);
-          console.log('🔍 ボタン要素:', startCTA, 'computed fontSize:', window.getComputedStyle(startCTA).fontSize, 'computed padding:', window.getComputedStyle(startCTA).padding);
+          arViewerLogger.info('🎨 ボタンサイズ適用（エディター準拠）:', `${fontSize}px`, 'buttonSize:', ss.buttonSize, 'padding:', `${padY}px ${padX}px`);
+          arViewerLogger.info('🔍 ボタン要素:', startCTA, 'computed fontSize:', window.getComputedStyle(startCTA).fontSize, 'computed padding:', window.getComputedStyle(startCTA).padding);
         } else {
-          console.log('❌ ボタンサイズ適用スキップ - buttonSize:', ss.buttonSize, 'type:', typeof ss.buttonSize);
+          arViewerLogger.info('❌ ボタンサイズ適用スキップ - buttonSize:', ss.buttonSize, 'type:', typeof ss.buttonSize);
         }
       }
       
@@ -2807,12 +2760,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (editorLocalSettings.startScreen) {
             const els = editorLocalSettings.startScreen || {};
             ss = { ...els, ...ss };
-            console.log('🔧 最終補完(ls=on): editor startScreen を不足のみ適用');
+            arViewerLogger.info('🔧 最終補完(ls=on): editor startScreen を不足のみ適用');
           }
           if (editorLocalSettings.loadingScreen) {
             const ell = editorLocalSettings.loadingScreen || {};
             ls = { ...ell, ...ls };
-            console.log('🔧 最終補完(ls=on): editor loadingScreen を不足のみ適用');
+            arViewerLogger.info('🔧 最終補完(ls=on): editor loadingScreen を不足のみ適用');
           }
         }
       } catch (_) {}
@@ -2889,7 +2842,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           }
         }
       } catch (e) {
-        console.warn('⚠️ 最終確定の適用に失敗（継続）:', e);
+        arViewerLogger.warn('⚠️ 最終確定の適用に失敗（継続）:', e);
       }
 
       // 初回レイアウト実行
@@ -2906,7 +2859,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ローディングは開始押下まで非表示
       if (loadingScreen) {
         loadingScreen.style.display = 'none';
-        console.log('🔍 ローディング画面を初期状態で非表示に設定');
+        arViewerLogger.info('🔍 ローディング画面を初期状態で非表示に設定');
       }
       if (startBtn) {
         startBtn.style.display = 'none';
@@ -2919,7 +2872,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         const startCTA = container.querySelector('#ar-start-cta');
         if (startCTA) {
           startCTA.addEventListener('click', onStartClick, { once: true });
-          console.log('[FLOW] start button bound directly:', startCTA);
+          arViewerLogger.info('[FLOW] start button bound directly:', startCTA);
         } else {
           bindStartButtonOnce();
         }
@@ -2935,7 +2888,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         const startBtn = container.querySelector('#ar-start-btn');
         if (startBtn) {
           startBtn.addEventListener('click', onStartClick, { once: true });
-          console.log('[FLOW] fallback button bound directly:', startBtn);
+          arViewerLogger.info('[FLOW] fallback button bound directly:', startBtn);
         } else {
           bindStartButtonOnce();
         }
@@ -3001,7 +2954,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       
       dlog('🎯 ガイド画面設定完了:', { guideMode, gs, hasCustomMarkerGuide });
     } catch (guideError) {
-      console.warn('⚠️ ガイド画面設定エラー:', guideError);
+      arViewerLogger.warn('⚠️ ガイド画面設定エラー:', guideError);
     }
 
   } catch (error) {
@@ -3063,7 +3016,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     if (!loadingStateManager) {
       loadingStateManager = createLoadingStateManager({
         onStateChange: (newState, oldState, data) => {
-          console.log(`📊 ローディング状態: ${oldState} → ${newState}`, data);
+          arViewerLogger.info(`📊 ローディング状態: ${oldState} → ${newState}`, data);
           // updateStatus関数との互換性のため、直接UI更新
           updateStatus(data.message, data.type);
         }
@@ -3072,11 +3025,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     arStateMachine = createARStateMachine({
       onStateChange: async (newState, oldState, data) => {
-        console.log(`🔄 AR状態変更: ${oldState} → ${newState}`, data);
+        arViewerLogger.info(`🔄 AR状態変更: ${oldState} → ${newState}`, data);
         await handleARStateChange(newState, oldState, data);
       },
       onError: async (error, previousState, data) => {
-        console.error('❌ AR状態機械エラー:', error, { previousState, data });
+        arViewerLogger.error('❌ AR状態機械エラー:', error, { previousState, data });
         handleARError(error, previousState, data);
       },
       defaultTimeout: 30000
@@ -3085,18 +3038,18 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   // AR開始（ユーザー操作起点・状態機械制御）
   startBtn.addEventListener('click', async () => {
-    console.log('🚀 AR開始ボタンが押されました');
+    arViewerLogger.info('🚀 AR開始ボタンが押されました');
 
     // 状態機械初期化
     initializeARStateMachine();
 
     // 現在の状態確認
     const currentState = arStateMachine.getState();
-    console.log('📊 現在のAR状態:', currentState);
+    arViewerLogger.info('📊 現在のAR状態:', currentState);
 
     // IDLE状態でない場合は重複起動防止
     if (currentState !== ARState.IDLE) {
-      console.log('⚠️ AR処理が既に進行中です:', currentState);
+      arViewerLogger.info('⚠️ AR処理が既に進行中です:', currentState);
       return;
     }
 
@@ -3108,137 +3061,214 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         engineOverride: engineOverride || null
       });
     } catch (error) {
-      console.error('❌ AR起動要求エラー:', error);
+      arViewerLogger.error('❌ AR起動要求エラー:', error);
       handleARError(error, ARState.IDLE, {});
     }
   });
 
-  // AR状態変更ハンドラー
+  // AR状態ごとのUI設定マップ
+  const AR_STATE_CONFIG = {
+    [ARState.LAUNCH_REQUESTED]: {
+      loadingMessage: '🔍 デバイス対応確認中...',
+      loadingType: 'loading',
+      hideStartButton: true
+    },
+    [ARState.PERMISSION_PROMPT]: {
+      loadingMessage: '📱 権限確認中...',
+      loadingType: 'loading'
+    },
+    [ARState.CAMERA_STARTING]: {
+      loadingMessage: '📷 カメラ起動中...',
+      loadingType: 'loading',
+      screen: screenStates.GUIDE,
+      updateGuide: { type: 'marker' }
+    },
+    [ARState.XR_STARTING]: {
+      loadingMessage: '🥽 WebXR起動中...',
+      loadingType: 'loading',
+      screen: screenStates.GUIDE,
+      updateGuide: { type: 'webxr' }
+    },
+    [ARState.LOADING_ASSETS]: {
+      loadingMessage: '📦 アセット読み込み中...',
+      loadingType: 'loading'
+    },
+    [ARState.PLACING]: {
+      loadingMessage: '🎯 配置モード',
+      loadingType: 'success',
+      screen: screenStates.AR
+    },
+    [ARState.RUNNING]: {
+      loadingMessage: '✅ AR実行中',
+      loadingType: 'success',
+      screen: screenStates.AR
+    },
+    [ARState.ERROR]: {
+      loadingType: 'error'
+    },
+    [ARState.DISPOSED]: {
+      loadingMessage: '準備完了',
+      loadingType: 'idle'
+    }
+  };
+
+  // AR状態変更ハンドラー（UI更新と状態処理の一元管理）
   async function handleARStateChange(newState, oldState, data) {
-    switch (newState) {
-      case ARState.LAUNCH_REQUESTED:
+    // UI設定の適用
+    const config = AR_STATE_CONFIG[newState];
+    if (config) {
+      // ローディング状態更新
+      if (config.loadingMessage || config.loadingType) {
+        switch (config.loadingType) {
+          case 'loading':
+            loadingStateManager.startLoading(config.loadingMessage);
+            break;
+          case 'success':
+            loadingStateManager.setSuccess(config.loadingMessage);
+            break;
+          case 'error':
+            loadingStateManager.setError(data.error?.message || 'AR起動エラー');
+            break;
+          case 'idle':
+            loadingStateManager.setIdle(config.loadingMessage);
+            break;
+        }
+      }
+
+      // スタートボタン非表示
+      if (config.hideStartButton) {
         startBtn.style.display = 'none';
-        loadingStateManager.startLoading('🔍 デバイス対応確認中...');
-        await handleLaunchRequested(data);
-        break;
+      }
 
-      case ARState.PERMISSION_PROMPT:
-        loadingStateManager.startLoading('📱 権限確認中...');
-        await handlePermissionPrompt(data);
-        break;
+      // 画面切り替え
+      if (config.screen) {
+        showScreen(config.screen);
+      }
 
-      case ARState.CAMERA_STARTING:
-        loadingStateManager.startLoading('📷 カメラ起動中...');
-        updateGuideScreen(data.fallbackInfo, 'marker');
-        showScreen(screenStates.GUIDE);
-        await handleCameraStarting(data);
-        break;
+      // ガイド画面更新
+      if (config.updateGuide && data.fallbackInfo) {
+        updateGuideScreen(data.fallbackInfo, config.updateGuide.type);
+      }
+    }
 
-      case ARState.XR_STARTING:
-        loadingStateManager.startLoading('🥽 WebXR起動中...');
-        updateGuideScreen(data.fallbackInfo, 'webxr');
-        showScreen(screenStates.GUIDE);
-        await handleXRStarting(data);
-        break;
+    // 状態ごとの処理実行と次状態の取得
+    let nextStateResult = null;
+    try {
+      switch (newState) {
+        case ARState.LAUNCH_REQUESTED:
+          nextStateResult = await handleLaunchRequested(data);
+          break;
 
-      case ARState.LOADING_ASSETS:
-        loadingStateManager.startLoading('📦 アセット読み込み中...');
-        await handleLoadingAssets(data);
-        break;
+        case ARState.PERMISSION_PROMPT:
+          nextStateResult = await handlePermissionPrompt(data);
+          break;
 
-      case ARState.PLACING:
-        loadingStateManager.setSuccess('🎯 配置モード');
-        showScreen(screenStates.AR);
-        await handlePlacing(data);
-        break;
+        case ARState.CAMERA_STARTING:
+          nextStateResult = await handleCameraStarting(data);
+          break;
 
-      case ARState.RUNNING:
-        loadingStateManager.setSuccess('✅ AR実行中');
-        showScreen(screenStates.AR);
-        await handleRunning(data);
-        break;
+        case ARState.XR_STARTING:
+          nextStateResult = await handleXRStarting(data);
+          break;
 
-      case ARState.ERROR:
-        loadingStateManager.setError(data.error?.message || 'AR起動エラー');
-        handleARError(data.error, oldState, data);
-        break;
+        case ARState.LOADING_ASSETS:
+          nextStateResult = await handleLoadingAssets(data);
+          break;
 
-      case ARState.DISPOSED:
-        loadingStateManager.setIdle('準備完了');
-        await handleDisposed(data);
-        break;
+        case ARState.PLACING:
+          nextStateResult = await handlePlacing(data);
+          break;
+
+        case ARState.RUNNING:
+          nextStateResult = await handleRunning(data);
+          break;
+
+        case ARState.ERROR:
+          handleARError(data.error, oldState, data);
+          break;
+
+        case ARState.DISPOSED:
+          nextStateResult = await handleDisposed(data);
+          break;
+      }
+
+      // 次の状態への遷移（handle関数が次状態を返した場合）
+      if (nextStateResult && nextStateResult.nextState) {
+        await arStateMachine.transition(nextStateResult.nextState, {
+          ...data,
+          ...nextStateResult.data
+        });
+      }
+    } catch (error) {
+      // エラー処理：ERROR状態に遷移
+      arViewerLogger.error('❌ AR状態処理エラー:', error);
+      if (newState !== ARState.ERROR) {
+        await arStateMachine.transition(ARState.ERROR, { error });
+      }
     }
   }
 
   // AR起動要求処理
   async function handleLaunchRequested(data) {
-    try {
-      console.log('🔍 WebXRサポート判定開始...');
+    arViewerLogger.info('🔍 WebXRサポート判定開始...');
 
-      const xrSupport = await checkXRSupport();
-      const fallbackInfo = getRecommendedFallback(xrSupport);
+    const xrSupport = await checkXRSupport();
+    const fallbackInfo = getRecommendedFallback(xrSupport);
 
-      console.log('🔍 WebXRサポート結果:', {
-        supported: xrSupport.supported,
-        reason: xrSupport.reason,
-        recommendation: fallbackInfo.type
-      });
+    arViewerLogger.info('🔍 WebXRサポート結果:', {
+      supported: xrSupport.supported,
+      reason: xrSupport.reason,
+      recommendation: fallbackInfo.type
+    });
 
-      // AR経路確定（WebXR or AR.js）
-      const useWebXR = xrSupport.supported && !data.engineOverride;
-      const arPath = useWebXR ? 'webxr' : 'marker';
+    // AR経路確定（WebXR or AR.js）
+    const useWebXR = xrSupport.supported && !data.engineOverride;
+    const arPath = useWebXR ? 'webxr' : 'marker';
 
-      console.log(`🎯 AR経路確定: ${arPath}${data.engineOverride ? ' (URL強制指定)' : ' (自動判定)'}`, {
-        webxrSupported: xrSupport.supported,
-        engineOverride: data.engineOverride,
-        finalPath: arPath
-      });
+    arViewerLogger.info(`🎯 AR経路確定: ${arPath}${data.engineOverride ? ' (URL強制指定)' : ' (自動判定)'}`, {
+      webxrSupported: xrSupport.supported,
+      engineOverride: data.engineOverride,
+      finalPath: arPath
+    });
 
-      // 次の状態へ遷移（権限プロンプトを経由）
-      await arStateMachine.transition(ARState.PERMISSION_PROMPT, {
+    // 次の状態とデータを返す
+    return {
+      nextState: ARState.PERMISSION_PROMPT,
+      data: {
         arPath,
         xrSupport,
         fallbackInfo,
         engineOverride: data.engineOverride
-      });
-
-    } catch (error) {
-      console.error('❌ AR起動要求処理エラー:', error);
-      throw error;
-    }
+      }
+    };
   }
 
   // 権限プロンプト処理
   async function handlePermissionPrompt(data) {
-    console.log('📱 権限プロンプト処理開始');
-    
+    arViewerLogger.info('📱 権限プロンプト処理開始');
+
     // 権限要求処理（カメラアクセス）
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
-      console.log('✅ カメラ権限取得完了');
-      
-      // ストリームを停止（ARエンジン側で再取得）
-      stream.getTracks().forEach(track => track.stop());
-      
-      // 次の状態へ遷移
-      const nextState = data.arPath === 'webxr' ? ARState.XR_STARTING : ARState.CAMERA_STARTING;
-      await arStateMachine.transition(nextState, data);
-      
-    } catch (error) {
-      console.error('❌ カメラ権限取得失敗:', error);
-      await arStateMachine.transition(ARState.ERROR, { 
-        error: new Error(`カメラ権限が必要です: ${error.message}`) 
-      });
-    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    arViewerLogger.info('✅ カメラ権限取得完了');
+
+    // ストリームを停止（ARエンジン側で再取得）
+    stream.getTracks().forEach(track => track.stop());
+
+    // 次の状態を返す
+    const nextState = data.arPath === 'webxr' ? ARState.XR_STARTING : ARState.CAMERA_STARTING;
+    return {
+      nextState,
+      data: {} // 既存のdataを引き継ぐ
+    };
   }
 
   // カメラ起動処理
   async function handleCameraStarting(data) {
     try {
-      console.log('📷 AR.jsカメラ起動開始...');
-      console.log('🔍 currentProject確認:', {
+      arViewerLogger.info('📷 AR.jsカメラ起動開始...');
+      arViewerLogger.info('🔍 currentProject確認:', {
         'projectが存在': !!currentProject,
         'markerPattern': currentProject?.markerPattern ? '存在' : 'なし',
         'markerImage': currentProject?.markerImage || 'なし',
@@ -3252,18 +3282,18 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       try {
         // 1) 既に .patt 文字列が保存されている場合
         if (currentProject?.markerPattern && typeof currentProject.markerPattern === 'string') {
-          console.log('✅ markerPattern が存在します（文字列長:', currentProject.markerPattern.length, '）');
+          arViewerLogger.info('✅ markerPattern が存在します（文字列長:', currentProject.markerPattern.length, '）');
           const patt = createPatternBlob(currentProject.markerPattern);
           markerUrlOption = patt.url;
           markerPatternCleanup = patt.revoke;
-          console.log('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
+          arViewerLogger.info('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
         } else {
-          console.log('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
+          arViewerLogger.info('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
 
           // extractDesignで正規化されたマーカー画像URLを取得
           const { guideScreen } = extractDesign(currentProject);
           const normalizedMarkerUrl = guideScreen?.marker?.src || guideScreen?.markerImage;
-          console.log('🔍 正規化されたマーカー画像URL:', normalizedMarkerUrl);
+          arViewerLogger.info('🔍 正規化されたマーカー画像URL:', normalizedMarkerUrl);
 
           // 2) マーカー画像から .patt を生成
           // 複数の場所からマーカー画像URLを探す（正規化されたURLを最優先）
@@ -3278,7 +3308,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             || currentProject?.guideScreen?.markerImage
             || currentProject?.screens?.[0]?.marker?.src
             || null;
-          console.log('🔍 マーカー画像URL:', rawUrl);
+          arViewerLogger.info('🔍 マーカー画像URL:', rawUrl);
 
           if (rawUrl) {
             // 絶対URL化（プロジェクトの__sourceUrlを基準に）
@@ -3298,55 +3328,55 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
             } catch {
               absUrl = rawUrl;
             }
-            console.log('🔗 絶対URL化されたマーカー画像:', absUrl);
-            console.log('🔄 マーカーパターン生成開始...');
+            arViewerLogger.info('🔗 絶対URL化されたマーカー画像:', absUrl);
+            arViewerLogger.info('🔄 マーカーパターン生成開始...');
             const patternString = await generateMarkerPatternFromImage(absUrl).catch((err) => {
-              console.error('❌ マーカーパターン生成エラー:', err);
+              arViewerLogger.error('❌ マーカーパターン生成エラー:', err);
               return null;
             });
             if (patternString) {
-              console.log('✅ マーカーパターン生成成功（文字列長:', patternString.length, '）');
+              arViewerLogger.info('✅ マーカーパターン生成成功（文字列長:', patternString.length, '）');
               const patt = createPatternBlob(patternString);
               markerUrlOption = patt.url;
               markerPatternCleanup = patt.revoke;
-              console.log('📌 マーカー画像から生成した .patt を使用:', markerUrlOption);
+              arViewerLogger.info('📌 マーカー画像から生成した .patt を使用:', markerUrlOption);
             } else {
-              console.warn('⚠️ マーカーパターン生成に失敗しました');
+              arViewerLogger.warn('⚠️ マーカーパターン生成に失敗しました');
             }
           } else {
-            console.warn('⚠️ マーカー画像URLが見つかりません - フォールバック画像を使用します');
+            arViewerLogger.warn('⚠️ マーカー画像URLが見つかりません - フォールバック画像を使用します');
             // フォールバック: サンプル画像からパターンを生成
             try {
               const fallbackUrl = '/assets/sample.png';
-              console.log('🔄 フォールバック画像からマーカーパターン生成:', fallbackUrl);
+              arViewerLogger.info('🔄 フォールバック画像からマーカーパターン生成:', fallbackUrl);
               const patternString = await generateMarkerPatternFromImage(fallbackUrl);
               if (patternString) {
                 const patt = createPatternBlob(patternString);
                 markerUrlOption = patt.url;
                 markerPatternCleanup = patt.revoke;
-                console.log('✅ フォールバック画像からマーカーパターン生成成功');
+                arViewerLogger.info('✅ フォールバック画像からマーカーパターン生成成功');
               }
             } catch (fallbackErr) {
-              console.error('❌ フォールバック画像からのパターン生成も失敗:', fallbackErr);
+              arViewerLogger.error('❌ フォールバック画像からのパターン生成も失敗:', fallbackErr);
             }
           }
         }
       } catch (genErr) {
-        console.error('❌ マーカーパターン準備エラー:', genErr);
-        console.warn('⚠️ マーカーパターン準備で警告（フォールバック継続）:', genErr?.message || genErr);
+        arViewerLogger.error('❌ マーカーパターン準備エラー:', genErr);
+        arViewerLogger.warn('⚠️ マーカーパターン準備で警告（フォールバック継続）:', genErr?.message || genErr);
       }
 
-      console.log('🎯 最終的なmarkerUrlOption:', markerUrlOption);
+      arViewerLogger.info('🎯 最終的なmarkerUrlOption:', markerUrlOption);
 
       // ⚠️ 重要: HIROマーカーへのフォールバック禁止 (docs/MARKER_POLICY.md 参照)
       // カスタムマーカーが設定されていない場合は警告を表示
       if (!markerUrlOption) {
-        console.warn('⚠️ カスタムマーカーが設定されていません');
-        console.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください');
+        arViewerLogger.warn('⚠️ カスタムマーカーが設定されていません');
+        arViewerLogger.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください');
       }
       
       const finalMarkerUrl = markerUrlOption || null;
-      console.log('🎯 AREngineAdapter.create()に渡すmarkerUrl:', finalMarkerUrl);
+      arViewerLogger.info('🎯 AREngineAdapter.create()に渡すmarkerUrl:', finalMarkerUrl);
 
       const arEngine = await AREngineAdapter.create({
         container: arHost,
@@ -3358,64 +3388,55 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       currentAREngine = arEngine;
       await arEngine.initialize();
 
-      // アセット読み込みへ遷移
-      await arStateMachine.transition(ARState.LOADING_ASSETS, {
-        ...data,
-        arEngine
-      });
+      // 次の状態を返す
+      return {
+        nextState: ARState.LOADING_ASSETS,
+        data: { arEngine }
+      };
 
     } catch (error) {
-      console.error('❌ カメラ起動エラー:', error);
+      arViewerLogger.error('❌ カメラ起動エラー:', error);
       throw error;
     }
   }
 
   // WebXR起動処理
   async function handleXRStarting(data) {
-    try {
-      console.log('🥽 WebXR起動開始...');
+    arViewerLogger.info('🥽 WebXR起動開始...');
 
-      const arEngine = await AREngineAdapter.create({
-        container: arHost,
-        preferredEngine: 'webxr'
-      });
+    const arEngine = await AREngineAdapter.create({
+      container: arHost,
+      preferredEngine: 'webxr'
+    });
 
-      currentAREngine = arEngine;
-      await arEngine.initialize();
+    currentAREngine = arEngine;
+    await arEngine.initialize();
 
-      // アセット読み込みへ遷移
-      await arStateMachine.transition(ARState.LOADING_ASSETS, {
-        ...data,
-        arEngine
-      });
-
-    } catch (error) {
-      console.error('❌ WebXR起動エラー:', error);
-      throw error;
-    }
+    // 次の状態を返す
+    return {
+      nextState: ARState.LOADING_ASSETS,
+      data: { arEngine }
+    };
   }
 
   // アセット読み込み処理
   async function handleLoadingAssets(data) {
-    try {
-      console.log('📦 アセット読み込み開始...');
+    arViewerLogger.info('📦 アセット読み込み開始...');
 
-      // プロジェクト開始
-      await currentAREngine.start(currentProject);
+    // プロジェクト開始
+    await currentAREngine.start(currentProject);
 
-      // 配置モードまたは実行モードへ遷移
-      const nextState = data.arPath === 'webxr' ? ARState.PLACING : ARState.RUNNING;
-      await arStateMachine.transition(nextState, data);
-
-    } catch (error) {
-      console.error('❌ アセット読み込みエラー:', error);
-      throw error;
-    }
+    // 次の状態を返す（配置モードまたは実行モード）
+    const nextState = data.arPath === 'webxr' ? ARState.PLACING : ARState.RUNNING;
+    return {
+      nextState,
+      data: {}
+    };
   }
 
   // 配置モード処理
   async function handlePlacing(data) {
-    console.log('🎯 配置モード開始');
+    arViewerLogger.info('🎯 配置モード開始');
 
     if (data.arPath === 'webxr') {
       updateInstruction('<strong>🎯 空間をスキャンしてARオブジェクトを配置してください</strong>');
@@ -3423,11 +3444,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
     // WebXRの場合、タップで配置完了後にRUNNING状態へ遷移
     // この遷移は実際のタップイベントで実行される
+    // 戻り値なし（タップイベントで遷移）
   }
 
   // AR実行処理
   async function handleRunning(data) {
-    console.log('▶️ AR実行開始');
+    arViewerLogger.info('▶️ AR実行開始');
 
     // RUNNING状態のタイムアウトをクリア（実行中は無期限）
     if (arStateMachine) {
@@ -3439,11 +3461,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     } else if (data.arPath === 'webxr') {
       updateInstruction('<strong>🎉 ARオブジェクトを楽しんでください</strong>');
     }
+
+    // 終了状態なので次状態なし
   }
 
   // 破棄処理
   async function handleDisposed(data) {
-    console.log('🗑️ AR破棄処理');
+    arViewerLogger.info('🗑️ AR破棄処理');
 
     // ARエンジンアダプターの完全破棄
     await AREngineAdapter.destroyActiveEngine();
@@ -3454,7 +3478,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   // ARエラーハンドリング
   function handleARError(error, previousState, data) {
-    console.error('❌ AR状態機械エラー:', error, { previousState, data });
+    arViewerLogger.error('❌ AR状態機械エラー:', error, { previousState, data });
 
     updateStatus(`❌ AR起動失敗: ${error.message}`, 'error');
     showRetryButton(error.message);
@@ -3583,7 +3607,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     function animate() {
       // クリーンアップ時のアニメーション停止チェック
       if (window.stopARAnimation) {
-        console.log('🛑 ARアニメーションループ停止');
+        arViewerLogger.info('🛑 ARアニメーションループ停止');
         return;
       }
       
@@ -3606,13 +3630,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   
   // ★★★ ARビューア統合クリーンアップ関数を返す ★★★
   return function cleanup() {
-    console.log('🧹 ARビューア 統合クリーンアップ実行');
+    arViewerLogger.info('🧹 ARビューア 統合クリーンアップ実行');
     
     // 1. イベントリスナー解除
     if (layoutStartScreenHandler) {
       window.removeEventListener('resize', layoutStartScreenHandler);
       layoutStartScreenHandler = null;
-      console.log('✅ resize イベントリスナーを解除');
+      arViewerLogger.info('✅ resize イベントリスナーを解除');
     }
     
     // 2. AR関連リソース解除
@@ -3620,8 +3644,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       try {
         window.arInstance.dispose();
         window.arInstance = null;
-        console.log('✅ ARインスタンスを破棄');
-      } catch(e) { console.warn('⚠️ ARインスタンス破棄エラー:', e); }
+        arViewerLogger.info('✅ ARインスタンスを破棄');
+      } catch(e) { arViewerLogger.warn('⚠️ ARインスタンス破棄エラー:', e); }
     }
     
     // 3. カメラストリーム停止
@@ -3631,25 +3655,25 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (stream && stream.getTracks) {
           stream.getTracks().forEach(track => {
             track.stop();
-            console.log('✅ カメラトラック停止:', track.kind);
+            arViewerLogger.info('✅ カメラトラック停止:', track.kind);
           });
         }
         video.srcObject = null;
-      } catch(e) { console.warn('⚠️ カメラストリーム停止エラー:', e); }
+      } catch(e) { arViewerLogger.warn('⚠️ カメラストリーム停止エラー:', e); }
     }
     
     // 4. Three.js リソース解除
     if (renderer) {
       try {
         renderer.dispose();
-        console.log('✅ Three.jsレンダラーを破棄');
-      } catch(e) { console.warn('⚠️ Three.jsレンダラー破棄エラー:', e); }
+        arViewerLogger.info('✅ Three.jsレンダラーを破棄');
+      } catch(e) { arViewerLogger.warn('⚠️ Three.jsレンダラー破棄エラー:', e); }
     }
     
     // 5. DOM要素解除
     if (video && video.parentNode) {
       video.parentNode.removeChild(video);
-      console.log('✅ videoエレメントをDOM削除');
+      arViewerLogger.info('✅ videoエレメントをDOM削除');
     }
     
     // 6. グローバル変数リセット
@@ -3670,6 +3694,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       window.stopARAnimation = true;
     }
     
-    console.log('✅ ARビューア クリーンアップ完了');
+    arViewerLogger.info('✅ ARビューア クリーンアップ完了');
   };
 }
