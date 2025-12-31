@@ -21,9 +21,48 @@ import { extractDesign } from '../utils/design-extractor.js';
 // ============================================================
 (function deepDiag(){
   const box = document.createElement('pre');
-  box.style.cssText = 'position:fixed;top:8px;left:8px;right:8px;z-index:99998;max-height:50vh;overflow:auto;background:rgba(0,0,0,.95);color:#0ff;padding:12px;font:13px/1.6 monospace;border:2px solid #0ff;border-radius:8px;box-shadow:0 4px 12px rgba(0,255,255,0.3)';
+  box.id = 'deep-diag-panel';
+  box.style.cssText = `
+    position: fixed !important;
+    top: 60px !important;
+    left: 8px !important;
+    right: 8px !important;
+    z-index: 2147483647 !important;
+    max-height: 60vh !important;
+    overflow: auto !important;
+    background: rgba(0, 0, 0, 0.98) !important;
+    color: #00ffff !important;
+    padding: 16px !important;
+    font: 14px/1.6 Consolas, Monaco, monospace !important;
+    border: 3px solid #00ffff !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 255, 255, 0.5) !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    margin: 0 !important;
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+  `.replace(/\s+/g, ' ');
   box.textContent = '[🔍 診断パネル] 初期化中...\n\n';
-  document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(box));
+
+  // DOM準備を確実に待つ
+  const appendBox = () => {
+    if (document.body) {
+      document.body.appendChild(box);
+      console.log('[diag] 診断パネル表示完了');
+    } else {
+      setTimeout(appendBox, 50);
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', appendBox);
+  } else {
+    appendBox();
+  }
+
   const log=(...a)=>{
     console.log('[diag]',...a);
     const msg = a.map(v=>typeof v==='string'?v:JSON.stringify(v,null,2)).join(' ')+'\n';
@@ -92,6 +131,22 @@ import { extractDesign } from '../utils/design-extractor.js';
     }
     // 診断プローブは常に実行（デバッグのため）
     log('🔍 プロジェクト読み込み開始...');
+
+    // 初期診断情報を表示
+    log('📋 初期診断:');
+    log('  - URLにsrcパラメータあり:', !!raw);
+    log('  - 正規化されたsrcURL:', srcUrl || '(なし)');
+
+    if (!srcUrl) {
+      log('❌ 致命的エラー: srcパラメータが見つかりません');
+      log('');
+      log('確認事項:');
+      log('1. URLに ?src=... パラメータが含まれているか');
+      log('2. ハッシュ内に ?src=... パラメータがあるか (#/viewer?src=...)');
+      log('');
+      log('現在のURL形式:', window.location.href);
+    }
+
     if (srcUrl) {
       probe(srcUrl);
     }
@@ -101,15 +156,34 @@ import { extractDesign } from '../utils/design-extractor.js';
       log('✅ bootFromQR完了:', e.detail);
     });
 
-    // 初期化の進行状況を監視
-    setInterval(() => {
+    // 初期化の進行状況を監視（3秒後から開始）
+    let checkCount = 0;
+    const checkInterval = setInterval(() => {
+      checkCount++;
       const status = {
         '__bootFromQR_completed': !!window.__bootFromQR_completed,
         '__project': !!window.__project,
         '__viewer_booted': !!window.__viewer_booted
       };
-      if (Object.values(status).some(v => v)) {
-        log('📊 初期化状態:', status);
+
+      const hasAnyProgress = Object.values(status).some(v => v);
+
+      if (hasAnyProgress) {
+        log(`📊 初期化状態 (${checkCount}回目):`, status);
+      } else if (checkCount >= 3) {
+        log(`⚠️ 警告: ${checkCount * 2}秒経過しても初期化が開始されません`);
+        log('考えられる原因:');
+        log('  - bootFromQR関数が実行されていない');
+        log('  - srcパラメータが正しく取得できていない');
+        log('  - プロジェクトの読み込みでエラーが発生している');
+      }
+
+      // 10回チェックしたら停止
+      if (checkCount >= 10) {
+        clearInterval(checkInterval);
+        if (!hasAnyProgress) {
+          log('❌ 初期化タイムアウト: 20秒経過しても初期化されませんでした');
+        }
       }
     }, 2000);
 
@@ -2300,36 +2374,41 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       }
     } catch (_) {}
     
-    // 2. editorSettingsから不足している設定を補完
+    // 2. editorSettingsの設定を強制適用（ユーザー設定を最優先）
+    // ユーザーが意図して設定した値を反映させるため、ss/gs/lsを上書きする形に変更
     if (ls.editorSettings) {
-      console.log('🔄 editorSettingsから不足設定を補完:', ls.editorSettings);
+      console.log('🔄 editorSettingsの設定を適用（ユーザー設定優先）:', ls.editorSettings);
       
-      // startScreen設定: 不足のみ補完（プロジェクト/テンプレ優先）
+      // startScreen設定
       if (ls.editorSettings.startScreen) {
         const es = ls.editorSettings.startScreen || {};
-        ss = { ...es, ...ss };
-        console.log('🔄 editorSettings.startScreenで不足のみ補完:', ss);
+        // 既存の設定(ss)よりもエディタ設定(es)を優先
+        ss = { ...ss, ...es };
+        console.log('🔄 editorSettings.startScreenを優先適用:', ss);
       }
       
-      // guideScreen設定: 不足のみ補完（ネストもfallback）
+      // guideScreen設定
       if (ls.editorSettings.guideScreen) {
         const eg = ls.editorSettings.guideScreen || {};
-        const mergedGs = { ...eg, ...gs };
-        if (eg.surfaceDetection || gs.surfaceDetection) {
-          mergedGs.surfaceDetection = { ...(eg.surfaceDetection || {}), ...(gs.surfaceDetection || {}) };
+        // 既存の設定(gs)よりもエディタ設定(eg)を優先
+        gs = { ...gs, ...eg };
+        
+        // ネストされたオブジェクトのマージ
+        if (eg.surfaceDetection) {
+          gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...eg.surfaceDetection };
         }
-        if (eg.worldTracking || gs.worldTracking) {
-          mergedGs.worldTracking = { ...(eg.worldTracking || {}), ...(gs.worldTracking || {}) };
+        if (eg.worldTracking) {
+          gs.worldTracking = { ...(gs.worldTracking || {}), ...eg.worldTracking };
         }
-        gs = mergedGs;
-        console.log('🔄 editorSettings.guideScreenで不足のみ補完:', gs);
+        console.log('🔄 editorSettings.guideScreenを優先適用:', gs);
       }
       
-      // loadingScreen設定: 不足のみ補完（プロジェクト/テンプレ優先）
+      // loadingScreen設定
       if (ls.editorSettings.loadingScreen) {
         const el = ls.editorSettings.loadingScreen || {};
-        ls = { ...el, ...ls };
-        console.log('🔄 editorSettings.loadingScreenで不足のみ補完:', ls);
+        // 既存の設定(ls)よりもエディタ設定(el)を優先
+        ls = { ...ls, ...el };
+        console.log('🔄 editorSettings.loadingScreenを優先適用:', ls);
       }
     }
     
@@ -2643,7 +2722,17 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ローディング画面をしばらく表示してカスタマイズを確認可能にする
       await new Promise(resolve => setTimeout(resolve, 800));
       if (currentProject.models && currentProject.models.length > 0) {
-        await loadModels();
+        try {
+          // タイムアウト付きでモデル読み込み（最大30秒）
+          await Promise.race([
+            loadModels(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('モデル読み込みタイムアウト')), 30000))
+          ]);
+        } catch (e) {
+          console.error('❌ モデル読み込みエラー（続行します）:', e);
+          updateStatus('⚠️ モデルの読み込みに時間がかかっていますが、続行します', 'warning');
+          // エラーでも続行させる
+        }
       }
     } else {
       updateProgress(60, 'カメラ起動の準備中...');
