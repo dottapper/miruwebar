@@ -97,11 +97,17 @@ import { extractDesign } from '../utils/design-extractor.js';
   window.addEventListener('error', (event) => {
     log('');
     log('❌ JavaScript エラー:');
-    log('  メッセージ: ' + event.message);
-    log('  ファイル: ' + event.filename);
-    log('  行: ' + event.lineno + ':' + event.colno);
+    log('  メッセージ: ' + String(event.message || event.error?.message || '(不明)'));
+    if (event.error) {
+      log('  エラータイプ: ' + (event.error.name || event.error.constructor?.name || '(不明)'));
+      log('  toString: ' + String(event.error));
+    }
+    log('  ファイル: ' + (event.filename || '(不明)'));
+    log('  行: ' + (event.lineno || '?') + ':' + (event.colno || '?'));
     if (event.error && event.error.stack) {
-      log('  スタック: ' + event.error.stack.split('\n').slice(0, 3).join('\n           '));
+      const stackLines = event.error.stack.split('\n').slice(0, 5);
+      log('  スタック:');
+      stackLines.forEach(line => log('    ' + line.trim()));
     }
   });
 
@@ -109,9 +115,16 @@ import { extractDesign } from '../utils/design-extractor.js';
   window.addEventListener('unhandledrejection', (event) => {
     log('');
     log('❌ Promise拒否:');
-    log('  理由: ' + (event.reason?.message || String(event.reason)));
-    if (event.reason?.stack) {
-      log('  スタック: ' + event.reason.stack.split('\n').slice(0, 3).join('\n           '));
+    const reason = event.reason;
+    if (reason instanceof Error) {
+      log('  エラー: ' + reason.name + ': ' + reason.message);
+      if (reason.stack) {
+        const stackLines = reason.stack.split('\n').slice(0, 5);
+        log('  スタック:');
+        stackLines.forEach(line => log('    ' + line.trim()));
+      }
+    } else {
+      log('  理由: ' + String(reason));
     }
   });
 
