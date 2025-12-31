@@ -8,6 +8,7 @@ import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';
 import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
+import { publishProjectToFirebase } from '../firebase/storage.js';
 
 // UI専用ロガーを作成
 const uiLogger = createLogger('UI');
@@ -602,20 +603,19 @@ export async function showQRCodeModal(options = {}) {
                 <!-- Web設定 -->
                 <div id="web-settings" class="method-settings" style="display: none;">
                     <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        🌐 インターネット経由で世界中の誰でもアクセス可能（本格公開用）
+                        🌐 Firebase Storageにアップロードして、世界中の誰でもアクセス可能に
                     </p>
-                    <div class="url-input-group" style="margin-bottom: 0.5rem;">
-                        <label style="display: block; margin-bottom: 0.3rem; font-size: 0.9rem;">公開URL:</label>
-                        <input type="text" id="web-url-input" placeholder="https://your-domain.com" value="https://your-domain.com" style="width: 100%; padding: 0.5rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: var(--color-surface); color: var(--color-text-primary);">
+                    <button id="publish-to-firebase" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); background: #FFA000; border: none; color: white; font-weight: bold; cursor: pointer;">
+                        🔥 Firebaseに公開する
+                    </button>
+                    <div id="firebase-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); background: #E3F2FD; color: #1565C0; text-align: center;">
+                        アップロード中...
                     </div>
                     <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
                         <span id="web-url">${webUrl}</span>
                     </div>
                     <button id="copy-web-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
                         公開URLをコピー
-                    </button>
-                    <button id="update-web-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                        URL更新
                     </button>
                 </div>
             </div>
@@ -644,8 +644,8 @@ export async function showQRCodeModal(options = {}) {
                     </ul>
                     <p style="margin: 0 0 0.5rem 0;"><strong>🌐 公開用:</strong></p>
                     <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
-                        <li>公開URLを設定してQRコードを生成</li>
-                        <li>ZIPファイルをダウンロードしてホスティングサービスにアップロード</li>
+                        <li>「Firebaseに公開する」ボタンをクリック</li>
+                        <li>自動でFirebase Storageにアップロード</li>
                         <li>世界中の誰でもアクセス可能になります</li>
                     </ul>
                 </div>
@@ -677,56 +677,65 @@ export async function showQRCodeModal(options = {}) {
     let currentMethod = options.defaultMethod || 'local';
     let currentUrl = localUrl;
 
+    // Firebase公開済みURL（公開後に設定される）
+    let firebasePublishedUrl = '';
+
     async function switchTab(method) {
       currentMethod = method;
-      
+
       // タブの見た目を切り替え
       localTab.classList.toggle('active', method === 'local');
       webTab.classList.toggle('active', method === 'web');
-      
+
       // 設定の表示を切り替え
       localSettings.style.display = method === 'local' ? 'block' : 'none';
       webSettings.style.display = method === 'web' ? 'block' : 'none';
-      
+
       // URLを更新
       if (method === 'local') {
         currentUrl = localUrl;
         modalOverlay.querySelector('#local-url').textContent = localUrl;
       } else {
-        const webUrlInput = modalOverlay.querySelector('#web-url-input').value;
-        let newWebUrl = '';
-        try {
-          const parsed = new URL(webUrlInput);
-          const publicDomain = parsed.host; // hostはポート含む
-          const publicStabilizer = createURLStabilizer({ publicDomain });
-          const info = await publicStabilizer.generateARViewerURL(projectId, URLType.PUBLIC, { skipValidation: true });
-          newWebUrl = info.viewerUrl;
-        } catch (_) {
-          // 入力がURLとして不正な場合は手動生成（フォールバック）
-          const host = webUrlInput.replace(/\/$/, '');
-          newWebUrl = `${host}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+        // Firebase公開済みURLがあればそれを使用
+        if (firebasePublishedUrl) {
+          currentUrl = firebasePublishedUrl;
+          modalOverlay.querySelector('#web-url').textContent = firebasePublishedUrl;
+        } else {
+          modalOverlay.querySelector('#web-url').textContent = '「Firebaseに公開する」ボタンを押してください';
+          currentUrl = '';
         }
-        currentUrl = newWebUrl;
-        modalOverlay.querySelector('#web-url').textContent = newWebUrl;
       }
-      
-      // QRコードを再生成（DOM更新を待つ）
+
+      // QRコードを再生成（DOM更新を確実に待つ）
       setTimeout(() => {
-        generateQRCode();
-      }, 100);
+        // Canvas要素の存在を確認してから生成
+        const canvas = document.querySelector('#qrcode-canvas');
+        if (currentUrl && canvas) {
+          generateQRCode();
+        } else if (!canvas) {
+          uiLogger.warn('⚠️ タブ切り替え後、Canvas要素が見つかりません');
+        }
+      }, 150);
     }
 
     localTab.addEventListener('click', () => switchTab('local'));
     webTab.addEventListener('click', () => switchTab('web'));
 
-    // 初期状態を設定
+    // 初期状態を設定（DOM要素が完全に準備されてから実行）
     setTimeout(() => {
+      // Canvas要素の存在を確認
+      const canvas = document.querySelector('#qrcode-canvas');
+      if (!canvas) {
+        uiLogger.error('❌ 初期化時: Canvas要素が見つかりません');
+        console.error('❌ QRコード生成に失敗しました\nエラー: Canvas element not found');
+      }
+
       if (currentMethod === 'web') {
         switchTab('web');
       } else {
         switchTab('local');
       }
-    }, 100);
+    }, 200);
 
     // URLコピー機能
     modalOverlay.querySelector('#copy-local-url').addEventListener('click', () => {
@@ -756,93 +765,191 @@ export async function showQRCodeModal(options = {}) {
       window.open(localUrl, '_blank', 'noopener,noreferrer');
     });
 
-    // Web URL更新
-    modalOverlay.querySelector('#update-web-url').addEventListener('click', () => {
-      switchTab('web');
-    });
+    // Firebase公開ボタン
+    modalOverlay.querySelector('#publish-to-firebase').addEventListener('click', async () => {
+      const statusEl = modalOverlay.querySelector('#firebase-status');
+      const publishBtn = modalOverlay.querySelector('#publish-to-firebase');
 
-    // Web URL入力時の自動更新
-    modalOverlay.querySelector('#web-url-input').addEventListener('input', () => {
-      if (currentMethod === 'web') {
-        switchTab('web');
+      try {
+        // UI状態を更新
+        statusEl.style.display = 'block';
+        statusEl.textContent = '🔄 アップロード中...';
+        statusEl.style.background = '#E3F2FD';
+        statusEl.style.color = '#1565C0';
+        publishBtn.disabled = true;
+        publishBtn.textContent = '⏳ アップロード中...';
+
+        // プロジェクトデータを取得
+        const project = await getProject(projectId);
+        if (!project) {
+          throw new Error('プロジェクトが見つかりません');
+        }
+        const projectData = await loadProjectWithModels(project);
+        if (!projectData) {
+          throw new Error('プロジェクトデータの取得に失敗しました');
+        }
+
+        uiLogger.log('🔥 Firebase公開開始:', projectId, projectData);
+
+        // Firebaseにアップロード（modelDataを使用）
+        const result = await publishProjectToFirebase({
+          id: projectId,
+          name: projectData.name || 'Untitled',
+          type: projectData.type || 'markerless',
+          modelData: projectData.modelData || [],
+          loadingScreen: projectData.loadingScreen || null,
+          startScreen: projectData.startScreen || null,
+          arSettings: projectData.arSettings || {}
+        });
+
+        uiLogger.log('✅ Firebase公開完了:', result);
+
+        // 成功
+        firebasePublishedUrl = result.viewerUrl;
+        currentUrl = firebasePublishedUrl;
+        
+        uiLogger.log('🔗 更新されたURL:', currentUrl);
+
+        statusEl.textContent = '✅ 公開完了！';
+        statusEl.style.background = '#E8F5E9';
+        statusEl.style.color = '#2E7D32';
+
+        modalOverlay.querySelector('#web-url').textContent = firebasePublishedUrl;
+
+        publishBtn.textContent = '✅ 公開済み';
+        publishBtn.style.background = '#4CAF50';
+        publishBtn.disabled = false; // 再公開可能にする
+
+        // QRコードを更新（DOM更新を確実にするため少し待つ）
+        setTimeout(() => {
+          const canvas = document.querySelector('#qrcode-canvas');
+          if (canvas && currentUrl) {
+            generateQRCode();
+          } else {
+            uiLogger.warn('⚠️ Firebase公開後: Canvas要素が見つかりません');
+          }
+        }, 100);
+
+      } catch (error) {
+        console.error('Firebase公開エラー:', error);
+        statusEl.textContent = `❌ エラー: ${error.message}`;
+        statusEl.style.background = '#FFEBEE';
+        statusEl.style.color = '#C62828';
+        publishBtn.disabled = false;
+        publishBtn.textContent = '🔥 Firebaseに公開する';
       }
     });
 
     // QRコード生成
     const generateQRCode = async () => {
+        // DOM要素の存在を再確認（タブ切り替え時に要素が存在しない可能性があるため）
+        const container = document.querySelector('#qrcode-container');
+        const canvas = document.querySelector('#qrcode-canvas');
+
         try {
-            uiLogger.log('🔄 QRコード生成開始:', currentUrl);
-            const canvas = document.getElementById('qrcode-canvas');
+            // Canvas要素が存在しない場合は早期リターン
             if (!canvas) {
-                throw new Error('Canvas element not found');
+                uiLogger.warn('⚠️ QRコード生成スキップ: Canvas要素が見つかりません');
+                console.error('❌ QRコード生成に失敗しました\nエラー: Canvas element not found');
+                return;
             }
-            uiLogger.log('✅ Canvas要素を取得:', canvas);
+
+            if (!currentUrl) {
+                uiLogger.warn('⚠️ QRコード生成スキップ: URLが空です');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'center';
+                ctx.fillText('URLが設定されていません', canvas.width/2, canvas.height/2);
+                return;
+            }
+
+            uiLogger.log('🔄 QRコード生成開始:', currentUrl);
 
             // QRCodeライブラリを取得
-            const QRCode = await loadQRCode();
-            uiLogger.log('✅ QRCodeライブラリを取得:', typeof QRCode, QRCode);
-
-            if (!QRCode || typeof QRCode.toCanvas !== 'function') {
-                console.error('❌ QRCodeライブラリが無効:', QRCode);
-                throw new Error('QRCode library not available or toCanvas method missing');
+            let QRCodeLib;
+            try {
+                QRCodeLib = await loadQRCode();
+            } catch (e) {
+                throw new Error(`QRCodeライブラリの読み込みに失敗: ${e.message}`);
             }
 
-            uiLogger.log('🎯 QRCode生成開始:', { currentUrl, canvas });
-            await QRCode.toCanvas(canvas, currentUrl, {
+            uiLogger.log('✅ QRCodeライブラリ状態:', {
+                type: typeof QRCodeLib,
+                hasToCanvas: QRCodeLib && typeof QRCodeLib.toCanvas === 'function',
+                keys: QRCodeLib ? Object.keys(QRCodeLib) : []
+            });
+
+            if (!QRCodeLib || typeof QRCodeLib.toCanvas !== 'function') {
+                console.error('❌ QRCodeライブラリが無効:', QRCodeLib);
+                throw new Error('QRCode library invalid: toCanvas method missing');
+            }
+
+            // キャンバスをクリア
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            uiLogger.log('🎯 QRCode描画実行:', { currentUrl });
+            
+            await QRCodeLib.toCanvas(canvas, currentUrl, {
                 width: 200,
                 margin: 1,
                 color: {
                     dark: '#000000',
                     light: '#FFFFFF'
-                }
+                },
+                errorCorrectionLevel: 'M'
             });
             
             uiLogger.log('✅ QRコード生成完了:', {
                 canvasWidth: canvas.width,
                 canvasHeight: canvas.height,
-                url: currentUrl,
-                timestamp: new Date().toISOString()
+                urlLength: currentUrl.length
             });
 
-            // QRコードのダウンロード処理
-            document.getElementById('download-qrcode').addEventListener('click', () => {
-                try {
-                    const image = canvas.toDataURL('image/png');
-                    const link = document.createElement('a');
-                    link.href = image;
-                    link.download = `${projectId}-qrcode.png`;
-                    link.click();
-                } catch (error) {
-                    console.error('QRコードのダウンロードに失敗しました:', error);
-                    alert('QRコードのダウンロードに失敗しました。');
-                }
-            });
+            // QRコードのダウンロード処理を再設定（重複防止のため一度削除したいが、単純に追加）
+            // 注: 毎回リスナーを追加すると重複するため、ボタンのcloneNodeでリセット推奨だが、
+            // ここでは簡易的に既存リスナーを許容（実害は少ない）
+            const dlBtn = document.getElementById('download-qrcode');
+            if (dlBtn) {
+                // 古いリスナーを削除するためにクローン
+                const newBtn = dlBtn.cloneNode(true);
+                dlBtn.parentNode.replaceChild(newBtn, dlBtn);
+                
+                newBtn.addEventListener('click', () => {
+                    try {
+                        const image = canvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = image;
+                        link.download = `${projectId}-qrcode.png`;
+                        link.click();
+                    } catch (error) {
+                        console.error('QRコードのダウンロードに失敗しました:', error);
+                        alert('QRコードのダウンロードに失敗しました。');
+                    }
+                });
+            }
 
         } catch (error) {
             console.error('❌ QRコード生成エラー:', error);
             console.error('❌ エラー詳細:', {
                 message: error.message,
                 stack: error.stack,
-                currentUrl,
-                canvasExists: !!document.getElementById('qrcode-canvas')
+                currentUrl
             });
             
-            const container = document.getElementById('qrcode-container');
             if (container) {
                 container.innerHTML = `
-                    <div style="color: red; text-align: center; padding: 1rem;">
-                        <h3>❌ QRコード生成に失敗しました</h3>
-                        <p><strong>エラー:</strong> ${error.message}</p>
-                        <p style="font-size: 0.9em; word-break: break-all;"><strong>URL:</strong> ${currentUrl}</p>
-                        <button onclick="location.reload()" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #007bff; color: white; border: none; border-radius: 4px;">
-                            ページを再読み込み
+                    <div style="color: #D32F2F; text-align: center; padding: 1rem; background: #FFEBEE; border-radius: 4px;">
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">QRコード生成失敗</h3>
+                        <p style="margin: 0; font-size: 0.85rem;">${error.message}</p>
+                        <button onclick="location.reload()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: #D32F2F; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
+                            再読み込み
                         </button>
                     </div>
                 `;
             }
-            
-            // エラーが発生してもモーダルは閉じない
-            return;
         }
     };
 
@@ -969,7 +1076,18 @@ export async function showQRCodeModal(options = {}) {
         }
       } finally {
         // 初期QR生成（公開に成功していれば更新されたURLになる）
-        setTimeout(() => generateQRCode(), 200);
+        // DOM要素の準備を確実に待つ
+        setTimeout(() => {
+          const canvas = document.querySelector('#qrcode-canvas');
+          if (canvas && currentUrl) {
+            generateQRCode();
+          } else {
+            uiLogger.warn('⚠️ 初期QR生成: Canvas要素またはURLが見つかりません', {
+              hasCanvas: !!canvas,
+              hasUrl: !!currentUrl
+            });
+          }
+        }, 300);
       }
     })();
 
