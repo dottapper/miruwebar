@@ -1,0 +1,636 @@
+# ミルウェブAR プロジェクト構造
+
+## ルートディレクトリ
+```
+miruwebar/
+├── ドキュメント・設定ファイル
+│   ├── README.md
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── vite.config.js
+│   ├── vitest.config.js
+│   ├── nodemon.json
+│   ├── vercel.json
+│   ├── env.example
+│   ├── CODEOWNERS
+│   ├── CONTRIBUTING.md
+│   ├── NEW_FEATURES.md
+│   ├── 修正プラン.md
+│   └── 各種レポート・ガイド
+│       ├── CACHE_CLEAR.md
+│       ├── CLEANUP_REPORT_2025-10-05.md
+│       ├── DIAGNOSIS_GUIDE_2025-10-05.md
+│       ├── SAMPLE_KEEP_ME_VERIFICATION_2025-10-05.md
+│       ├── SINGLE_LOAD_FIX_2025-10-05.md
+│       ├── SRC_PARAM_FIX_REPORT_2025-10-05.md
+│       ├── UI_WIRING_FIX_2025-10-05.md
+│       └── URL_FIX_REPORT_2025-10-05.md
+│
+├── HTMLファイル（ルート）
+│   ├── index.html
+│   ├── hiro-marker-display.html
+│   ├── integrated-ar-viewer.html
+│   ├── marker-ar-working.html
+│   ├── qr-debug.html
+│   ├── qr-simple-ar.html
+│   ├── simple-camera-test.html
+│   └── test-unified-state.html
+│
+├── src/ （メインソースコード）
+│   ├── main.js
+│   ├── counter.js
+│   ├── javascript.svg
+│   │
+│   ├── views/ （ページレベルのコンポーネント）
+│   │   ├── ar-viewer.js
+│   │   ├── diag.js
+│   │   ├── editor.js
+│   │   ├── editor-backup.js
+│   │   ├── editor.js.backup
+│   │   ├── login.js
+│   │   ├── login-backup.js
+│   │   ├── loading-screen-editor.js
+│   │   ├── marker-upload.js
+│   │   ├── projects.js
+│   │   ├── qr-code.js
+│   │   ├── select-ar.js
+│   │   ├── smoke.js
+│   │   ├── usage-guide.js
+│   │   └── editor/ （エディター関連モジュール）
+│   │       ├── event-handlers.js
+│   │       ├── project-operations.js
+│   │       ├── project-state.js
+│   │       ├── transform-controls.js
+│   │       └── ui-handlers.js
+│   │
+│   ├── components/ （再利用可能なコンポーネント）
+│   │   ├── ProjectCard.js
+│   │   ├── arViewer.js
+│   │   ├── webxr-ar.js
+│   │   ├── simple-camera-ar.js
+│   │   ├── model-list-ui.js
+│   │   ├── loading-screen-selector.js
+│   │   ├── ui.js
+│   │   ├── version-info.js
+│   │   ├── ar/ （AR関連コンポーネント）
+│   │   │   ├── marker-ar.js
+│   │   │   └── webxr-ar.js
+│   │   └── loading-screen/ （ローディング画面関連）
+│   │       ├── constants.js
+│   │       ├── event-handlers.js
+│   │       ├── preview.js
+│   │       ├── settings.js
+│   │       ├── template-manager.js
+│   │       └── ui-templates.js
+│   │
+│   ├── utils/ （ユーティリティ関数）
+│   │   ├── qrcode-loader.js
+│   │   ├── ar-detection.js
+│   │   ├── ar-engine-adapter.js
+│   │   ├── ar-state-machine.js
+│   │   ├── apply-project-design.js
+│   │   ├── apply-project.spec.js
+│   │   ├── data-integrity-manager.js
+│   │   ├── data-migration-helper.js
+│   │   ├── debug-overlay.js
+│   │   ├── debug-tools.js
+│   │   ├── design-extractor.js
+│   │   ├── error-boundary.js
+│   │   ├── error-handler.js
+│   │   ├── hmr-client.js
+│   │   ├── hot-reload-manager.js
+│   │   ├── loading-screen-state.js
+│   │   ├── loading-state-manager.js
+│   │   ├── loadingManager.js
+│   │   ├── logger.js
+│   │   ├── marker-utils.js
+│   │   ├── monitored-fetch.js
+│   │   ├── normalize-project.js
+│   │   ├── performance-manager.js
+│   │   ├── project-data-normalizer.js
+│   │   ├── publish.js
+│   │   ├── responsive-manager.js
+│   │   ├── screen-manager.js
+│   │   ├── security-manager.js
+│   │   ├── settings-validator.js
+│   │   ├── template-state-manager.js
+│   │   ├── unified-loading-screen.js
+│   │   ├── unified-logger.js
+│   │   ├── unified-state-manager.js
+│   │   ├── url-params.js
+│   │   ├── url-stabilizer.js
+│   │   ├── usage-example.js
+│   │   ├── user-experience-manager.js
+│   │   ├── viewer-app.js
+│   │   └── webxr-support.js
+│   │
+│   ├── storage/ （データ永続化ロジック）
+│   │   ├── indexeddb-storage.js
+│   │   ├── migrate.js
+│   │   └── project-store.js
+│   │
+│   ├── api/ （外部API通信）
+│   │   ├── auth.js
+│   │   ├── projects.js
+│   │   ├── projects-new.js
+│   │   └── qr-code.js
+│   │
+│   ├── architecture/ （アーキテクチャ関連）
+│   │   ├── abstraction-layers.js
+│   │   ├── design-philosophy.js
+│   │   ├── feature-gate.js
+│   │   └── legacy-refactor.js
+│   │
+│   ├── config/ （設定ファイル）
+│   │   └── feature-flags.js
+│   │
+│   ├── loader/ （アセット読み込み関連）
+│   │   └── loadGLBFromIDB.js
+│   │
+│   ├── mappers/ （データマッピング）
+│   │   ├── model-mapper.js
+│   │   └── project-mapper.js
+│   │
+│   ├── styles/ （CSSファイル）
+│   │   ├── style.css
+│   │   ├── common.css
+│   │   ├── responsive.css
+│   │   ├── ar-viewer.css
+│   │   ├── editor.css
+│   │   ├── error-experience.css
+│   │   ├── loading-screen.css
+│   │   ├── loading-screen-editor.css
+│   │   ├── loading-screen-editor.css.bak
+│   │   ├── loading-screen-selector.css
+│   │   ├── login.css
+│   │   ├── login-backup.css
+│   │   ├── marker-upload.css
+│   │   ├── projects.css
+│   │   ├── qr-code.css
+│   │   ├── select-ar.css
+│   │   ├── usage-guide.css
+│   │   └── version-info.css
+│   │
+│   ├── dev/ （開発ツール）
+│   │   ├── takeover-injector.js
+│   │   ├── takeover-start-ui.js
+│   │   ├── takeover-start-ui.css
+│   │   └── takeover-viewer-standalone.js
+│   │
+│   ├── maintenance/ （メンテナンススクリプト）
+│   │   └── project-maintenance.js
+│   │
+│   ├── scripts/ （スクリプト）
+│   │   ├── cleanup-project-duplicates.js
+│   │   └── cleanup-single-file.js
+│   │
+│   ├── docs/ （ドキュメント）
+│   │   └── security-guidelines.md
+│   │
+│   ├── auto-save-test.js
+│   └── test-auto-restart.js
+│
+├── public/ （公開リソース）
+│   ├── vite.svg
+│   ├── diagnosis.html
+│   ├── arjs/ （AR.js関連）
+│   │   ├── README.txt
+│   │   ├── ar-threex.js
+│   │   ├── camera_para.dat
+│   │   └── patt.hiro
+│   ├── assets/ （アセットファイル）
+│   │   ├── logo.png
+│   │   ├── main-low.jpg
+│   │   ├── sample.png
+│   │   ├── sample.glb
+│   │   ├── sample02.glb
+│   │   ├── cohoran-P-parts02.glb
+│   │   ├── kocoran-w-parts.glb
+│   │   ├── kuri_dance.glb
+│   │   ├── kuri_danceNLA.glb
+│   │   ├── カーネーションサンプル.glb
+│   │   └── 各種画像ファイル
+│   └── projects/ （プロジェクトデータ）
+│       ├── 1758976868204/
+│       ├── 1759652163991/
+│       ├── 1759654445691/
+│       ├── project_1757896431699_1/
+│       └── sample-keep-me/
+│
+├── server/ （サーバーサイド）
+│   ├── app.js
+│   ├── simple-server.js
+│   ├── controllers/
+│   │   └── settingsController.js
+│   ├── models/
+│   │   └── LoadingScreenSettings.js
+│   ├── routes/
+│   │   └── api.js
+│   └── utils/
+│       ├── logger.js
+│       └── module-loader.js
+│
+├── tests/ （テストファイル）
+│   ├── README.md
+│   ├── setup.js
+│   ├── api/
+│   │   └── projects.test.js
+│   ├── architecture/
+│   │   ├── abstraction-layers.test.js
+│   │   └── design-philosophy.test.js
+│   ├── e2e/
+│   │   ├── ar-viewer-e2e.test.js
+│   │   ├── ar-viewer-simple.test.js
+│   │   ├── basic-flow.test.js
+│   │   ├── debug-dom.test.js
+│   │   ├── qr-code-ar-display.test.js
+│   │   ├── simple-dom.test.js
+│   │   └── template-to-ar-flow.test.js
+│   ├── integration/
+│   │   ├── ar-viewer.test.js
+│   │   ├── basic.test.js
+│   │   ├── data-migration-helper.test.js
+│   │   ├── property-consistency.test.js
+│   │   ├── safe-json-parse.test.js
+│   │   ├── storage-integration.test.js
+│   │   └── template-migration-simple.test.js
+│   ├── security/
+│   │   ├── data-integrity.test.js
+│   │   └── security-manager.test.js
+│   ├── storage/
+│   │   └── indexeddb-storage.test.js
+│   ├── unit/
+│   │   └── performance-manager.test.js
+│   ├── usability/
+│   │   ├── responsive-manager.test.js
+│   │   └── user-experience.test.js
+│   └── utils/
+│       ├── mock-system.js
+│       └── test-helpers.js
+│
+├── scripts/ （ビルド・検証スクリプト）
+│   ├── check-start-screen.js
+│   ├── cleanup-project-data.js
+│   ├── dev-environment-manager.js
+│   ├── verify-build.js
+│   └── verify-journey.cjs
+│
+├── vite/ （Viteプラグイン）
+│   ├── plugins/
+│   │   ├── networkInfo.js
+│   │   ├── projectsApi.js
+│   │   └── projectsStatic.js
+│   └── utils/
+│       └── network.js
+│
+├── docs/ （ドキュメント）
+│   ├── adr/
+│   │   └── TEMPLATE.md
+│   ├── device-debug.md
+│   ├── routes.md
+│   ├── webar-audit.md
+│   ├── webar-fix-plan.md
+│   ├── webar-master-fix-plan.md
+│   └── webar-rootcause.md
+│
+├── legacy/ （レガシーコード）
+│   ├── README.md
+│   ├── loading-screen.css
+│   ├── loadingManager.js
+│   ├── webxr-ar.js
+│   └── _tests_2025-10-05/
+│
+├── backup/ （バックアップ）
+│   └── usage-guide-original/
+│       ├── usage-guide.css
+│       └── usage-guide.js
+│
+├── data/ （データファイル）
+│   └── projects.json
+│
+├── uploads/ （アップロードファイル）
+│   └── projects/
+│
+├── ssl/ （SSL証明書）
+│   ├── server.crt
+│   ├── server.key
+│   └── ssl/
+│
+├── test-results/ （テスト結果）
+│   └── assets/
+│
+└── dist/ （ビルド出力 - .gitignore対象）
+
+```
+
+## ファイル一覧（フルパス）
+
+### ルートファイル
+```
+./CACHE_CLEAR.md
+./CLEANUP_REPORT_2025-10-05.md
+./CODEOWNERS
+./CONTRIBUTING.md
+./DIAGNOSIS_GUIDE_2025-10-05.md
+./NEW_FEATURES.md
+./README.md
+./SAMPLE_KEEP_ME_VERIFICATION_2025-10-05.md
+./SINGLE_LOAD_FIX_2025-10-05.md
+./SRC_PARAM_FIX_REPORT_2025-10-05.md
+./UI_WIRING_FIX_2025-10-05.md
+./URL_FIX_REPORT_2025-10-05.md
+./env.example
+./hiro-marker-display.html
+./index.html
+./integrated-ar-viewer.html
+./marker-ar-working.html
+./nodemon.json
+./package-lock.json
+./package.json
+./qr-debug.html
+./qr-simple-ar.html
+./simple-camera-test.html
+./test-unified-state.html
+./vercel.json
+./vite.config.js
+./vitest.config.js
+./修正プラン.md
+```
+
+### src/views/
+```
+./src/views/ar-viewer.js
+./src/views/diag.js
+./src/views/editor.js
+./src/views/editor-backup.js
+./src/views/editor.js.backup
+./src/views/login.js
+./src/views/login-backup.js
+./src/views/loading-screen-editor.js
+./src/views/marker-upload.js
+./src/views/projects.js
+./src/views/qr-code.js
+./src/views/select-ar.js
+./src/views/smoke.js
+./src/views/usage-guide.js
+./src/views/editor/event-handlers.js
+./src/views/editor/project-operations.js
+./src/views/editor/project-state.js
+./src/views/editor/transform-controls.js
+./src/views/editor/ui-handlers.js
+```
+
+### src/components/
+```
+./src/components/ProjectCard.js
+./src/components/arViewer.js
+./src/components/webxr-ar.js
+./src/components/simple-camera-ar.js
+./src/components/model-list-ui.js
+./src/components/loading-screen-selector.js
+./src/components/ui.js
+./src/components/version-info.js
+./src/components/ar/marker-ar.js
+./src/components/ar/webxr-ar.js
+./src/components/loading-screen/constants.js
+./src/components/loading-screen/event-handlers.js
+./src/components/loading-screen/preview.js
+./src/components/loading-screen/settings.js
+./src/components/loading-screen/template-manager.js
+./src/components/loading-screen/ui-templates.js
+```
+
+### src/utils/
+```
+./src/utils/qrcode-loader.js
+./src/utils/ar-detection.js
+./src/utils/ar-engine-adapter.js
+./src/utils/ar-state-machine.js
+./src/utils/apply-project-design.js
+./src/utils/apply-project.spec.js
+./src/utils/data-integrity-manager.js
+./src/utils/data-migration-helper.js
+./src/utils/debug-overlay.js
+./src/utils/debug-tools.js
+./src/utils/design-extractor.js
+./src/utils/error-boundary.js
+./src/utils/error-handler.js
+./src/utils/hmr-client.js
+./src/utils/hot-reload-manager.js
+./src/utils/loading-screen-state.js
+./src/utils/loading-state-manager.js
+./src/utils/loadingManager.js
+./src/utils/logger.js
+./src/utils/marker-utils.js
+./src/utils/monitored-fetch.js
+./src/utils/normalize-project.js
+./src/utils/performance-manager.js
+./src/utils/project-data-normalizer.js
+./src/utils/publish.js
+./src/utils/responsive-manager.js
+./src/utils/screen-manager.js
+./src/utils/security-manager.js
+./src/utils/settings-validator.js
+./src/utils/template-state-manager.js
+./src/utils/unified-loading-screen.js
+./src/utils/unified-logger.js
+./src/utils/unified-state-manager.js
+./src/utils/url-params.js
+./src/utils/url-stabilizer.js
+./src/utils/usage-example.js
+./src/utils/user-experience-manager.js
+./src/utils/viewer-app.js
+./src/utils/webxr-support.js
+```
+
+### src/storage/
+```
+./src/storage/indexeddb-storage.js
+./src/storage/migrate.js
+./src/storage/project-store.js
+```
+
+### src/api/
+```
+./src/api/auth.js
+./src/api/projects.js
+./src/api/projects-new.js
+./src/api/qr-code.js
+```
+
+### src/styles/
+```
+./src/styles/style.css
+./src/styles/common.css
+./src/styles/responsive.css
+./src/styles/ar-viewer.css
+./src/styles/editor.css
+./src/styles/error-experience.css
+./src/styles/loading-screen.css
+./src/styles/loading-screen-editor.css
+./src/styles/loading-screen-editor.css.bak
+./src/styles/loading-screen-selector.css
+./src/styles/login.css
+./src/styles/login-backup.css
+./src/styles/marker-upload.css
+./src/styles/projects.css
+./src/styles/qr-code.css
+./src/styles/select-ar.css
+./src/styles/usage-guide.css
+./src/styles/version-info.css
+```
+
+### public/
+```
+./public/vite.svg
+./public/diagnosis.html
+./public/arjs/README.txt
+./public/arjs/ar-threex.js
+./public/arjs/camera_para.dat
+./public/arjs/patt.hiro
+./public/assets/logo.png
+./public/assets/main-low.jpg
+./public/assets/sample.png
+./public/assets/sample.glb
+./public/assets/sample02.glb
+./public/assets/cohoran-P-parts02.glb
+./public/assets/kocoran-w-parts.glb
+./public/assets/kuri_dance.glb
+./public/assets/kuri_danceNLA.glb
+./public/assets/カーネーションサンプル.glb
+./public/projects/1758976868204/project.json
+./public/projects/1758976868204/sample.glb
+./public/projects/1759652163991/project.json
+./public/projects/1759652163991/sample.glb
+./public/projects/1759654445691/project.json
+./public/projects/1759654445691/sample.glb
+./public/projects/project_1757896431699_1/project.json
+./public/projects/project_1757896431699_1/sample.glb
+./public/projects/sample-keep-me/project.json
+./public/projects/sample-keep-me/assets/hiro-marker.png
+./public/projects/sample-keep-me/assets/loading.png
+./public/projects/sample-keep-me/assets/marker.png
+./public/projects/sample-keep-me/assets/sample.glb
+./public/projects/sample-keep-me/assets/start-bg.jpg
+```
+
+### tests/
+```
+./tests/README.md
+./tests/setup.js
+./tests/api/projects.test.js
+./tests/architecture/abstraction-layers.test.js
+./tests/architecture/design-philosophy.test.js
+./tests/e2e/ar-viewer-e2e.test.js
+./tests/e2e/ar-viewer-simple.test.js
+./tests/e2e/basic-flow.test.js
+./tests/e2e/debug-dom.test.js
+./tests/e2e/qr-code-ar-display.test.js
+./tests/e2e/simple-dom.test.js
+./tests/e2e/template-to-ar-flow.test.js
+./tests/integration/ar-viewer.test.js
+./tests/integration/basic.test.js
+./tests/integration/data-migration-helper.test.js
+./tests/integration/property-consistency.test.js
+./tests/integration/safe-json-parse.test.js
+./tests/integration/storage-integration.test.js
+./tests/integration/template-migration-simple.test.js
+./tests/security/data-integrity.test.js
+./tests/security/security-manager.test.js
+./tests/storage/indexeddb-storage.test.js
+./tests/unit/performance-manager.test.js
+./tests/usability/responsive-manager.test.js
+./tests/usability/user-experience.test.js
+./tests/utils/mock-system.js
+./tests/utils/test-helpers.js
+```
+
+### server/
+```
+./server/app.js
+./server/simple-server.js
+./server/controllers/settingsController.js
+./server/models/LoadingScreenSettings.js
+./server/routes/api.js
+./server/utils/logger.js
+./server/utils/module-loader.js
+```
+
+### scripts/
+```
+./scripts/check-start-screen.js
+./scripts/cleanup-project-data.js
+./scripts/dev-environment-manager.js
+./scripts/verify-build.js
+./scripts/verify-journey.cjs
+```
+
+### vite/
+```
+./vite/plugins/networkInfo.js
+./vite/plugins/projectsApi.js
+./vite/plugins/projectsStatic.js
+./vite/utils/network.js
+```
+
+### docs/
+```
+./docs/adr/TEMPLATE.md
+./docs/device-debug.md
+./docs/routes.md
+./docs/webar-audit.md
+./docs/webar-fix-plan.md
+./docs/webar-master-fix-plan.md
+./docs/webar-rootcause.md
+```
+
+### legacy/
+```
+./legacy/README.md
+./legacy/loading-screen.css
+./legacy/loadingManager.js
+./legacy/webxr-ar.js
+./legacy/_tests_2025-10-05/marker-test-fixed.html
+./legacy/_tests_2025-10-05/marker-test-improved.html
+./legacy/_tests_2025-10-05/marker-test-simple.html
+./legacy/_tests_2025-10-05/network-test.html
+./legacy/_tests_2025-10-05/qr-test.html
+./legacy/_tests_2025-10-05/simple-ar-test.html
+./legacy/_tests_2025-10-05/test-ar-adapter.html
+./legacy/_tests_2025-10-05/test-ar-engine-adapter.js
+./legacy/_tests_2025-10-05/test-save.html
+```
+
+### その他
+```
+./backup/usage-guide-original/usage-guide.css
+./backup/usage-guide-original/usage-guide.js
+./data/projects.json
+./src/main.js
+./src/counter.js
+./src/javascript.svg
+./src/loader/loadGLBFromIDB.js
+./src/architecture/abstraction-layers.js
+./src/architecture/design-philosophy.js
+./src/architecture/feature-gate.js
+./src/architecture/legacy-refactor.js
+./src/config/feature-flags.js
+./src/mappers/model-mapper.js
+./src/mappers/project-mapper.js
+./src/dev/takeover-injector.js
+./src/dev/takeover-start-ui.css
+./src/dev/takeover-start-ui.js
+./src/dev/takeover-viewer-standalone.js
+./src/maintenance/project-maintenance.js
+./src/scripts/cleanup-project-duplicates.js
+./src/scripts/cleanup-single-file.js
+./src/docs/security-guidelines.md
+./src/auto-save-test.js
+./src/test-auto-restart.js
+./uploads/projects/sample-keep-me/project.json
+./ssl/server.crt
+./ssl/server.key
+./ssl/ssl/server.crt
+./ssl/ssl/server.key
+```
+

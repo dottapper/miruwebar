@@ -347,9 +347,17 @@ function navigateBackOrHome() {
 
 // ★ スタートUI乗っ取り版（デザインを"本当に"表示させる）
 function __takeoverStartUI(project){
+  console.log('🔍 __takeoverStartUI 呼び出し:', { project });
+
   const p = project || window.__project || {};
-  const start = p.start || {};
-  const guideSrc = p?.guide?.marker?.src || '';
+
+  // extractDesignで正規化されたデータを使用
+  const { startScreen } = extractDesign(p);
+  console.log('🔍 正規化されたstartScreen:', startScreen);
+
+  // 旧形式との互換性のため、両方のパスをチェック
+  const start = p.start || p.startScreen || {};
+  console.log('🔍 生のstart設定:', start);
 
   // 既存があれば消す
   document.getElementById('__dev_applied_proof__')?.remove();
@@ -365,37 +373,53 @@ function __takeoverStartUI(project){
     'font-family:system-ui, sans-serif'
   ].join(';');
 
-  // 背景
-  if (start.backgroundImage) {
-    root.style.backgroundImage = `url(${start.backgroundImage})`;
+  // 背景画像
+  const bgImage = startScreen?.backgroundImage || startScreen?.background || start?.backgroundImage || start?.background;
+  if (bgImage) {
+    root.style.backgroundImage = `url(${bgImage})`;
     root.style.backgroundSize = 'cover';
     root.style.backgroundPosition = 'center';
+    console.log('✅ 背景画像を適用:', bgImage);
   }
-  if (start.backgroundColor) root.style.backgroundColor = start.backgroundColor;
+
+  // 背景色
+  const bgColor = startScreen?.backgroundColor || start?.backgroundColor;
+  if (bgColor) {
+    root.style.backgroundColor = bgColor;
+    console.log('✅ 背景色を適用:', bgColor);
+  }
 
   // タイトル
   const title = document.createElement('h1');
-  title.textContent = start.title || 'AR体験を開始';
+  title.textContent = startScreen?.title || start?.title || 'AR体験を開始';
+  const titleColor = startScreen?.textColor || startScreen?.titleColor || start?.textColor || '#fff';
+  const titleSize = startScreen?.titleSize || start?.titleSize || 1;
   title.style.cssText = [
-    `color:${start.textColor || '#fff'}`,
-    `font-size:${(start.titleSize ? 32*start.titleSize : 32)}px`,
+    `color:${titleColor}`,
+    `font-size:${32 * titleSize}px`,
     'font-weight:700','margin:0','text-shadow:0 2px 6px rgba(0,0,0,.4)'
   ].join(';');
+  console.log('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
 
   // 位置（%をvhで近似）
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:absolute;left:0;right:0;text-align:center;transform:translateY(-50%)';
-  wrap.style.top = (typeof start.titlePosition === 'number' ? `${start.titlePosition}vh` : '40vh');
+  const titlePos = startScreen?.titlePosition || start?.titlePosition || 40;
+  wrap.style.top = `${titlePos}vh`;
   wrap.appendChild(title);
 
   // 開始ボタン
   const btn = document.createElement('button');
-  btn.textContent = '開始';
+  btn.textContent = startScreen?.buttonText || start?.buttonText || '開始';
+  const buttonColor = startScreen?.buttonColor || start?.buttonColor || '#6c63ff';
+  const buttonTextColor = startScreen?.buttonTextColor || start?.buttonTextColor || '#fff';
   btn.style.cssText = [
     'margin-top:24px','padding:12px 24px','border-radius:12px',
     'border:none','cursor:pointer','box-shadow:0 8px 24px rgba(0,0,0,.25)',
-    'background:#6c63ff','color:#fff','font-size:16px','font-weight:600'
+    `background:${buttonColor}`,`color:${buttonTextColor}`,'font-size:16px','font-weight:600'
   ].join(';');
+  console.log('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
+
   btn.onclick = async (e)=>{
     e.stopPropagation();
     btn.disabled = true;
@@ -427,57 +451,120 @@ function __takeoverStartUI(project){
   root.appendChild(tag);
 
   document.body.appendChild(root);
-  console.info('[TAKEOVER] start UI mounted', {start, guideSrc});
+  console.info('[TAKEOVER] start UI mounted');
 }
 
 function __showLoadingUI(project){
-  const l = project?.loading || {};
+  console.log('🔍 __showLoadingUI 呼び出し:', { project });
+
+  // extractDesignで正規化されたデータを使用
+  const { loadingScreen } = extractDesign(project);
+  console.log('🔍 正規化されたloadingScreen:', loadingScreen);
+
+  // 旧形式との互換性のため、両方のパスをチェック
+  const l = project?.loading || project?.loadingScreen || {};
+  console.log('🔍 生のloading設定:', l);
+
   // 既存を消す
   document.getElementById('__takeover_loading__')?.remove();
 
   const box = document.createElement('div');
   box.id = '__takeover_loading__';
   box.style.cssText = 'position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(2px)';
-  if (l.backgroundColor) box.style.background = l.backgroundColor;
 
-  if (l.image){
+  // 背景色を適用
+  const bgColor = loadingScreen?.backgroundColor || l?.backgroundColor;
+  if (bgColor) {
+    box.style.background = bgColor;
+  }
+
+  // ロゴ/画像を表示
+  const logoSrc = loadingScreen?.logo || loadingScreen?.image || l?.image || l?.logo;
+  console.log('🔍 ローディング画像URL:', logoSrc);
+
+  if (logoSrc){
     const img = document.createElement('img');
-    img.src = l.image;
+    img.src = logoSrc;
     img.alt = 'loading';
     img.style.cssText = 'width:120px;height:auto;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))';
     box.appendChild(img);
+    console.log('✅ ローディング画像を追加:', logoSrc);
   }
+
   const msg = document.createElement('div');
-  msg.textContent = l.message || '読み込み中…';
+  msg.textContent = loadingScreen?.message || l?.message || '読み込み中…';
   msg.style.cssText = 'margin-top:12px;color:#fff;font-weight:600';
+
+  // テキスト色を適用
+  const textColor = loadingScreen?.textColor || l?.textColor;
+  if (textColor) {
+    msg.style.color = textColor;
+  }
+
   box.appendChild(msg);
 
   document.body.appendChild(box);
+  console.log('✅ __takeover_loading__ を表示');
   // 少なくとも一瞬は見えるようタイムアウト解除は別で
   setTimeout(()=>box.remove(), 800);
 }
 
 function __showGuideUI(project){
-  const g = project?.guide || {};
+  console.log('🔍 __showGuideUI 呼び出し:', { project });
+
+  // extractDesignで正規化されたデータを使用
+  const { guideScreen } = extractDesign(project);
+  console.log('🔍 正規化されたguideScreen:', guideScreen);
+
+  // 旧形式との互換性のため、両方のパスをチェック
+  const g = project?.guide || project?.guideScreen || {};
+  console.log('🔍 生のguide設定:', g);
+
   document.getElementById('__takeover_guide__')?.remove();
 
   const box = document.createElement('div');
   box.id = '__takeover_guide__';
   box.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;z-index:2147483000;padding:12px;border-radius:12px;background:rgba(0,0,0,.6);color:#fff;display:flex;gap:12px;align-items:center';
 
-  if (g?.marker?.src){
+  // 背景色を適用
+  if (guideScreen?.backgroundColor || g?.backgroundColor) {
+    box.style.backgroundColor = guideScreen?.backgroundColor || g?.backgroundColor;
+  }
+
+  // マーカー画像を表示（複数のパスをチェック）
+  const markerSrc =
+    guideScreen?.marker?.src ||
+    guideScreen?.markerImage ||
+    g?.marker?.src ||
+    g?.markerImage ||
+    g?.marker?.image;
+
+  console.log('🔍 マーカー画像URL:', markerSrc);
+
+  if (markerSrc){
     const img = document.createElement('img');
-    img.src = g.marker.src;
+    img.src = markerSrc;
     img.alt = 'marker';
     img.style.cssText = 'width:72px;height:auto;border-radius:8px';
     box.appendChild(img);
+    console.log('✅ マーカー画像を追加:', markerSrc);
+  } else {
+    console.warn('⚠️ マーカー画像が見つかりません');
   }
+
   const msg = document.createElement('div');
-  msg.textContent = g.message || 'マーカーをカメラに写してください';
+  msg.textContent = guideScreen?.message || g?.message || 'マーカーをカメラに写してください';
   msg.style.cssText = 'font-weight:600';
+
+  // テキスト色を適用
+  if (guideScreen?.textColor || g?.textColor) {
+    msg.style.color = guideScreen?.textColor || g?.textColor;
+  }
+
   box.appendChild(msg);
 
   document.body.appendChild(box);
+  console.log('✅ __takeover_guide__ を表示');
 }
 
 // Expose minimal UI hooks for the takeover injector
@@ -3481,14 +3568,23 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           console.log('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
         } else {
           console.log('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
+
+          // extractDesignで正規化されたマーカー画像URLを取得
+          const { guideScreen } = extractDesign(currentProject);
+          const normalizedMarkerUrl = guideScreen?.marker?.src || guideScreen?.markerImage;
+          console.log('🔍 正規化されたマーカー画像URL:', normalizedMarkerUrl);
+
           // 2) マーカー画像から .patt を生成
-          // 複数の場所からマーカー画像URLを探す
-          const rawUrl = currentProject?.markerImage
+          // 複数の場所からマーカー画像URLを探す（正規化されたURLを最優先）
+          const rawUrl = normalizedMarkerUrl
+            || currentProject?.markerImage
             || currentProject?.markerImageUrl
             || currentProject?.marker?.url
             || currentProject?.marker?.src
             || currentProject?.guide?.marker?.src
             || currentProject?.guide?.markerImage
+            || currentProject?.guideScreen?.marker?.src
+            || currentProject?.guideScreen?.markerImage
             || currentProject?.screens?.[0]?.marker?.src
             || null;
           console.log('🔍 マーカー画像URL:', rawUrl);

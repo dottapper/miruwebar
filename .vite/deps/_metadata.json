@@ -1,43 +1,52 @@
 {
-  "hash": "b6f05c01",
+  "hash": "0f854d4b",
   "configHash": "1732d227",
-  "lockfileHash": "03b8d09c",
-  "browserHash": "7ea69638",
+  "lockfileHash": "939d1bf8",
+  "browserHash": "b4d50f05",
   "optimized": {
     "uuid": {
       "src": "../../node_modules/uuid/dist/esm-browser/index.js",
       "file": "uuid.js",
-      "fileHash": "bbd2c324",
+      "fileHash": "da4ffe1c",
       "needsInterop": false
     },
     "idb-keyval": {
       "src": "../../node_modules/idb-keyval/dist/index.js",
       "file": "idb-keyval.js",
-      "fileHash": "193ece9a",
+      "fileHash": "d958551f",
       "needsInterop": false
     },
     "qrcode": {
       "src": "../../node_modules/qrcode/lib/browser.js",
       "file": "qrcode.js",
-      "fileHash": "7e47e25c",
+      "fileHash": "d3bca92f",
       "needsInterop": true
+    },
+    "firebase/app": {
+      "src": "../../node_modules/firebase/app/dist/esm/index.esm.js",
+      "file": "firebase_app.js",
+      "fileHash": "1e1ca2b9",
+      "needsInterop": false
+    },
+    "firebase/storage": {
+      "src": "../../node_modules/firebase/storage/dist/esm/index.esm.js",
+      "file": "firebase_storage.js",
+      "fileHash": "3de9d0b6",
+      "needsInterop": false
     },
     "jszip": {
       "src": "../../node_modules/jszip/dist/jszip.min.js",
       "file": "jszip.js",
-      "fileHash": "84c533a8",
+      "fileHash": "a5f2d702",
       "needsInterop": true
-    },
-    "@ar-js-org/ar.js-threejs": {
-      "src": "../../node_modules/@ar-js-org/ar.js-threejs/dist/ar.mjs",
-      "file": "@ar-js-org_ar__js-threejs.js",
-      "fileHash": "ae8f64e8",
-      "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-KVCYZR2Q": {
-      "file": "chunk-KVCYZR2Q.js"
+    "chunk-V66YMBLQ": {
+      "file": "chunk-V66YMBLQ.js"
+    },
+    "chunk-VUNV25KB": {
+      "file": "chunk-VUNV25KB.js"
     }
   }
 }
