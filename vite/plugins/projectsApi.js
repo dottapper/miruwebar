@@ -17,6 +17,25 @@ export function projectsApiPlugin() {
         return safe.slice(0, 100) || 'model.glb';
       };
       const isAllowedExt = (name) => /\.(glb|gltf)$/i.test(name);
+      const normalizeVec3 = (value, fallback) => {
+        if (Array.isArray(value) && value.length >= 3) {
+          return value.slice(0, 3).map((v, i) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback[i];
+          });
+        }
+        if (value && typeof value === 'object') {
+          const x = Number(value.x);
+          const y = Number(value.y);
+          const z = Number(value.z);
+          return [
+            Number.isFinite(x) ? x : fallback[0],
+            Number.isFinite(y) ? y : fallback[1],
+            Number.isFinite(z) ? z : fallback[2]
+          ];
+        }
+        return [...fallback];
+      };
       const MAX_MODEL_BYTES = 50 * 1024 * 1024; // 50MB/1 file
       const MAX_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB/req
       const MAX_BODY_BYTES = 150 * 1024 * 1024; // 上限（保護用。モデル合計100MB+余裕）
@@ -70,7 +89,17 @@ export function projectsApiPlugin() {
         try {
           const body = await readRequestBody(req);
           const parsed = JSON.parse(body || '{}');
-          const { id: rawId, type = 'markerless', loadingScreen = null, startScreen = null, models = [] } = parsed;
+          const {
+            id: rawId,
+            type = 'markerless',
+            loadingScreen = null,
+            startScreen = null,
+            guideScreen = null,
+            markerImage = null,
+            markerPattern = null,
+            arSettings = null,
+            models = []
+          } = parsed;
           const id = sanitizeId(rawId);
           if (!id) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -98,7 +127,18 @@ export function projectsApiPlugin() {
                 throw new Error(`total size exceeded (${totalBytes} bytes)`);
               }
               await fs.writeFile(path.join(dir, fileName), buf);
-              modelEntries.push({ url: `/projects/${id}/${fileName}`, fileName, fileSize: buf.length });
+              const transform = m.transform || {};
+              const position = normalizeVec3(m.position || transform.position, [0, 0, 0]);
+              const rotation = normalizeVec3(m.rotation || transform.rotation, [0, 0, 0]);
+              const scale = normalizeVec3(m.scale || transform.scale, [1, 1, 1]);
+              modelEntries.push({
+                url: `/projects/${id}/${fileName}`,
+                fileName,
+                fileSize: buf.length,
+                position,
+                rotation,
+                scale
+              });
             } catch (e) {
               if (DEBUG) console.warn('⚠️ モデル書き込み失敗（継続）:', e.message);
             }
@@ -123,7 +163,17 @@ export function projectsApiPlugin() {
             console.warn('⚠️ ロゴ画像の書き出し失敗（継続）:', e.message);
           }
 
-          const projectJson = { id, type, startScreen: startScreen || null, loadingScreen: lsOut, models: modelEntries };
+          const projectJson = {
+            id,
+            type,
+            startScreen: startScreen || null,
+            guideScreen: guideScreen || null,
+            loadingScreen: lsOut,
+            markerImage: markerImage || null,
+            markerPattern: markerPattern || null,
+            arSettings: arSettings || null,
+            models: modelEntries
+          };
           await fs.writeJson(path.join(dir, 'project.json'), projectJson, { spaces: 2 });
 
           // 実際にリッスン中のポート/スキームを推定

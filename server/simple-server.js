@@ -337,13 +337,42 @@ async function requestHandler(req, res) {
     if (pathname === '/api/publish-project' && req.method === 'POST') {
       try {
         const body = await parsePostData(req);
-        const { id: rawId, type, loadingScreen, models } = body || {};
+        const {
+          id: rawId,
+          type,
+          loadingScreen,
+          startScreen,
+          guideScreen,
+          markerImage,
+          markerPattern,
+          arSettings,
+          models
+        } = body || {};
         const sanitizeId = (x) => String(x || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'project';
         const sanitizeFileName = (name) => {
           const just = String(name || 'model.glb').split(/[\\/]/).pop();
           return just.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'model.glb';
         };
         const isAllowedExt = (n) => /\.(glb|gltf)$/i.test(n);
+        const normalizeVec3 = (value, fallback) => {
+          if (Array.isArray(value) && value.length >= 3) {
+            return value.slice(0, 3).map((v, i) => {
+              const n = Number(v);
+              return Number.isFinite(n) ? n : fallback[i];
+            });
+          }
+          if (value && typeof value === 'object') {
+            const x = Number(value.x);
+            const y = Number(value.y);
+            const z = Number(value.z);
+            return [
+              Number.isFinite(x) ? x : fallback[0],
+              Number.isFinite(y) ? y : fallback[1],
+              Number.isFinite(z) ? z : fallback[2]
+            ];
+          }
+          return [...fallback];
+        };
         const MAX_MODEL_BYTES = 50 * 1024 * 1024;
         const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 
@@ -373,10 +402,17 @@ async function requestHandler(req, res) {
               if (totalBytes > MAX_TOTAL_BYTES) throw new Error('total size exceeded');
               const filePath = path.join(projectDir, fileName);
               await fs.writeFile(filePath, buffer);
+              const transform = m.transform || {};
+              const position = normalizeVec3(m.position || transform.position, [0, 0, 0]);
+              const rotation = normalizeVec3(m.rotation || transform.rotation, [0, 0, 0]);
+              const scale = normalizeVec3(m.scale || transform.scale, [1, 1, 1]);
               modelEntries.push({
                 url: `/projects/${id}/${fileName}`,
                 fileName,
-                fileSize: buffer.length
+                fileSize: buffer.length,
+                position,
+                rotation,
+                scale
               });
               simpleServerLogger.debug(`モデルファイルを保存しました: ${fileName}`);
             } catch (e) {
@@ -389,7 +425,12 @@ async function requestHandler(req, res) {
         const projectJson = {
           id,
           type: type || 'markerless',
+          startScreen: startScreen || null,
+          guideScreen: guideScreen || null,
           loadingScreen: loadingScreen || null,
+          markerImage: markerImage || null,
+          markerPattern: markerPattern || null,
+          arSettings: arSettings || null,
           models: modelEntries
         };
         await fs.writeFile(path.join(projectDir, 'project.json'), JSON.stringify(projectJson, null, 2));

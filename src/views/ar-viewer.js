@@ -382,9 +382,9 @@ async function bootFromQR() {
 
     arViewerLogger.info('[FLOW] project loaded', project);
 
-    // ★ プロジェクトデザインを確実に適用
-    await applyProjectDesign(project);
-    arViewerLogger.info('[APPLY] Design applied on boot');
+    // デザイン適用は initIntegratedARViewer() 内で DOM 生成後に行う。
+    // bootFromQR 時点では #webar-ui が未生成のため、ここでの適用はスキップする。
+    arViewerLogger.info('[APPLY] Design application deferred to initIntegratedARViewer (DOM not ready yet)');
 
     // ★ スタートUI乗っ取り（統合UI）はデフォルト無効化
     try {
@@ -699,23 +699,9 @@ async function onStartClick() {
     // ここでも念のためガイドを marker に矯正
     forceGuideModeIfMarker(project);
 
-    // ★ プロジェクトデザインをDOMに確実に反映
-    if (typeof applyProjectDesign === 'function') {
-      applyProjectDesign(project);
-    }
-
-    // カメラ許可→ローディング表示（既存ロジック）
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }});
-      if (typeof attachStreamToVideo === 'function') attachStreamToVideo(stream);
-    } catch (e) {
-      arViewerLogger.error('[FLOW] camera error', e);
-      alert('カメラ権限が必要です（HTTPSが必要な場合があります）');
-      return;
-    }
-
-    if (typeof showLoadingScreen === 'function') showLoadingScreen(project.loadingScreen);
-    arViewerLogger.info('[FLOW] loading ready');
+    // デザイン適用とカメラ取得は状態機械パス (handleARStateChange) で行われる。
+    // onStartClick は normalizeProject のみ実行し、UI制御は状態機械に委譲する。
+    arViewerLogger.info('[FLOW] normalizeProject complete, state machine will handle the rest');
   } finally {
     // ★ 処理完了後にフラグをリセット（次回呼び出しを許可）
     setTimeout(() => {
@@ -1959,130 +1945,19 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     dlog('📁 読み込まれたプロジェクト:', currentProject);
     dlog('🔍 プロジェクトのloadingScreen:', currentProject.loadingScreen);
 
-    // 画面設定（ローディング/スタート/ガイド）の取得
-    let ls = currentProject.loadingScreen || {};
-    let ss = currentProject.startScreen || {};
-    let gs = currentProject.guideScreen || {};
+    // =====================================================
+    // 画面設定の構築
+    // 優先順位（高→低）:
+    //   1. editorSettings（ユーザーがエディタで明示的に変更した値）
+    //   2. templateSettings（選択されたテンプレートの設定）
+    //   3. extractDesign（正規化されたプロジェクトデザイン）
+    //   4. プロジェクト直下の生データ（startScreen/loadingScreen/guideScreen）
+    //   5. デフォルト値（真っ白画面の防止）
+    // 全レイヤーで { ...低優先, ...高優先 } の一貫したパターンを使用。
+    // =====================================================
 
-    // 正規化されたデザインを先に取り出し、初期値として採用
-    try {
-      const { startScreen, loadingScreen, guideScreen } = extractDesign(currentProject);
-      ss = { ...ss, ...(startScreen || {}) };
-      ls = { ...ls, ...(loadingScreen || {}) };
-      gs = { ...gs, ...(guideScreen || {}) };
-    } catch (e) {
-      arViewerLogger.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
-    }
-
-    // 追加補完: エディター保存のローカル設定（同一オリジンでの即時反映用）
-    try {
-      // ローカル補完は ?ls=on のときのみ有効
-      const lsEnabled = enableLSFlag === true;
-      const editorLocal = lsEnabled ? localStorage.getItem('loadingScreenSettings') : null;
-      if (lsEnabled && editorLocal) {
-        const editorSettings = JSON.parse(editorLocal);
-        if (editorSettings.startScreen) {
-          ss = { ...editorSettings.startScreen, ...ss };
-        }
-        if (editorSettings.loadingScreen) {
-          ls = { ...editorSettings.loadingScreen, ...ls };
-        }
-        if (editorSettings.guideScreen) {
-          // ネストを意識して浅い上書き
-          gs = { ...editorSettings.guideScreen, ...gs };
-          if (editorSettings.guideScreen.surfaceDetection) {
-            gs.surfaceDetection = { ...(editorSettings.guideScreen.surfaceDetection || {}), ...(gs.surfaceDetection || {}) };
-          }
-          if (editorSettings.guideScreen.worldTracking) {
-            gs.worldTracking = { ...(editorSettings.guideScreen.worldTracking || {}), ...(gs.worldTracking || {}) };
-          }
-        }
-      }
-    } catch (e) {
-      arViewerLogger.warn('⚠️ editor local settings の適用に失敗:', e);
-    }
-    
-    // project.jsonに埋め込まれた設定を最優先で適用
-
-    // 1. templateSettingsから設定を適用（最高優先度）
-    if (ls.templateSettings) {
-      if (ls.templateSettings.startScreen) {
-        // 完全に上書きではなく、既存の設定に追加する形でマージ
-        const templateStartScreen = ls.templateSettings.startScreen;
-        ss = {
-          ...ss,
-          ...templateStartScreen,
-          // 位置とサイズの設定を明示的に適用
-          titlePosition: templateStartScreen.titlePosition ?? ss.titlePosition,
-          buttonPosition: templateStartScreen.buttonPosition ?? ss.buttonPosition,
-          logoPosition: templateStartScreen.logoPosition ?? ss.logoPosition,
-          titleSize: templateStartScreen.titleSize ?? ss.titleSize,
-          buttonSize: templateStartScreen.buttonSize ?? ss.buttonSize,
-          logoSize: templateStartScreen.logoSize ?? ss.logoSize
-        };
-        dlog('🎯 templateSettings.startScreenを適用');
-      }
-      if (ls.templateSettings.loadingScreen) {
-        // templateSettingsのloadingScreenを最優先でマージ
-        ls = { ...ls, ...ls.templateSettings.loadingScreen };
-        dlog('🎯 templateSettings.loadingScreenを適用');
-      }
-      if (ls.templateSettings.guideScreen) {
-        gs = { ...gs, ...ls.templateSettings.guideScreen };
-        dlog('🎯 templateSettings.guideScreenを適用');
-      }
-    }
-    
-    // 1.5 プロジェクト直下の画面設定を反映（テンプレの次に優先）
-    try {
-      if (currentProject?.startScreen) {
-        // プロジェクト直下の値は不足補完として扱い、テンプレで上書きされた内容を壊さない
-        ss = { ...currentProject.startScreen, ...ss };
-      }
-      if (currentProject?.guideScreen) {
-        gs = { ...currentProject.guideScreen, ...gs };
-      }
-      if (currentProject?.loadingScreen) {
-        // 既に ls は currentProject.loadingScreen を基にしている想定だが、念のため浅く統合
-        ls = { ...currentProject.loadingScreen, ...ls };
-      }
-    } catch (_) {}
-    
-    // 2. editorSettingsの設定を強制適用（ユーザー設定を最優先）
-    // ユーザーが意図して設定した値を反映させるため、ss/gs/lsを上書きする形に変更
-    if (ls.editorSettings) {
-      // startScreen設定
-      if (ls.editorSettings.startScreen) {
-        const es = ls.editorSettings.startScreen || {};
-        // 既存の設定(ss)よりもエディタ設定(es)を優先
-        ss = { ...ss, ...es };
-      }
-
-      // guideScreen設定
-      if (ls.editorSettings.guideScreen) {
-        const eg = ls.editorSettings.guideScreen || {};
-        // 既存の設定(gs)よりもエディタ設定(eg)を優先
-        gs = { ...gs, ...eg };
-
-        // ネストされたオブジェクトのマージ
-        if (eg.surfaceDetection) {
-          gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...eg.surfaceDetection };
-        }
-        if (eg.worldTracking) {
-          gs.worldTracking = { ...(gs.worldTracking || {}), ...eg.worldTracking };
-        }
-      }
-
-      // loadingScreen設定
-      if (ls.editorSettings.loadingScreen) {
-        const el = ls.editorSettings.loadingScreen || {};
-        // 既存の設定(ls)よりもエディタ設定(el)を優先
-        ls = { ...ls, ...el };
-      }
-    }
-    
-    // 3. デフォルト設定でフォールバック（真っ白画面を防ぐ）
-    const defaultSettings = {
+    // --- Layer 0: デフォルト値 ---
+    const defaultStartScreen = {
       title: 'AR体験を開始',
       buttonText: '開始',
       backgroundColor: '#121212',
@@ -2096,67 +1971,93 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       buttonPosition: 60,
       logoPosition: 20
     };
-    ss = { ...defaultSettings, ...ss };
+    const defaultLoadingScreen = {
+      backgroundColor: '#1a1a1a',
+      textColor: '#ffffff',
+      progressColor: '#4CAF50',
+      message: 'ARコンテンツを準備中...',
+      showProgress: true
+    };
 
-    if (!ls.backgroundColor && !ls.textColor) {
-      ls = {
-        backgroundColor: '#1a1a1a',
-        textColor: '#ffffff',
-        progressColor: '#4CAF50',
-        message: 'ARコンテンツを準備中...',
-        showProgress: true,
-        ...ls
-      };
+    // --- Layer 1: プロジェクト直下の生データ ---
+    let ss = { ...defaultStartScreen, ...(currentProject.startScreen || {}) };
+    let ls = { ...defaultLoadingScreen, ...(currentProject.loadingScreen || {}) };
+    let gs = { ...(currentProject.guideScreen || {}) };
+    dlog('📋 Layer 1 (project raw):', { ss, ls, gs });
+
+    // --- Layer 2: extractDesign による正規化 ---
+    try {
+      const design = extractDesign(currentProject);
+      if (design.startScreen)  ss = { ...ss, ...design.startScreen };
+      if (design.loadingScreen) ls = { ...ls, ...design.loadingScreen };
+      if (design.guideScreen)  gs = { ...gs, ...design.guideScreen };
+      dlog('📋 Layer 2 (extractDesign):', { ss, ls, gs });
+    } catch (e) {
+      arViewerLogger.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
     }
-    
-    // ビューア専用の状態管理を使用して設定を適用
+
+    // --- Layer 3: templateSettings（テンプレート選択による設定）---
+    const templateSettings = ls.templateSettings || null;
+    if (templateSettings) {
+      if (templateSettings.startScreen)  ss = { ...ss, ...templateSettings.startScreen };
+      if (templateSettings.loadingScreen) ls = { ...ls, ...templateSettings.loadingScreen };
+      if (templateSettings.guideScreen) {
+        const tgs = templateSettings.guideScreen;
+        gs = { ...gs, ...tgs };
+        if (tgs.surfaceDetection) gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...tgs.surfaceDetection };
+        if (tgs.worldTracking)    gs.worldTracking = { ...(gs.worldTracking || {}), ...tgs.worldTracking };
+      }
+      dlog('📋 Layer 3 (templateSettings):', { ss, ls, gs });
+    }
+
+    // --- Layer 4: editorSettings（ユーザー明示設定 - 最高優先度）---
+    const editorSettings = ls.editorSettings || null;
+    if (editorSettings) {
+      if (editorSettings.startScreen)  ss = { ...ss, ...editorSettings.startScreen };
+      if (editorSettings.loadingScreen) ls = { ...ls, ...editorSettings.loadingScreen };
+      if (editorSettings.guideScreen) {
+        const eg = editorSettings.guideScreen;
+        gs = { ...gs, ...eg };
+        if (eg.surfaceDetection) gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...eg.surfaceDetection };
+        if (eg.worldTracking)    gs.worldTracking = { ...(gs.worldTracking || {}), ...eg.worldTracking };
+      }
+      dlog('📋 Layer 4 (editorSettings):', { ss, ls, gs });
+    }
+
+    // --- Layer 5: localStorage補完（?ls=on のときのみ、不足分を補完）---
+    try {
+      if (enableLSFlag === true) {
+        const editorLocal = localStorage.getItem('loadingScreenSettings');
+        if (editorLocal) {
+          const localSettings = JSON.parse(editorLocal);
+          // { ...localStorage, ...既存 } で既存値を壊さず不足分のみ補完
+          if (localSettings.startScreen)  ss = { ...localSettings.startScreen, ...ss };
+          if (localSettings.loadingScreen) ls = { ...localSettings.loadingScreen, ...ls };
+          if (localSettings.guideScreen)  gs = { ...localSettings.guideScreen, ...gs };
+          dlog('📋 Layer 5 (localStorage complement):', { ss, ls, gs });
+        }
+      }
+    } catch (e) {
+      arViewerLogger.warn('⚠️ editor local settings の適用に失敗:', e);
+    }
+
+    // --- 統合システムによる不足分補完（オプショナル）---
     try {
       const { applyProjectLoadingSettings } = await import('../utils/loading-screen-state.js');
       const { mergeLoadingSettings } = await import('../utils/unified-loading-screen.js');
-      
       const viewerSettings = applyProjectLoadingSettings(currentProject);
       const mergedSettings = mergeLoadingSettings(currentProject, viewerSettings);
-      
-      // templateSettingsが最優先、不足項目のみマージで補完
-      if (!ls.templateSettings?.loadingScreen) {
-        // templateSettingsにローディング設定がない場合のみマージ
-        ls = { ...mergedSettings.loadingScreen, ...ls };
-      }
-      if (!ss.title && !ls.templateSettings?.startScreen) {
-        // スタート画面のタイトルがなく、templateSettingsにも設定がない場合のみマージ
-        ss = { ...mergedSettings.startScreen, ...ss };
-      }
-      if (!gs.message && !ls.templateSettings?.guideScreen) {
-        // ガイド画面にメッセージがなく、templateSettingsにも設定がない場合のみマージ
-        gs = { ...mergedSettings.guideScreen, ...gs };
-      }
-
-      dlog('🎨 統合システムでローディング画面設定を適用:', { ls, ss, gs, merged: mergedSettings });
+      // 不足分のみ補完: { ...unified, ...既存 }
+      if (mergedSettings.loadingScreen) ls = { ...mergedSettings.loadingScreen, ...ls };
+      if (mergedSettings.startScreen)   ss = { ...mergedSettings.startScreen, ...ss };
+      if (mergedSettings.guideScreen)   gs = { ...mergedSettings.guideScreen, ...gs };
+      dlog('📋 統合システム補完完了:', { ls, ss, gs });
     } catch (error) {
-      arViewerLogger.warn('統合システムの適用に失敗、従来の方法を使用:', error);
-
-      // フォールバック: templateSettingsを最優先にして、エディター保存形式も処理
-      const editorSettings = ls.editorSettings || null;
-
-      // templateSettingsが存在する場合は、それを最優先で適用
-      if (ls.templateSettings) {
-        if (ls.templateSettings.loadingScreen && !ls.backgroundColor) {
-          ls = { ...ls, ...ls.templateSettings.loadingScreen };
-        }
-        if (ls.templateSettings.startScreen && !ss.title) {
-          ss = { ...ss, ...ls.templateSettings.startScreen };
-        }
-      }
-
-      // その後でeditorSettingsから不足項目を補完
-      if (!ss.title && !ls.templateSettings?.startScreen) {
-        ss = currentProject.startScreen || (editorSettings?.startScreen || {});
-      }
+      arViewerLogger.warn('統合システムの適用に失敗（継続）:', error);
     }
     
-    // editorSettings をスコープ外でも使用するため、ここで定義
-    const editorSettings = ls.editorSettings || null;
-    
+    // editorSettings は Layer 4 で既に定義済み
+
     if (ls) {
       dlog('🎨 プロジェクトファイルからローディング画面設定を取得:', ls);
       
@@ -2202,34 +2103,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const loadingTitle = container.querySelector('#ar-loading-title');
       const loadingMessage = container.querySelector('#ar-loading-message');
 
-      // editorSettings.loadingScreen から不足項目を補完
-      try {
-        if (editorSettings?.loadingScreen) {
-          const le = editorSettings.loadingScreen;
-          ls = {
-            ...le,
-            ...ls,
-            // 優先順位: 明示的に指定された ls が勝つが、なければ le を使う
-            backgroundColor: ls.backgroundColor || le.backgroundColor,
-            textColor: ls.textColor || le.textColor,
-            progressColor: ls.progressColor || ls.accentColor || le.progressColor || le.accentColor,
-            accentColor: ls.accentColor || le.accentColor,
-            loadingMessage: ls.loadingMessage || ls.message || le.loadingMessage || le.message,
-            brandName: ls.brandName || le.brandName,
-            subTitle: ls.subTitle || le.subTitle,
-            fontScale: ls.fontScale || le.fontScale,
-            showProgress: (ls.showProgress !== undefined) ? ls.showProgress : (le.showProgress !== undefined ? le.showProgress : true),
-            logoType: ls.logoType || le.logoType,
-            logoImage: ls.logoImage || ls.logo || le.logoImage || le.logo,
-            logoPosition: (ls.logoPosition !== undefined) ? ls.logoPosition : le.logoPosition,
-            logoSize: (ls.logoSize !== undefined) ? ls.logoSize : le.logoSize,
-            textPosition: (ls.textPosition !== undefined) ? ls.textPosition : le.textPosition
-          };
-          dlog('🔄 editorSettings から不足項目を補完:', ls);
-        }
-      } catch (e) {
-        arViewerLogger.warn('⚠️ editorSettings の補完に失敗（継続）:', e);
-      }
+      // editorSettings の補完は Layer 4 で完了済み
 
       // メッセージ適用（小さめの説明文）
       if (ls.loadingMessage && loadingMessage) {
@@ -2500,99 +2374,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ★★★ レイアウト関数終了とイベント設定 ★★★
       }
       
-      // 最終補正: エディターのローカル設定を再適用（テンプレ/デフォルトよりも最優先）
-      let editorLocalSettings = null;
-      try {
-        const editorLocal = localStorage.getItem('loadingScreenSettings');
-        if (enableLSFlag && editorLocal) {
-          editorLocalSettings = JSON.parse(editorLocal);
-          if (editorLocalSettings.startScreen) {
-            const els = editorLocalSettings.startScreen || {};
-            ss = { ...els, ...ss };
-            arViewerLogger.info('🔧 最終補完(ls=on): editor startScreen を不足のみ適用');
-          }
-          if (editorLocalSettings.loadingScreen) {
-            const ell = editorLocalSettings.loadingScreen || {};
-            ls = { ...ell, ...ls };
-            arViewerLogger.info('🔧 最終補完(ls=on): editor loadingScreen を不足のみ適用');
-          }
-        }
-      } catch (_) {}
-
-      // 背景の強制上書きは行わない。プロジェクト/テンプレの設定のみを使用
-
-      // 🔒 最終確定: テンプレ設定の主要プロパティを明示反映（上書き事故防止）
-      try {
-        const ts = currentProject?.loadingScreen?.templateSettings || null;
-        if (ts) {
-          // StartScreen: 配置・サイズ・色・文言の主要キー
-          if (ts.startScreen) {
-            const tss = ts.startScreen;
-            ss = {
-              ...ss,
-              ...(tss.backgroundColor !== undefined ? { backgroundColor: tss.backgroundColor } : {}),
-              ...(tss.textColor !== undefined ? { textColor: tss.textColor } : {}),
-              ...(tss.buttonColor !== undefined ? { buttonColor: tss.buttonColor } : {}),
-              ...(tss.buttonTextColor !== undefined ? { buttonTextColor: tss.buttonTextColor } : {}),
-              ...(tss.title !== undefined ? { title: tss.title } : {}),
-              ...(tss.buttonText !== undefined ? { buttonText: tss.buttonText } : {}),
-              ...(typeof tss.titlePosition === 'number' ? { titlePosition: tss.titlePosition } : {}),
-              ...(typeof tss.buttonPosition === 'number' ? { buttonPosition: tss.buttonPosition } : {}),
-              ...(typeof tss.logoPosition === 'number' ? { logoPosition: tss.logoPosition } : {}),
-              ...(typeof tss.titleSize === 'number' ? { titleSize: tss.titleSize } : {}),
-              ...(typeof tss.buttonSize === 'number' ? { buttonSize: tss.buttonSize } : {}),
-              ...(typeof tss.logoSize === 'number' ? { logoSize: tss.logoSize } : {}),
-            };
-          }
-          // LoadingScreen: 色・文言・ロゴ位置/サイズ等
-          if (ts.loadingScreen) {
-            const tls = ts.loadingScreen;
-            ls = {
-              ...ls,
-              ...(tls.backgroundColor !== undefined ? { backgroundColor: tls.backgroundColor } : {}),
-              ...(tls.textColor !== undefined ? { textColor: tls.textColor } : {}),
-              ...(tls.progressColor !== undefined ? { progressColor: tls.progressColor } : {}),
-              ...(tls.accentColor !== undefined ? { accentColor: tls.accentColor } : {}),
-              ...(tls.loadingMessage !== undefined ? { loadingMessage: tls.loadingMessage } : {}),
-              ...(tls.message !== undefined ? { message: tls.message } : {}),
-              ...(tls.brandName !== undefined ? { brandName: tls.brandName } : {}),
-              ...(tls.subTitle !== undefined ? { subTitle: tls.subTitle } : {}),
-              ...(typeof tls.fontScale === 'number' ? { fontScale: tls.fontScale } : {}),
-              ...(typeof tls.showProgress === 'boolean' ? { showProgress: tls.showProgress } : {}),
-              ...(tls.logoType !== undefined ? { logoType: tls.logoType } : {}),
-              ...(tls.logo !== undefined ? { logo: tls.logo } : {}),
-              ...(typeof tls.logoPosition === 'number' ? { logoPosition: tls.logoPosition } : {}),
-              ...(typeof tls.logoSize === 'number' ? { logoSize: tls.logoSize } : {}),
-              ...(typeof tls.textPosition === 'number' ? { textPosition: tls.textPosition } : {})
-            };
-          }
-          // GuideScreen: 色・文言・モード/各セクション
-          if (ts.guideScreen) {
-            const tgs = ts.guideScreen;
-            gs = {
-              ...gs,
-              ...(tgs.backgroundColor !== undefined ? { backgroundColor: tgs.backgroundColor } : {}),
-              ...(tgs.textColor !== undefined ? { textColor: tgs.textColor } : {}),
-              ...(tgs.accentColor !== undefined ? { accentColor: tgs.accentColor } : {}),
-              ...(tgs.mode !== undefined ? { mode: tgs.mode } : {}),
-              ...(tgs.title !== undefined ? { title: tgs.title } : {}),
-              ...(tgs.description !== undefined ? { description: tgs.description } : {}),
-              ...(typeof tgs.surfaceTextPosition === 'number' ? { surfaceTextPosition: tgs.surfaceTextPosition } : {}),
-              ...(typeof tgs.surfaceFooterPosition === 'number' ? { surfaceFooterPosition: tgs.surfaceFooterPosition } : {}),
-              ...(typeof tgs.worldTextPosition === 'number' ? { worldTextPosition: tgs.worldTextPosition } : {}),
-              ...(typeof tgs.worldFooterPosition === 'number' ? { worldFooterPosition: tgs.worldFooterPosition } : {}),
-            };
-            if (tgs.surfaceDetection) {
-              gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...tgs.surfaceDetection };
-            }
-            if (tgs.worldTracking) {
-              gs.worldTracking = { ...(gs.worldTracking || {}), ...tgs.worldTracking };
-            }
-          }
-        }
-      } catch (e) {
-        arViewerLogger.warn('⚠️ 最終確定の適用に失敗（継続）:', e);
-      }
+      // 設定マージは初期構築セクション（Layer 0-5）で一貫した優先順位で完了済み。
+      // 重複する再マージは削除（旧「最終補正」「最終確定」ブロック）。
 
       // 初回レイアウト実行
       layoutStartScreen();
@@ -2617,14 +2400,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         startCTA.setAttribute('data-role', 'start-button');
       }
       // HTML生成後にスタートボタンのイベントをバインド
+      // 注意: onStartClick（旧パス）は状態機械と競合するため使用しない。
+      // bindStartButtonOnce() が #ar-start-cta → #ar-start-btn への転送を担当し、
+      // #ar-start-btn のクリックで状態機械が起動する。
       setTimeout(() => {
-        const startCTA = container.querySelector('#ar-start-cta');
-        if (startCTA) {
-          startCTA.addEventListener('click', onStartClick, { once: true });
-          arViewerLogger.info('[FLOW] start button bound directly:', startCTA);
-        } else {
-          bindStartButtonOnce();
-        }
+        bindStartButtonOnce();
       }, 100); // DOM更新を待つ
       updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>「開始」を押して体験を始めてください`);
     } catch (e) {
@@ -2632,15 +2412,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const safeName = escapeHTML(currentProject.name || 'ARプロジェクト');
       updateInstruction(`<strong>✅ ${safeName} 読み込み完了</strong><br>画面の「AR開始」を押して体験を始めてください`);
       startBtn.style.display = 'inline-block';
-      // フォールバックでもボタンのバインドを試行
+      // フォールバック: 状態機械パスを使用（onStartClick は競合するため不使用）
       setTimeout(() => {
-        const startBtn = container.querySelector('#ar-start-btn');
-        if (startBtn) {
-          startBtn.addEventListener('click', onStartClick, { once: true });
-          arViewerLogger.info('[FLOW] fallback button bound directly:', startBtn);
-        } else {
-          bindStartButtonOnce();
-        }
+        bindStartButtonOnce();
       }, 100);
     }
 

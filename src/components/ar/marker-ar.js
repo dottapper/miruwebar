@@ -1258,10 +1258,11 @@ export class MarkerAR extends AREngineInterface {
 
   /**
    * AREngineInterface 実装: 初期化
+   * 注意: isInitialized は init() 内部で設定する。
+   * ここで true にすると init() がスキップされてAR.jsが読み込まれない。
    */
   async initialize() {
-    markerARLogger.info('🚀 MarkerAR初期化開始');
-    this.isInitialized = true;
+    markerARLogger.info('🚀 MarkerAR initialize() 呼び出し（実初期化は init() に委譲）');
     return true;
   }
 
@@ -1269,9 +1270,6 @@ export class MarkerAR extends AREngineInterface {
    * AREngineInterface 実装: AR開始
    */
   async start(projectData) {
-    if (!this.isInitialized) {
-      await this.initialize();
-    }
     this.isRunning = true;
     markerARLogger.info('▶️ MarkerAR開始');
     markerARLogger.info('🔍 projectData受け取り確認:', {

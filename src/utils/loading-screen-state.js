@@ -189,6 +189,7 @@ export function getLoadingSettingsForProject() {
   return {
     loadingScreen: settings.loadingScreen,
     startScreen: settings.startScreen,
+    guideScreen: settings.guideScreen,
     editorSettings: settings // 下位互換性のため
   };
 }

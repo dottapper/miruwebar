@@ -964,6 +964,35 @@ export async function showQRCodeModal(options = {}) {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
+    
+    // 補助: transformをviewer互換の配列形式に正規化
+    const toVec3 = (value, fallback) => {
+      if (Array.isArray(value) && value.length >= 3) {
+        return value.slice(0, 3).map((v, i) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : fallback[i];
+        });
+      }
+      if (value && typeof value === 'object') {
+        const x = Number(value.x);
+        const y = Number(value.y);
+        const z = Number(value.z);
+        return [
+          Number.isFinite(x) ? x : fallback[0],
+          Number.isFinite(y) ? y : fallback[1],
+          Number.isFinite(z) ? z : fallback[2]
+        ];
+      }
+      return [...fallback];
+    };
+    
+    const normalizeTransform = (model) => {
+      const transform = model?.transform || {};
+      const position = toVec3(model?.position || transform.position, [0, 0, 0]);
+      const rotation = toVec3(model?.rotation || transform.rotation, [0, 0, 0]);
+      const scale = toVec3(model?.scale || transform.scale, [1, 1, 1]);
+      return { position, rotation, scale };
+    };
 
     // 開いたタイミングでローカル公開を試行（同一Wi-Fi前提）
     (async () => {
@@ -978,7 +1007,14 @@ export async function showQRCodeModal(options = {}) {
         for (const m of withModels.modelData || []) {
           if (m.blob) {
             const dataBase64 = await blobToBase64(m.blob);
-            modelPayload.push({ fileName: m.fileName || 'model.glb', dataBase64 });
+            const transform = normalizeTransform(m);
+            modelPayload.push({
+              fileName: m.fileName || 'model.glb',
+              dataBase64,
+              position: transform.position,
+              rotation: transform.rotation,
+              scale: transform.scale
+            });
           }
         }
 
