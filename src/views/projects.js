@@ -2,9 +2,6 @@
 import { showNewProjectModal, showConfirmDialog } from '../components/ui.js';
 import { getProjects, deleteProject } from '../api/projects-new.js';
 import { showVersionInfoModal } from '../components/version-info.js';
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 import { showLoadingScreenSelector } from '../components/loading-screen-selector.js';
 import '../styles/projects.css';
 import '../styles/version-info.css'; // バージョン情報モーダル用のスタイル
@@ -63,18 +60,15 @@ function createSampleProjects() {
       }
     ];
     localStorage.setItem('miruwebAR_projects', JSON.stringify(sampleProjects));
-    dlog("サンプルプロジェクトを作成しました");
     return sampleProjects;
   }
   return existingProjects;
 }
 
 export default function showProjects(container) {
-  dlog('showProjects 関数が呼び出されました。');
   
   // サンプルプロジェクトを作成（デバッグ用）
   const projects = createSampleProjects();
-  dlog('現在のプロジェクト:', projects);
 
   // プロジェクト一覧画面のHTMLを構築
   container.innerHTML = `
@@ -193,9 +187,7 @@ export default function showProjects(container) {
   // バージョン情報ボタンのイベントリスナー設定
   const versionInfoBtn = document.getElementById('version-info-btn');
   if (versionInfoBtn) {
-    dlog('バージョン情報ボタンを検出しました');
     versionInfoBtn.addEventListener('click', () => {
-      dlog('バージョン情報ボタンがクリックされました');
       try {
         showVersionInfoModal();
       } catch (error) {
@@ -210,7 +202,6 @@ export default function showProjects(container) {
   const loadingScreenBtn = document.getElementById('loading-screen-btn');
   if (loadingScreenBtn) {
     loadingScreenBtn.addEventListener('click', () => {
-      dlog('ローディング画面一覧ボタンがクリックされました');
       try {
         // ローディング画面選択モーダルを表示
         showLoadingScreenSelector();
@@ -224,7 +215,6 @@ export default function showProjects(container) {
   window.showVersionInfo = showVersionInfoModal;
   
   // デバッグ用：バージョン情報モジュールのパス確認
-  dlog("version-info.js のパス：", import.meta.url);
   
   // プロジェクト一覧を表示する関数
   function renderProjectList(page) {
@@ -240,7 +230,6 @@ export default function showProjects(container) {
     
     // プロジェクトデータを取得
     let projects = getProjects();
-    dlog('表示するプロジェクト:', projects);
     
     // 更新日の降順で並び替え
     projects.sort((a, b) => b.updated - a.updated);
@@ -338,25 +327,16 @@ export default function showProjects(container) {
       projectCard.querySelector('.card-content').addEventListener('click', (e) => {
         // メニューボタンやドロップダウンがクリックされた場合は無視
         if (e.target.closest('.card-menu') || e.target.closest('.card-menu-button') || e.target.closest('.card-menu-dropdown')) {
-          dlog('メニュー関連のクリックを検出 - カード遷移をキャンセル');
           return;
         }
-        dlog('カードクリック - プロジェクト編集画面に遷移:', project.name);
         window.location.hash = `#/editor?id=${project.id}&type=${project.type}`;
       });
       
       // メニューボタンのクリックイベント
       const menuButton = projectCard.querySelector('.card-menu-button');
       const menuDropdown = projectCard.querySelector('.card-menu-dropdown');
-      
-      dlog('メニューボタンとドロップダウンの要素確認:', {
-        menuButton: !!menuButton,
-        menuDropdown: !!menuDropdown,
-        projectName: project.name
-      });
-      
+
       menuButton.addEventListener('click', (e) => {
-        dlog('メニューボタンがクリックされました:', project.name);
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation(); // 追加：同一要素の他のイベントリスナーも停止
@@ -368,36 +348,30 @@ export default function showProjects(container) {
           }
         });
         
-        dlog('ドロップダウンの表示状態を切り替えます');
         menuDropdown.classList.toggle('show');
-        dlog('ドロップダウンが表示されました:', menuDropdown.classList.contains('show'));
+
       });
       
       // ドロップダウンメニューの各項目のクリックイベント
       const dropdownItems = projectCard.querySelectorAll('.dropdown-item');
       dropdownItems.forEach(item => {
         item.addEventListener('click', (e) => {
-          dlog('ドロップダウンアイテムがクリックされました:', item.getAttribute('data-action'));
+
           e.preventDefault();
           e.stopPropagation();
           menuDropdown.classList.remove('show');
           
           const action = item.getAttribute('data-action');
-          dlog('実行するアクション:', action);
           
           switch (action) {
             case 'delete':
-              dlog('削除処理を開始します:', project.name);
               showConfirmDialog(
                 `「${project.name}」を削除してもよろしいですか？`,
                 async () => {
-                  dlog('削除が確認されました。deleteProject関数を呼び出します:', project.id);
                   try {
                     const success = await deleteProject(project.id);
-                    dlog('削除結果:', success);
                     
                     if (success) {
-                      dlog('削除成功 - プロジェクトリストを更新します');
                       renderProjectList(currentPage);
                       const notification = document.createElement('div');
                       notification.className = 'notification success';
@@ -422,7 +396,6 @@ export default function showProjects(container) {
               
             case 'duplicate':
               // 複製処理（今後実装）
-              dlog(`プロジェクト "${project.name}" を複製します`);
               break;
           }
         });
@@ -491,7 +464,6 @@ export default function showProjects(container) {
   // ローカルストレージの変更を監視
   window.addEventListener('storage', (e) => {
     if (e.key === 'miruwebAR_projects') {
-      dlog('プロジェクトデータが更新されました');
       renderProjectList(currentPage);
     }
   }, { signal });
@@ -499,7 +471,6 @@ export default function showProjects(container) {
   // ページの表示・非表示切り替え時に更新
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-      dlog('ページが表示されました - プロジェクトリストを更新');
       renderProjectList(currentPage);
     }
   }, { signal });
@@ -515,7 +486,6 @@ export default function showProjects(container) {
 
   // クリーンアップ関数
   return () => {
-    dlog('プロジェクト一覧ビューのクリーンアップを実行します');
     controller.abort(); // すべてのイベントリスナーを一度に削除
   };
 }

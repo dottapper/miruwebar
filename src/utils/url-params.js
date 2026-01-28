@@ -145,18 +145,3 @@ export function navigateWithSearch(newHash) {
   history.replaceState(null, '', newUrl);
 }
 
-/**
- * デバッグ用: URL構造をログ出力
- */
-export function debugURL() {
-  if (typeof window === 'undefined') return;
-
-  console.group('[URL-PARAMS] Debug Info');
-  console.log('Full URL:', window.location.href);
-  console.log('Origin:', window.location.origin);
-  console.log('Pathname:', window.location.pathname);
-  console.log('Search:', window.location.search);
-  console.log('Hash:', window.location.hash);
-  console.log('All Params:', getAllParams());
-  console.groupEnd();
-}

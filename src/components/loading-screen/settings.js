@@ -10,8 +10,7 @@ import {
   COMPRESSION_SETTINGS,
   ERROR_MESSAGES,
   ERROR_TYPES,
-  CAPACITY_UTILS,
-  DEBUG
+  CAPACITY_UTILS
 } from './constants.js';
 import { TEMPLATES_STORAGE_KEY } from './template-manager.js';
 
@@ -828,15 +827,6 @@ export const settingsAPI = {
             console.log('📦 JPEG画像として圧縮');
           }
           
-          if (DEBUG.compressionLogs) {
-            console.log(`📦 画像圧縮結果:`, {
-              元サイズ: `${img.width}x${img.height}`,
-              新サイズ: `${width}x${height}`,
-              元データ: `${(base64String.length / 1024).toFixed(2)}KB`,
-              圧縮後: `${(compressedBase64.length / 1024).toFixed(2)}KB`,
-              圧縮率: `${(((base64String.length - compressedBase64.length) / base64String.length) * 100).toFixed(1)}%`
-            });
-          }
           
           resolve(compressedBase64);
         };
@@ -946,14 +936,6 @@ export const settingsAPI = {
               // Base64から元のバイナリサイズに変換（パディング考慮）
               const originalSize = CAPACITY_UTILS.calculateBinarySize(base64Data);
               totalImageSize += originalSize;
-              if (DEBUG.capacityLogs) {
-                console.log(`📊 設定画像データサイズ (${index}):`, {
-                  base64SizeKB: (base64Data.length / 1024).toFixed(2) + 'KB',
-                  originalSizeKB: (originalSize / 1024).toFixed(2) + 'KB',
-                  originalSizeMB: (originalSize / 1024 / 1024).toFixed(2) + 'MB',
-                  preview: imageSrc.substring(0, 50) + '...'
-                });
-              }
             }
           }
         });
@@ -962,12 +944,6 @@ export const settingsAPI = {
       console.warn('画像データサイズ計算中にエラー:', error);
     }
     
-    if (DEBUG.capacityLogs) {
-      console.log('📊 合計画像データサイズ:', {
-        totalKB: (totalImageSize / 1024).toFixed(2) + 'KB',
-        totalMB: (totalImageSize / 1024 / 1024).toFixed(2) + 'MB'
-      });
-    }
     
     return Math.round(totalImageSize);
   },

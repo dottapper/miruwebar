@@ -16,14 +16,7 @@ const markerARLogger = createLogger('MarkerAR');
 export class MarkerAR extends AREngineInterface {
   constructor(options = {}) {
     super(options);
-    this.IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-    this.dlog = (...args) => { if (this.IS_DEBUG) markerARLogger.debug(...args); };
     markerARLogger.info('🎯 MarkerAR初期化開始 (iPhone対応)');
-    this.dlog('🔍 markerUrl受け取り確認:', {
-      '渡されたmarkerUrl': options.markerUrl,
-      'markerUrlの型': typeof options.markerUrl,
-      'markerUrlが存在': !!options.markerUrl
-    });
     this.options = {
       sourceType: 'webcam',
       // 既定マーカー（まずローカル同梱を優先し、CDNはフォールバック）
@@ -35,8 +28,6 @@ export class MarkerAR extends AREngineInterface {
       // 検出チューニング（必要に応じて上書き可能）
       patternRatio: typeof options.patternRatio === 'number' ? options.patternRatio : 0.7,
       minConfidence: typeof options.minConfidence === 'number' ? options.minConfidence : 0.5,
-      // デバッグ用：強制的にキューブを配置
-      forceDebugCube: options.forceDebugCube === true,
       // デバッグ用：モデルのマテリアルを視認性の高い材質に置換
       forceNormalMaterial: options.forceNormalMaterial === true,
       ...options
@@ -144,14 +135,6 @@ export class MarkerAR extends AREngineInterface {
     this.renderer.shadowMap.enabled = false;
 
     try {
-      this.dlog('🔍 初期化デバッグ:', {
-        container: !!this.container,
-        _T: !!this._T,
-        scene: !!this.scene,
-        camera: !!this.camera,
-        renderer: !!this.renderer,
-        modelLoader: !!this.modelLoader
-      });
       // AR.js の動的読み込み
       markerARLogger.info('📦 AR.js ライブラリ読み込み開始');
       await this.loadARjsLibrary();
@@ -241,10 +224,6 @@ export class MarkerAR extends AREngineInterface {
 
       markerARLogger.info('✅ アセットURL解決完了');
 
-      this.dlog('🔗 解決したアセットURL:', {
-        cameraParametersUrl: this.options.cameraParametersUrl,
-        markerUrl: this.options.markerUrl
-      });
 
       // ARToolkitSource 初期化（カメラ）
       markerARLogger.info('📹 ARToolkitSource 初期化開始');
@@ -257,7 +236,6 @@ export class MarkerAR extends AREngineInterface {
       markerARLogger.info('✅ ARToolkitContext 初期化完了');
 
       // マーカーコントロール設定
-      this.dlog('🔧 マーカーコントロール設定開始');
       this.setupMarkerControls();
       markerARLogger.info('✅ マーカーコントロール設定完了');
 
@@ -266,7 +244,6 @@ export class MarkerAR extends AREngineInterface {
 
       this.isInitialized = true;
       this.isInitializing = false;
-      this.dlog('✅ MarkerAR初期化完了');
 
       return true;
 
@@ -481,7 +458,6 @@ export class MarkerAR extends AREngineInterface {
       markerARLogger.warn('⚠️ レンダラー詳細情報取得でエラー（続行）:', e.message);
     }
     
-    this.dlog('🖥️ レンダラー設定完了（透明度強化）:', debugInfo);
   }
 
   /**
@@ -505,7 +481,6 @@ export class MarkerAR extends AREngineInterface {
         facingMode: 'environment' // 外側カメラ
       };
 
-      this.dlog('📹 ArToolkitSource設定:', sourceConfig);
       this.arToolkitSource = new window.THREEx.ArToolkitSource(sourceConfig);
 
       // iPhone Safari では初期化前に少し待機
@@ -659,7 +634,6 @@ export class MarkerAR extends AREngineInterface {
   initARToolkitContext() {
     markerARLogger.info('🎯 initARToolkitContext() 開始');
     return new Promise((resolve, reject) => {
-      this.dlog('🎯 マーカー検出システム初期化開始');
 
       // カメラパラメータ設定
       const contextConfig = {
@@ -669,7 +643,7 @@ export class MarkerAR extends AREngineInterface {
         canvasWidth: 640,
         canvasHeight: 480,
         maxDetectionRate: 30,
-        debug: !!this.IS_DEBUG,
+        debug: false,
         imageSmoothingEnabled: false
       };
 
@@ -707,7 +681,6 @@ export class MarkerAR extends AREngineInterface {
           const projMatrix = this.arToolkitContext.getProjectionMatrix();
           if (projMatrix && this.camera.projectionMatrix) {
             this.camera.projectionMatrix.copy(projMatrix);
-            this.dlog('✅ カメラ投影行列設定完了');
           }
         } catch (projError) {
           markerARLogger.warn('⚠️ カメラ投影行列設定エラー（続行）:', projError.message);
@@ -716,8 +689,8 @@ export class MarkerAR extends AREngineInterface {
         resolve();
       };
 
-      // 初期化状態の定期チェック（デバッグ用）
-      if (this.IS_DEBUG) {
+      // 初期化状態の定期チェック
+      if (false) {
         checkInterval = setInterval(() => {
           const elapsed = Date.now() - initStartTime;
           markerARLogger.info(`🔄 AR初期化進捗 (${elapsed}ms):`, {
@@ -802,46 +775,15 @@ export class MarkerAR extends AREngineInterface {
     const checkMarkerVisibility = () => {
       const isVisible = this.markerRoot.visible;
 
-      // デバッグ出力（3秒に1回）
-      const now = Date.now();
-      if (this.IS_DEBUG && now - lastDebugTime > 3000) {
-        lastDebugTime = now;
-        this.dlog('🔍 MarkerAR デバッグ:', {
-          マーカー可視: isVisible,
-          ARコンテキスト: !!this.arToolkitContext,
-          ARコンテキスト初期化済: !!(this.arToolkitContext && this.arToolkitContext._arContext),
-          カメラソース存在: !!this.arToolkitSource,
-          カメラ準備完了: !!(this.arToolkitSource && this.arToolkitSource.ready === true),
-          カメラDOM要素: !!(this.arToolkitSource && this.arToolkitSource.domElement),
-          動画サイズ: this.arToolkitSource && this.arToolkitSource.domElement ?
-            `${this.arToolkitSource.domElement.videoWidth}x${this.arToolkitSource.domElement.videoHeight}` : 'N/A',
-          読み込み済みモデル数: this.loadedModels?.length || 0,
-          配置済みモデル: !!this.placedModel,
-          使用中のマーカーURL: this.options.markerUrl
-        });
-      }
-      
       if (isVisible && !wasVisible) {
         // マーカー発見
         this.isMarkerVisible = true;
         markerARLogger.info('🎯 マーカーを発見しました！');
         
-        // 自動でモデル/デバッグキューブを配置
-        this.dlog('🔍 モデル配置判定:', {
-          forceDebugCube: this.options.forceDebugCube,
-          loadedModel: !!this.loadedModel,
-          loadedModelsCount: this.loadedModels?.length || 0,
-          placedModel: !!this.placedModel
-        });
-        
-        // sample.glbテスト用：モデルがあれば優先的に表示
+        // 自動でモデルを配置
         if ((this.loadedModel || this.loadedModels?.length > 0) && !this.placedModel) {
           markerARLogger.info('📦 保存モデルを自動配置中...');
           this.placeModel();
-        } else if (this.options.forceDebugCube && !this.placedModel) {
-          // テストフラグが立っている場合はキューブを出す
-          markerARLogger.info('🧪 テスト: 強制デバッグキューブを配置');
-          this.placeDebugCube();
         } else if (!this.loadedModel && (!this.loadedModels || this.loadedModels.length === 0) && !this.placedModel) {
           // モデルが全くない場合のフォールバック
           markerARLogger.info('🧪 フォールバック: デバッグ用キューブを配置');
@@ -1054,7 +996,6 @@ export class MarkerAR extends AREngineInterface {
    * マーカー上にモデルを配置
    */
   placeModel() {
-    // forceDebugCubeが有効でもモデル表示を優先（sample.glbテスト用）
     markerARLogger.info('📦 placeModel() 実行開始');
 
     if (!this.loadedModels || this.loadedModels.length === 0) {
@@ -1285,7 +1226,6 @@ export class MarkerAR extends AREngineInterface {
 
     // 1.5) GLTFLoaderの初期化を確実に完了させる（init()で失敗した場合のフォールバック）
     if (!this.modelLoader) {
-      this.dlog('🔄 GLTFLoader未初期化のため再初期化を実行');
       await this._initGLTFLoader();
     }
 

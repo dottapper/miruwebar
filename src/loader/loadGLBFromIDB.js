@@ -7,8 +7,6 @@ import { createLogger } from '../utils/logger.js';
 const loaderLogger = createLogger('GLBLoader');
 
 // DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * IndexedDB からモデルを読み込み、Three.js の GLTFLoader で使用可能な URL を生成
@@ -17,7 +15,6 @@ const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
  */
 export async function loadGLBFromIDB(modelId) {
   try {
-    dlog('🔄 IndexedDB からモデル読み込み開始:', modelId);
 
     // モデル Blob とメタ情報を並行取得
     const [blob, meta] = await Promise.all([
@@ -44,16 +41,6 @@ export async function loadGLBFromIDB(modelId) {
     // Blob から Object URL を作成
     const objectUrl = URL.createObjectURL(blob);
 
-    dlog('✅ モデル読み込み完了:', {
-      modelId,
-      fileName: meta?.fileName || 'unknown.glb',
-      size: blob.size,
-      sizeKB: Math.round(blob.size / 1024),
-      sizeMB: Math.round(blob.size / 1024 / 1024 * 100) / 100,
-      mimeType: blob.type,
-      objectUrl
-    });
-
     return {
       modelId,
       objectUrl,
@@ -78,10 +65,6 @@ export async function loadGLBFromIDB(modelId) {
  */
 export async function loadMultipleGLBFromIDB(modelIds) {
   try {
-    dlog('🔄 複数モデル一括読み込み開始:', {
-      count: modelIds.length,
-      modelIds
-    });
 
     const results = await Promise.allSettled(
       modelIds.map(modelId => loadGLBFromIDB(modelId))
@@ -99,13 +82,6 @@ export async function loadMultipleGLBFromIDB(modelIds) {
           error: result.reason.message
         });
       }
-    });
-
-    dlog('✅ 複数モデル読み込み完了:', {
-      total: modelIds.length,
-      successful: successfulModels.length,
-      failed: failedModels.length,
-      failedModels
     });
 
     if (failedModels.length > 0) {
@@ -129,7 +105,6 @@ export function revokeModelObjectURL(modelOrUrl) {
     
     if (objectUrl && objectUrl.startsWith('blob:')) {
       URL.revokeObjectURL(objectUrl);
-      dlog('✅ Object URL 解放完了:', objectUrl);
     }
   } catch (error) {
     console.error('❌ Object URL 解放エラー:', error);
@@ -142,11 +117,9 @@ export function revokeModelObjectURL(modelOrUrl) {
  */
 export function revokeMultipleModelObjectURLs(models) {
   try {
-    dlog('🔄 複数 Object URL 解放開始:', models.length);
     
     models.forEach(model => revokeModelObjectURL(model));
     
-    dlog('✅ 複数 Object URL 解放完了');
   } catch (error) {
     console.error('❌ 複数 Object URL 解放エラー:', error);
   }
@@ -159,15 +132,9 @@ export function revokeMultipleModelObjectURLs(models) {
  */
 export function createTemporaryObjectURL(file) {
   try {
-    dlog('🔄 一時 Object URL 作成:', {
-      fileName: file.name,
-      size: file.size,
-      type: file.type
-    });
 
     const objectUrl = URL.createObjectURL(file);
     
-    dlog('✅ 一時 Object URL 作成完了:', objectUrl);
     return objectUrl;
   } catch (error) {
     console.error('❌ 一時 Object URL 作成エラー:', error);
@@ -182,10 +149,6 @@ export function createTemporaryObjectURL(file) {
  */
 export async function validateModelBlob(blob) {
   try {
-    dlog('🔄 モデル Blob 妥当性チェック開始:', {
-      size: blob.size,
-      type: blob.type
-    });
 
     const validation = {
       isValid: true,

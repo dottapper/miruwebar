@@ -27,13 +27,6 @@ import { initializeMigration } from './storage/migrate.js';
 // メインロガーを作成
 const mainLogger = createLogger('Main');
 
-// デバッグモードの設定
-const DEBUG_MODE = import.meta.env.DEV || window.location.search.includes('debug=true');
-
-// 他モジュールから参照できるように DEBUG フラグを公開（必要最小限）
-if (typeof window !== 'undefined') {
-  window.DEBUG = Boolean(DEBUG_MODE);
-}
 
 // HMRの設定
 if (import.meta.hot) {

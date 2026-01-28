@@ -5,8 +5,6 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { showEditorLoadingScreen, unifiedLoading } from '../utils/unified-loading-screen.js';
 
 // DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 // エクスポートする関数（統一システムを使用）
 const showLoading = async (options) => await showEditorLoadingScreen(options);
@@ -15,16 +13,8 @@ const updateLoadingProgress = (id, percent, message) => unifiedLoading.updatePro
 const cleanupLoading = () => unifiedLoading.cleanup();
 
 export async function initARViewer(containerId, options = {}) {
-  dlog('🎯 initARViewer開始:', { 
-    containerId, 
-    options, 
-    timestamp: new Date().toISOString(),
-    callerStack: new Error().stack 
-  });
-  dlog('🔧 アニメーション機能を初期化中...');
-  
+
   const container = document.getElementById(containerId);
-  dlog('コンテナ要素:', container);
   
   if (!container) {
     console.error(`❌ ARViewer: コンテナID "${containerId}" が見つかりません`, {
@@ -36,14 +26,7 @@ export async function initARViewer(containerId, options = {}) {
     });
     return null;
   }
-  
-  dlog('コンテナサイズ:', {
-    clientWidth: container.clientWidth,
-    clientHeight: container.clientHeight,
-    offsetWidth: container.offsetWidth,
-    offsetHeight: container.offsetHeight
-  });
-  
+
   const config = {
     showGrid: true,
     markerMode: false,
@@ -52,7 +35,6 @@ export async function initARViewer(containerId, options = {}) {
     ...options
   };
   
-  dlog('設定:', config);
 
   // ローディングマネージャーの初期化（統一システムを使用）
   const loadingManager = {
@@ -66,7 +48,6 @@ export async function initARViewer(containerId, options = {}) {
   const threeLoadingManager = new THREE.LoadingManager(
     // onLoad
     () => {
-      dlog('Loading complete - cleaning up loading screens');
       
       // 即時非表示のための強化処理
       if (loadingManager && typeof loadingManager.hideLoadingScreen === 'function') {
@@ -96,7 +77,6 @@ export async function initARViewer(containerId, options = {}) {
               // 即時削除
               try {
                 el.parentNode.removeChild(el);
-                dlog(`Removed loading element: ${selector}`);
               } catch (e) {
                 console.warn(`Failed to remove loading element ${selector}:`, e);
               }
@@ -114,7 +94,7 @@ export async function initARViewer(containerId, options = {}) {
     // onProgress
     (url, itemsLoaded, itemsTotal) => {
       const progressPercent = (itemsLoaded / itemsTotal) * 100;
-      dlog(`Loading file: ${url}. Loaded ${itemsLoaded}/${itemsTotal} files (${Math.floor(progressPercent)}%)`);
+
     },
     // onError
     (url) => {
@@ -156,10 +136,8 @@ export async function initARViewer(containerId, options = {}) {
   }
 
   // シーン・カメラ・レンダラーの初期化
-  dlog('Three.jsシーンの初期化を開始...');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(config.backgroundColor);
-  dlog('シーン作成完了');
 
   const camera = new THREE.PerspectiveCamera(
     75,
@@ -172,7 +150,6 @@ export async function initARViewer(containerId, options = {}) {
   const defaultCameraDistance = 3.5;  // より近い距離に統一
   camera.position.set(0, defaultCameraDistance * 0.3, defaultCameraDistance);  // 正面・ちょい引き・ちょい斜め上
   camera.lookAt(0, 0, 0);
-  dlog('カメラ作成完了');
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(container.clientWidth || 800, container.clientHeight || 600);
@@ -180,11 +157,8 @@ export async function initARViewer(containerId, options = {}) {
   renderer.domElement.style.height = '100%';
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  dlog('レンダラー作成完了');
   
-  dlog('レンダラーをコンテナに追加...');
   container.appendChild(renderer.domElement);
-  dlog('レンダラーをコンテナに追加完了');
 
   // OrbitControlsとTransformControlsの設定
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -445,7 +419,6 @@ export async function initARViewer(containerId, options = {}) {
       if (modelData.objectUrl && modelData.objectUrl.startsWith('blob:')) {
         URL.revokeObjectURL(modelData.objectUrl);
         objectUrls.delete(modelData.model);
-        dlog(`Object URL解放: ${modelData.objectUrl}`);
       }
 
       // モデルのリソースを再帰的に解放
@@ -469,7 +442,6 @@ export async function initARViewer(containerId, options = {}) {
         }
       });
 
-      dlog(`モデルリソース解放完了: ${modelData.fileName || 'Unknown'}`);
     } catch (error) {
       console.error('disposeModelResources内でエラーが発生:', error);
     }
@@ -597,14 +569,10 @@ export async function initARViewer(containerId, options = {}) {
       modelData.scale.copy(model.scale);
       
       // アニメーションセットアップ
-      dlog('🎭 アニメーションセットアップ開始:');
-      dlog('- アニメーション数:', animations.length);
       if (animations.length > 0) {
         try {
-          dlog('🔄 AnimationMixer作成開始...');
           const mixer = new THREE.AnimationMixer(model);
           
-          dlog('🔄 アニメーションクリップ検証...');
           const validAnimations = animations.filter(clip => {
             if (!clip) {
               console.warn('⚠️ null/undefinedアニメーションクリップを除外');
@@ -624,14 +592,9 @@ export async function initARViewer(containerId, options = {}) {
             animationClips.set(model, validAnimations);
             
             // 最初のアニメーションを準備（再生はしない）
-            dlog('🔄 最初のアニメーションアクション作成...');
             const firstAction = mixer.clipAction(validAnimations[0]);
             animationActions.set(model, [firstAction]);
             
-            dlog(`✅ アニメーションMixerを設定: ${validAnimations[0].name}`);
-            dlog('- animationMixers.size:', animationMixers.size);
-            dlog('- animationClips.size:', animationClips.size);
-            dlog('- 有効なアニメーション数:', validAnimations.length);
           }
         } catch (error) {
           console.error('❌ アニメーションミキサー初期化エラー:', error);
@@ -641,7 +604,6 @@ export async function initARViewer(containerId, options = {}) {
           // アニメーションエラーでもモデル読み込みは継続
         }
       } else {
-        dlog('❌ アニメーションが見つかりませんでした');
       }
       
       // カメラを適切な位置に調整してからその位置を保存
@@ -1163,7 +1125,6 @@ export async function initARViewer(containerId, options = {}) {
       };
     },
     removeModel: (index) => {
-      dlog(`removeModel呼び出し: インデックス=${index}, モデル数=${modelList.length}`);
       
       if (index < 0 || index >= modelList.length) {
         console.error(`無効なモデルインデックス: ${index} (有効範囲: 0-${modelList.length - 1})`);
@@ -1172,7 +1133,6 @@ export async function initARViewer(containerId, options = {}) {
 
       try {
         const removedModelData = modelList[index];
-        dlog(`削除対象モデル: ${removedModelData.fileName || 'Unknown'}`);
         
         // Detach TransformControls if it's attached to the model being removed
         if (transformControls && transformControls.object === removedModelData.model) {
@@ -1221,7 +1181,6 @@ export async function initARViewer(containerId, options = {}) {
         });
         container.dispatchEvent(modelListChangedEvent);
         
-        dlog(`モデル削除完了: インデックス=${index}, 新しいアクティブインデックス=${newActiveIndex}`);
         return true;
       } catch (error) {
         console.error('removeModel内でエラーが発生:', error);
@@ -1297,7 +1256,6 @@ export async function initARViewer(containerId, options = {}) {
         });
         container.dispatchEvent(scaleResetEvent);
 
-        dlog('Scale ratio reset to:', newScaleValue); // 動作確認ログ
       } else {
         console.warn('Cannot reset scale: No active model found.');
       }
@@ -1458,9 +1416,6 @@ export async function initARViewer(containerId, options = {}) {
         const mixer = animationMixers.get(model);
         const clips = animationClips.get(model);
         
-        dlog('- mixer存在:', !!mixer);
-        dlog('- clips存在:', !!clips);
-        dlog('- clips.length:', clips?.length);
         
         if (!mixer) {
           console.warn('❌ AnimationMixerが見つかりません');
@@ -1496,7 +1451,6 @@ export async function initARViewer(containerId, options = {}) {
         newAction.play();
         
         animationActions.set(model, [newAction]);
-        dlog(`✅ アニメーション "${targetClip.name}" を再生開始`);
         return true;
         
       } catch (error) {
@@ -1524,7 +1478,6 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
         
-        dlog('✅ アニメーションを停止しました');
         return true;
       } catch (error) {
         console.error('❌ stopAnimation エラー:', error);
@@ -1558,7 +1511,7 @@ export async function initARViewer(containerId, options = {}) {
     hasAnimations: () => {
       try {
         const modelData = getActiveModelData();
-        dlog('🔍 hasAnimations() チェック:');
+
         console.log('- activeModelIndex:', activeModelIndex);
         console.log('- modelList長さ:', modelList.length);
         console.log('- modelData存在:', !!modelData);
@@ -1569,7 +1522,7 @@ export async function initARViewer(containerId, options = {}) {
           console.log('- modelData.animations長さ:', modelData.animations?.length);
         }
         const result = modelData && modelData.hasAnimations;
-        dlog('🔍 hasAnimations() 結果:', result);
+
         return result;
       } catch (error) {
         console.error('❌ hasAnimations エラー:', error);
@@ -1578,7 +1531,6 @@ export async function initARViewer(containerId, options = {}) {
     }
   };
 
-  dlog('ARビューアーの初期化完了、コントロールを返却します');
   return {
     dispose: modelControls.dispose,
     controls: modelControls,

@@ -1,8 +1,5 @@
 // src/views/editor/transform-controls.js - Transform制御関連
 
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * TransformControlsでの変更をUIに反映する関数
@@ -68,12 +65,7 @@ export function updateModelFromUI(arViewer) {
   const scaleZ = parseFloat(document.getElementById('scale-z')?.value || 1);
   
   model.scale.set(scaleX, scaleY, scaleZ);
-  
-  dlog('🎯 UIからモデルを更新:', {
-    position: { x: posX, y: posY, z: posZ },
-    rotation: { x: rotX, y: rotY, z: rotZ },
-    scale: { x: scaleX, y: scaleY, z: scaleZ }
-  });
+
 }
 
 /**
@@ -129,5 +121,4 @@ function resetTransform(arViewer) {
   // UIを更新
   updateUIFromTransformControls(arViewer);
   
-  dlog('🔄 Transform をリセットしました');
 }

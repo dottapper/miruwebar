@@ -1,7 +1,5 @@
 // src/storage/migrate.js
 // localStorage の Base64 データを IndexedDB に移行するマイグレーション機能
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 import { saveModelToIDB, getAllModelIds } from './indexeddb-storage.js';
 import { getProjects, saveProject } from './project-store.js';
@@ -66,14 +64,8 @@ function generateModelId(fileName, index) {
  */
 async function migrateProjectModels(project) {
   try {
-    dlog('🔄 プロジェクトモデル移行開始:', {
-      projectId: project.id,
-      projectName: project.name,
-      modelCount: project.modelSettings?.length || 0
-    });
 
     if (!project.modelSettings || project.modelSettings.length === 0) {
-      dlog('ℹ️ 移行対象のモデルがありません:', project.id);
       return project;
     }
 
@@ -83,16 +75,9 @@ async function migrateProjectModels(project) {
 
     for (let i = 0; i < project.modelSettings.length; i++) {
       const model = project.modelSettings[i];
-      
-        dlog(`🔍 モデル ${i + 1}/${project.modelSettings.length} 処理中:`, {
-        fileName: model.fileName,
-        hasModelData: !!model.modelData,
-        modelDataSize: model.modelData ? model.modelData.length : 0
-      });
 
       // Base64 データが存在するかチェック
       if (!model.modelData || typeof model.modelData !== 'string' || !model.modelData.startsWith('data:')) {
-          dlog(`⏭️ Base64 データなし、スキップ: ${model.fileName}`);
         migratedModelSettings.push({
           ...model,
           modelId: null // IndexedDB にデータなし
@@ -139,7 +124,6 @@ async function migrateProjectModels(project) {
         migratedModelSettings.push(migratedModel);
         migratedCount++;
 
-        dlog(`✅ モデル移行完了: ${model.fileName} → ${modelId}`);
       } catch (modelError) {
         console.error(`❌ モデル移行エラー: ${model.fileName}`, modelError);
         
@@ -168,13 +152,6 @@ async function migrateProjectModels(project) {
       }
     };
 
-    dlog('✅ プロジェクトモデル移行完了:', {
-      projectId: project.id,
-      totalModels: project.modelSettings.length,
-      migratedCount,
-      skippedCount
-    });
-
     return migratedProject;
   } catch (error) {
     console.error('❌ プロジェクトモデル移行エラー:', error);
@@ -188,13 +165,11 @@ async function migrateProjectModels(project) {
  */
 export async function migrateLegacyBase64ToIDB() {
   try {
-    dlog('🚀 Base64 → IndexedDB マイグレーション開始');
 
     // 既に移行済みかチェック
     const migrationFlag = localStorage.getItem(MIGRATION_FLAG_KEY);
     if (migrationFlag) {
       const migrationInfo = JSON.parse(migrationFlag);
-      dlog('ℹ️ マイグレーション済み:', migrationInfo);
       return {
         alreadyMigrated: true,
         migrationInfo
@@ -205,7 +180,6 @@ export async function migrateLegacyBase64ToIDB() {
     const projects = getProjects();
     
     if (projects.length === 0) {
-      dlog('ℹ️ 移行対象のプロジェクトがありません');
       
       // 移行完了フラグを設定
       const migrationInfo = {
@@ -225,11 +199,9 @@ export async function migrateLegacyBase64ToIDB() {
       };
     }
 
-    dlog(`📊 移行対象プロジェクト数: ${projects.length}`);
 
     // IndexedDB の既存データをチェック
     const existingModelIds = await getAllModelIds();
-    dlog(`📊 既存 IndexedDB モデル数: ${existingModelIds.length}`);
 
     // 各プロジェクトを順次移行
     const migratedProjects = [];
@@ -239,7 +211,6 @@ export async function migrateLegacyBase64ToIDB() {
     for (let i = 0; i < projects.length; i++) {
       const project = projects[i];
       
-      dlog(`🔄 プロジェクト ${i + 1}/${projects.length} 移行中: ${project.name}`);
       
       try {
         const migratedProject = await migrateProjectModels(project);
@@ -261,7 +232,6 @@ export async function migrateLegacyBase64ToIDB() {
     }
 
     // 移行されたプロジェクトを localStorage に保存
-    dlog('🔄 移行されたプロジェクトを保存中...');
     
     // 個別に保存（サイズ制限対応）
     for (const project of migratedProjects) {
@@ -285,7 +255,6 @@ export async function migrateLegacyBase64ToIDB() {
 
     localStorage.setItem(MIGRATION_FLAG_KEY, JSON.stringify(migrationInfo));
 
-    dlog('🎉 Base64 → IndexedDB マイグレーション完了:', migrationInfo);
 
     return {
       alreadyMigrated: false,
@@ -303,7 +272,6 @@ export async function migrateLegacyBase64ToIDB() {
 export function resetMigrationFlag() {
   try {
     localStorage.removeItem(MIGRATION_FLAG_KEY);
-    dlog('✅ マイグレーションフラグをリセットしました');
     return true;
   } catch (error) {
     console.error('❌ マイグレーションフラグリセットエラー:', error);
@@ -331,7 +299,6 @@ export function getMigrationInfo() {
  */
 async function migrateTemplateStorageKeys() {
   try {
-    dlog('🔄 テンプレートストレージキー移行開始');
     
     const oldKey = 'loadingScreenTemplates';
     const newKey = TEMPLATES_STORAGE_KEY;
@@ -345,7 +312,6 @@ async function migrateTemplateStorageKeys() {
       try {
         templates = JSON.parse(newKeyData);
         dataSource = 'existing';
-        dlog('ℹ️ 新キーに既存データあり', { templatesCount: templates.length });
       } catch (parseError) {
         console.warn('⚠️ 新キーのデータが破損、初期化します:', parseError);
         templates = [];
@@ -360,11 +326,9 @@ async function migrateTemplateStorageKeys() {
           if (Array.isArray(parsedData)) {
             templates = parsedData;
             dataSource = 'migrated';
-            dlog('✅ 旧キーからデータを移行', { templatesCount: templates.length });
             // 旧キーを削除
             localStorage.removeItem(oldKey);
           } else {
-            dlog('⚠️ 旧キーのデータ形式が不正、空配列で初期化');
             templates = [];
             dataSource = 'invalid';
           }
@@ -375,7 +339,6 @@ async function migrateTemplateStorageKeys() {
           dataSource = 'corrupted';
         }
       } else {
-        dlog('ℹ️ 旧キー・新キー共にデータなし');
         templates = [];
         dataSource = 'empty';
       }
@@ -439,13 +402,8 @@ async function migrateTemplateStorageKeys() {
     // 正規化されたデータを保存（変更があった場合のみ）
     if (normalizedCount > 0 || dataSource !== 'existing') {
       localStorage.setItem(newKey, JSON.stringify(normalizedTemplates));
-      dlog('✅ テンプレートデータ正規化完了:', {
-        dataSource,
-        totalTemplates: normalizedTemplates.length,
-        normalizedCount
-      });
+
     } else {
-      dlog('ℹ️ データ正規化の必要なし');
     }
     
   } catch (error) {
@@ -460,11 +418,9 @@ async function migrateTemplateStorageKeys() {
  */
 async function migrateProjectTemplateReferences() {
   try {
-    dlog('🔄 プロジェクトテンプレート参照正規化開始');
     
     const projectsJson = localStorage.getItem('miruwebAR_projects');
     if (!projectsJson) {
-      dlog('ℹ️ プロジェクトデータなし、移行スキップ');
       return;
     }
     
@@ -477,7 +433,6 @@ async function migrateProjectTemplateReferences() {
     }
     
     if (!Array.isArray(projects)) {
-      dlog('⚠️ プロジェクトデータが配列ではありません');
       return;
     }
     
@@ -512,10 +467,7 @@ async function migrateProjectTemplateReferences() {
       
       if (needsMigration) {
         migratedCount++;
-        dlog(`✅ プロジェクト「${project.name}」のテンプレート参照を正規化:`, {
-          originalSelectedScreenId: project.loadingScreen?.selectedScreenId || project.selectedScreenId,
-          newTemplate: migrated.loadingScreen?.template
-        });
+
       }
       
       return migrated;
@@ -524,12 +476,8 @@ async function migrateProjectTemplateReferences() {
     // 変更があった場合のみ保存
     if (migratedCount > 0) {
       localStorage.setItem('miruwebAR_projects', JSON.stringify(migratedProjects));
-      dlog('✅ プロジェクトテンプレート参照正規化完了:', {
-        totalProjects: projects.length,
-        migratedCount
-      });
+
     } else {
-      dlog('ℹ️ プロジェクトテンプレート参照の正規化は不要');
     }
     
   } catch (error) {
@@ -544,7 +492,6 @@ async function migrateProjectTemplateReferences() {
  */
 async function migrateLogoPropertyNames() {
   try {
-    dlog('🔄 ロゴプロパティ名正規化開始');
     
     let migratedCount = 0;
     
@@ -574,7 +521,6 @@ async function migrateLogoPropertyNames() {
             
             if (needsMigration) {
               migratedCount++;
-              dlog(`✅ プロジェクト「${project.name}」のロゴプロパティを正規化`);
             }
             
             return migrated;
@@ -615,7 +561,6 @@ async function migrateLogoPropertyNames() {
             
             if (needsMigration) {
               migratedCount++;
-              dlog(`✅ テンプレート「${template.name}」のロゴプロパティを正規化`);
             }
             
             return migrated;
@@ -631,9 +576,7 @@ async function migrateLogoPropertyNames() {
     }
     
     if (migratedCount > 0) {
-      dlog('✅ ロゴプロパティ名正規化完了:', { migratedCount });
     } else {
-      dlog('ℹ️ ロゴプロパティ名の正規化は不要');
     }
     
   } catch (error) {
@@ -647,7 +590,6 @@ async function migrateLogoPropertyNames() {
  */
 export async function initializeMigration() {
   try {
-    dlog('🔄 アプリケーション初期化マイグレーション開始');
     
     // localStorage キー統一移行を最初に実行
     await migrateTemplateStorageKeys();
@@ -662,9 +604,7 @@ export async function initializeMigration() {
     const result = await migrateLegacyBase64ToIDB();
     
     if (result.alreadyMigrated) {
-      dlog('ℹ️ IndexedDB マイグレーション済み、スキップ');
     } else {
-      dlog('✅ 初期化マイグレーション完了:', result.migrationInfo);
     }
     
     return result;

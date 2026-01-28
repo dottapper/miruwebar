@@ -69,21 +69,34 @@ function normalizeLoadingScreen({ tpl = {}, direct = {} }) {
   return merged;
 }
 
-function normalizeGuideScreen({ tpl = {}, direct = {} }) {
+function normalizeGuideScreen({ tpl = {}, direct = {}, projectType = null, projectMarkerImage = null }) {
   const base = defaultTemplateSettings?.guideScreen || {};
   // プロジェクト直下（guide / guideScreen）を最優先、templateSettingsは補完のみ
   const merged = shallowMerge(base, tpl, direct);
-  // marker画像と文言にフォーカスして正規化
-  const markerSrc = merged.marker?.src || merged.markerImage || merged.markerImageUrl || merged.guideImage || merged.imageUrl;
+
+  // ★ markerタイプのプロジェクトではガイドモードをmarkerに強制
+  const mode = (projectType === 'marker') ? 'marker' : (merged.mode || direct.mode || 'surface');
+
+  const markerSrc = merged.marker?.src || merged.markerImage || merged.markerImageUrl || merged.guideImage || merged.imageUrl || projectMarkerImage;
   const bgImage = merged.backgroundImage || merged.background || merged.bg;
+
+  // modeに応じた適切なタイトル/説明を選択
+  let title, description;
+  if (mode === 'marker') {
+    title = direct.title || tpl.title || merged.surfaceDetection?.title || 'マーカーをカメラに写してください';
+    description = direct.description || tpl.description || merged.surfaceDetection?.description || 'マーカー画像を画面内に収めてください';
+  } else {
+    title = merged.title || merged.worldTracking?.title || merged.surfaceDetection?.title;
+    description = merged.description || merged.worldTracking?.description || merged.surfaceDetection?.description;
+  }
 
   return {
     backgroundColor: merged.backgroundColor || merged.bgColor,
     textColor: merged.textColor,
     background: bgImage,
-    mode: merged.mode || (direct.mode),
-    title: merged.title || merged.surfaceDetection?.title || merged.worldTracking?.title,
-    description: merged.description || merged.surfaceDetection?.description || merged.worldTracking?.description,
+    mode,
+    title,
+    description,
     message: merged.message, // 旧API互換
     marker: markerSrc ? { src: markerSrc } : undefined,
     // apply-project-design.jsとの互換性
@@ -93,6 +106,8 @@ function normalizeGuideScreen({ tpl = {}, direct = {} }) {
 
 export function extractDesign(project = {}) {
   const ts = project?.loadingScreen?.templateSettings || {};
+  const projectType = project.type || project.mode || null;
+  const projectMarkerImage = project.markerImage || project.markerImageUrl || null;
 
   // プロジェクト直下の表現（旧/新）を吸収
   const startDirect = project.start || project.startScreen || {};
@@ -101,7 +116,7 @@ export function extractDesign(project = {}) {
 
   const startScreen = normalizeStartScreen({ tpl: ts.startScreen || {}, direct: startDirect });
   const loadingScreen = normalizeLoadingScreen({ tpl: ts.loadingScreen || {}, direct: loadingDirect });
-  const guideScreen = normalizeGuideScreen({ tpl: ts.guideScreen || {}, direct: guideDirect });
+  const guideScreen = normalizeGuideScreen({ tpl: ts.guideScreen || {}, direct: guideDirect, projectType, projectMarkerImage });
 
   return { startScreen, loadingScreen, guideScreen };
 }

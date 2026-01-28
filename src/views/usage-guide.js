@@ -1,9 +1,6 @@
 // src/views/usage-guide.js
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 export default function showUsageGuide(container) {
-  dlog('🆕 新しいusage-guide.jsが実行されています！');
   
   // 完全にクリア
   container.innerHTML = '';
@@ -384,6 +381,5 @@ export default function showUsageGuide(container) {
   window.scrollTo(0, 0);
   
   return function cleanup() {
-    dlog('Usage guide cleanup');
   };
 }

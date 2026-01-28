@@ -125,10 +125,3 @@ export const CAPACITY_UTILS = {
     return (base64Data.length * 3) / 4 - padding;
   }
 };
-
-// ===== デバッグフラグ =====
-export const DEBUG = {
-  compressionLogs: true,    // 圧縮ログの表示
-  capacityLogs: true,       // 容量計算ログの表示
-  storageUsageLogs: true    // ストレージ使用量ログの表示
-};

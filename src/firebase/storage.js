@@ -255,30 +255,32 @@ export async function publishProjectToFirebase(projectData) {
     // マーカー画像
     markerImage: markerImageUrl,
 
-    // スクリーン配列（ARコンテンツ）
-    screens: [{
-      type: projectData.type || 'marker',
-      marker: markerPatternUrl ? { src: markerPatternUrl } : null,
-      models: uploadedModels.map(m => ({
+    // AR type
+    type: projectData.type || 'marker',
+
+    // ★ トップレベルmodels（ARビューアが直接参照）
+    models: uploadedModels.map(m => {
+      const t = m.transform || {};
+      // transform: 配列 [x,y,z] とオブジェクト {x,y,z} の両方に対応
+      const vec3 = (v, fb) => {
+        if (Array.isArray(v) && v.length >= 3) return { x: v[0], y: v[1], z: v[2] };
+        if (v && typeof v === 'object' && 'x' in v) return { x: v.x ?? fb, y: v.y ?? fb, z: v.z ?? fb };
+        return { x: fb, y: fb, z: fb };
+      };
+      return {
         id: m.fileName.replace(/\.[^/.]+$/, ''),
         name: m.fileName,
         url: m.url,
-        position: {
-          x: m.transform?.position?.[0] || 0,
-          y: m.transform?.position?.[1] || 0,
-          z: m.transform?.position?.[2] || 0
-        },
-        rotation: {
-          x: m.transform?.rotation?.[0] || 0,
-          y: m.transform?.rotation?.[1] || 0,
-          z: m.transform?.rotation?.[2] || 0
-        },
-        scale: {
-          x: m.transform?.scale?.[0] || 1,
-          y: m.transform?.scale?.[1] || 1,
-          z: m.transform?.scale?.[2] || 1
-        }
-      }))
+        position: vec3(t.position, 0),
+        rotation: vec3(t.rotation, 0),
+        scale: vec3(t.scale, 1)
+      };
+    }),
+
+    // スクリーン配列（後方互換）
+    screens: [{
+      type: projectData.type || 'marker',
+      marker: markerPatternUrl ? { src: markerPatternUrl } : null
     }],
 
     publishedAt: new Date().toISOString()

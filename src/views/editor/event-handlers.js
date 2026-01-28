@@ -4,14 +4,11 @@ import { resetAllUI, updateEditButtonState } from './ui-handlers.js';
 import { getLoadingScreenTemplate } from '../../components/loading-screen-selector.js';
 
 // DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * タブ切り替え機能の設定
  */
 export function setupTabSwitching() {
-  dlog('🔧 タブ切り替え機能を設定中...');
   
   const tabButtons = document.querySelectorAll('.panel-tab');
   const tabContents = document.querySelectorAll('.panel-content');
@@ -37,7 +34,6 @@ export function setupTabSwitching() {
       if (targetContent) {
         targetContent.classList.add('active');
         targetContent.style.display = 'block';
-        dlog(`✅ タブ "${targetTab}" に切り替えました`);
         
         // ローディング設定タブが表示された時にローディング画面一覧を読み込み
         if (targetTab === 'loading-settings') {
@@ -49,7 +45,6 @@ export function setupTabSwitching() {
     });
   });
   
-  dlog('✅ タブ切り替え機能の設定が完了しました');
 }
 
 /**
@@ -201,7 +196,6 @@ export function setupLoadingScreenControls() {
   if (loadingScreenSelect) {
     loadingScreenSelect.addEventListener('change', (event) => {
       const selectedValue = event.target.value;
-      dlog('🔄 ローディング画面選択変更:', selectedValue);
       updateEditButtonState();
     });
   }
@@ -211,7 +205,6 @@ export function setupLoadingScreenControls() {
       e.preventDefault();
       const selectedTemplateId = loadingScreenSelect?.value;
       if (selectedTemplateId && selectedTemplateId !== 'none') {
-        dlog('ローディング画面編集ボタンがクリックされました:', selectedTemplateId);
         window.location.hash = `#/loading-screen?template=${selectedTemplateId}`;
       } else {
         alert('編集するローディング画面を選択してください。');

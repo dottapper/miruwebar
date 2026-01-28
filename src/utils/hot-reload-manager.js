@@ -144,8 +144,7 @@ class HotReloadManager {
       // グローバル変数の状態をバックアップ
       const globalState = {
         currentProject: window.currentProject,
-        arInstance: window.arInstance,
-        debugMode: window.DEBUG
+        arInstance: window.arInstance
       };
       this.stateBackup.set('global', globalState);
 

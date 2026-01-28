@@ -4,8 +4,6 @@ import { saveCurrentProject } from './project-operations.js';
 import { showSaveProjectModal } from '../../components/ui.js';
 
 // DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 // プロジェクト状態管理
 let hasUnsavedChanges = false;
@@ -15,12 +13,10 @@ let hasUnsavedChanges = false;
  */
 export function markAsChanged() {
   hasUnsavedChanges = true;
-  dlog('変更が検出されました - 未保存状態に設定');
 }
 
 export function markAsSaved() {
   hasUnsavedChanges = false;
-  dlog('保存完了 - 保存済み状態に設定');
 }
 
 export function checkForUnsavedChanges() {
@@ -38,11 +34,9 @@ export function showUnsavedChangesDialog() {
     
     if (confirm(message)) {
       // 「OK」を選択 - 保存してから戻る
-      dlog('ユーザーが保存を選択しました');
       
       // 保存処理を実行
       handleSaveProject().then(() => {
-        dlog('保存完了 - プロジェクト一覧に戻ります');
         resolve(true);
       }).catch(error => {
         console.error('保存に失敗しました:', error);

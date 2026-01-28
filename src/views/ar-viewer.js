@@ -10,15 +10,11 @@ import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
 import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
 import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
 import { createLoadingStateManager, LoadingState } from '../utils/loading-state-manager.js';
-import { getParam, debugURL, getProjectSrc } from '../utils/url-params.js';
+import { getParam, getProjectSrc } from '../utils/url-params.js';
 import { applyProjectDesign } from '../utils/apply-project-design.js';
 import { DEV_FORCE_SCREENS, DEV_STRICT_MODE, DEV_VERBOSE_LOGS, DEV_TAKEOVER_UI } from '../config/feature-flags.js';
 import { fetchOnce, reportFetchStats } from '../utils/monitored-fetch.js';
 import { extractDesign } from '../utils/design-extractor.js';
-
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) arViewerLogger.debug(...args); };
 
 const arViewerLogger = createLogger('ARViewer');
 
@@ -39,17 +35,14 @@ function navigateBackOrHome() {
 
 // ★ スタートUI乗っ取り版（デザインを"本当に"表示させる）
 function __takeoverStartUI(project){
-  dlog('🔍 __takeoverStartUI 呼び出し:', { project });
 
   const p = project || window.__project || {};
 
   // extractDesignで正規化されたデータを使用
   const { startScreen } = extractDesign(p);
-  dlog('🔍 正規化されたstartScreen:', startScreen);
 
   // 旧形式との互換性のため、両方のパスをチェック
   const start = p.start || p.startScreen || {};
-  dlog('🔍 生のstart設定:', start);
 
   // 既存があれば消す
   document.getElementById('__dev_applied_proof__')?.remove();
@@ -71,14 +64,12 @@ function __takeoverStartUI(project){
     root.style.backgroundImage = `url(${bgImage})`;
     root.style.backgroundSize = 'cover';
     root.style.backgroundPosition = 'center';
-    dlog('✅ 背景画像を適用:', bgImage);
   }
 
   // 背景色
   const bgColor = startScreen?.backgroundColor || start?.backgroundColor;
   if (bgColor) {
     root.style.backgroundColor = bgColor;
-    dlog('✅ 背景色を適用:', bgColor);
   }
 
   // タイトル
@@ -91,7 +82,6 @@ function __takeoverStartUI(project){
     `font-size:${32 * titleSize}px`,
     'font-weight:700','margin:0','text-shadow:0 2px 6px rgba(0,0,0,.4)'
   ].join(';');
-  dlog('✅ タイトルを設定:', { text: title.textContent, color: titleColor, size: titleSize });
 
   // 位置（%をvhで近似）
   const wrap = document.createElement('div');
@@ -110,7 +100,6 @@ function __takeoverStartUI(project){
     'border:none','cursor:pointer','box-shadow:0 8px 24px rgba(0,0,0,.25)',
     `background:${buttonColor}`,`color:${buttonTextColor}`,'font-size:16px','font-weight:600'
   ].join(';');
-  dlog('✅ ボタンを設定:', { text: btn.textContent, bgColor: buttonColor, textColor: buttonTextColor });
 
   btn.onclick = async (e)=>{
     e.stopPropagation();
@@ -601,6 +590,26 @@ async function normalizeProject(project, baseHref) {
     }
   }
 
+  // models の解決: 複数のデータ形式に対応（フォールバック付き）
+  if (!project.models || project.models.length === 0) {
+    // screens[0].models（Firebase公開形式）からフォールバック
+    if (project.screens?.[0]?.models?.length) {
+      arViewerLogger.info('[FLOW] project.models が空のため screens[0].models を使用');
+      project.models = project.screens[0].models;
+    }
+    // modelSettings（エディタ保存形式）からフォールバック
+    else if (project.modelSettings?.length) {
+      arViewerLogger.info('[FLOW] project.models が空のため modelSettings から構築');
+      project.models = project.modelSettings
+        .filter(m => m.fileName)
+        .map(m => ({
+          url: m.fileName,
+          fileName: m.fileName,
+          transform: m.transform
+        }));
+    }
+  }
+
   // models の絶対化と検証
   project.models = (project.models || []).map((m, index) => {
     const absoluteUrl = abs(m.url);
@@ -609,11 +618,11 @@ async function normalizeProject(project, baseHref) {
       absolute: absoluteUrl,
       valid: !!absoluteUrl
     });
-    
+
     if (!absoluteUrl) {
       arViewerLogger.warn(`⚠️ モデル ${index + 1} のURLが無効です:`, m.url);
     }
-    
+
     return { ...m, url: absoluteUrl };
   });
 
@@ -931,7 +940,6 @@ function bindGuideStartButton() {
 setTimeout(bindGuideStartButton, 500);
 
 export default function showARViewer(container) {
-  dlog('🚀 統合ARビューア開始');
 
   // ★ URLパラメータから project.json のURLを取得（統一された取得ロジックを使用）
   const projectSrc = getProjectSrc();
@@ -946,8 +954,6 @@ export default function showARViewer(container) {
   const engineOverrideRaw = (urlParams.get('engine') || urlParams.get('type') || '').toLowerCase();
   const engineOverride = ['marker', 'webxr', 'simple'].includes(engineOverrideRaw) ? engineOverrideRaw : null;
   const enableLSFlag = (urlParams.get('ls') || '').toLowerCase() === 'on';
-  // デバッグ用：cube=on で強制デバッグキューブを配置
-  const forceDebugCube = ['on','1','true','yes'].includes((urlParams.get('cube')||'').toLowerCase());
   const forceNormalMaterial = ['normal','n','1','true','yes'].includes((urlParams.get('mat')||'').toLowerCase());
 
   arViewerLogger.info('[showARViewer] projectSrc:', projectSrc);
@@ -1030,7 +1036,6 @@ export default function showARViewer(container) {
     };
   }
 
-  dlog('📡 プロジェクトURL:', projectSrc);
 
   // 統合ARビューアのHTML構造
   container.innerHTML = `
@@ -1061,8 +1066,8 @@ export default function showARViewer(container) {
       <div id="ar-guide-screen" class="ar-guide-screen" data-screen="guide" style="display: none;">
         <div class="guide-content">
           <img id="ar-guide-image" alt="guide image" style="display:none;max-width:240px;max-height:180px;margin-bottom:16px;" />
-          <h2 id="ar-guide-title">画面をタップしてください</h2>
-          <p id="ar-guide-description">平らな面を見つけて画面をタップしてください</p>
+          <h2 id="ar-guide-title">読み込み中...</h2>
+          <p id="ar-guide-description"></p>
           <div id="ar-guide-marker" style="display:none;">
             <img id="ar-guide-marker-image" alt="marker" style="max-width:200px;max-height:150px;margin:16px 0;" />
           </div>
@@ -1350,48 +1355,6 @@ export default function showARViewer(container) {
   `;
   document.head.appendChild(style);
 
-  // デバッグコンソール（スマホ用）: 本番では無効
-  if (IS_DEBUG) {
-    const debugConsole = document.createElement('div');
-    debugConsole.id = 'debug-console';
-    debugConsole.style.cssText = `
-      position: fixed; top: 10px; left: 10px; right: 10px; max-height: 200px;
-      background: rgba(0,0,0,0.8); color: #00ff00; font-size: 12px;
-      padding: 10px; border-radius: 5px; z-index: 9999; overflow-y: auto;
-      font-family: monospace; display: none;
-    `;
-    document.body.appendChild(debugConsole);
-
-    const originalLog = console.log;
-    const originalWarn = console.warn;
-    const originalError = console.error;
-    function addToDebugConsole(message, type = 'log') {
-      const color = type === 'error' ? '#ff4444' : type === 'warn' ? '#ffaa44' : '#00ff00';
-      const div = document.createElement('div');
-      div.style.color = color;
-      div.textContent = `[${type.toUpperCase()}] ${message}`;
-      debugConsole.appendChild(div);
-      debugConsole.scrollTop = debugConsole.scrollHeight;
-      if (debugConsole.children.length > 50) {
-        debugConsole.removeChild(debugConsole.firstChild);
-      }
-    }
-    console.log = (...args) => { originalLog(...args); addToDebugConsole(args.join(' '), 'log'); };
-    console.warn = (...args) => { originalWarn(...args); addToDebugConsole(args.join(' '), 'warn'); };
-    console.error = (...args) => { originalError(...args); addToDebugConsole(args.join(' '), 'error'); };
-    let tapCount = 0;
-    document.addEventListener('touchstart', () => {
-      tapCount++;
-      setTimeout(() => { tapCount = 0; }, 1000);
-      if (tapCount === 3) {
-        debugConsole.style.display = debugConsole.style.display === 'none' ? 'block' : 'none';
-      }
-    });
-    setTimeout(() => {
-      debugConsole.style.display = 'block';
-      addToDebugConsole('🚀 デバッグコンソール自動表示開始', 'log');
-    }, 5000);
-  }
 
   // ★ 統一されたボタンバインド処理（二重バインド防止・再入禁止）
   const bindStartButtonOnce = () => {
@@ -1430,7 +1393,7 @@ export default function showARViewer(container) {
   // ★ bootFromQR 完了を待ってから実行
   const initARViewerWhenReady = () => {
     if (window.__bootFromQR_completed && window.__project) {
-      initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceDebugCube, forceNormalMaterial, engineOverride });
+      initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceNormalMaterial, engineOverride });
     } else {
       // bootFromQR がまだ完了していない場合、イベントを待つ
       window.addEventListener('bootFromQRCompleted', initARViewerWhenReady, { once: true });
@@ -1463,7 +1426,7 @@ export default function showARViewer(container) {
 async function initIntegratedARViewer(container, projectSrc, options = {}) {
   arViewerLogger.info('[🚀 initIntegratedARViewer] 開始:', { projectSrc, options });
   arViewerLogger.info('ARビューア初期化開始:', { projectSrc, options });
-  const { enableLSFlag = false, forceDebugCube = false, forceNormalMaterial = false, engineOverride = null } = options;
+  const { enableLSFlag = false, forceNormalMaterial = false, engineOverride = null } = options;
   const loadingScreen = container.querySelector('#ar-loading-screen');
   const loadingBar = container.querySelector('#ar-loading-bar');
   const loadingProgressWrap = container.querySelector('.ar-loading-progress');
@@ -1757,7 +1720,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
   // ローディング画面とスタート画面をデフォルト状態にリセットする関数
   function resetLoadingScreenStyles() {
-    dlog('🔄 ローディング画面・スタート画面スタイルをリセット');
     
     // ローディング画面のリセット
     if (loadingScreen) {
@@ -1887,12 +1849,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       startCTA.onclick = null;
     }
 
-    dlog('✅ ローディング画面・スタート画面リセット完了');
   }
 
   function updateStatus(message, type = 'info') {
     const timestamp = new Date().toLocaleTimeString();
-    if (IS_DEBUG) arViewerLogger.info(`[${timestamp}] ${message}`);
     
     // ★★★ セキュリティ強化: DOM要素作成でXSS防止 ★★★
     statusText.textContent = ''; // クリア
@@ -1942,8 +1902,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     updateStatus('✅ プロジェクトデータ取得完了', 'success');
     updateProgress(30, 'プロジェクト設定を確認中...');
 
-    dlog('📁 読み込まれたプロジェクト:', currentProject);
-    dlog('🔍 プロジェクトのloadingScreen:', currentProject.loadingScreen);
 
     // =====================================================
     // 画面設定の構築
@@ -1983,7 +1941,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     let ss = { ...defaultStartScreen, ...(currentProject.startScreen || {}) };
     let ls = { ...defaultLoadingScreen, ...(currentProject.loadingScreen || {}) };
     let gs = { ...(currentProject.guideScreen || {}) };
-    dlog('📋 Layer 1 (project raw):', { ss, ls, gs });
 
     // --- Layer 2: extractDesign による正規化 ---
     try {
@@ -1991,7 +1948,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (design.startScreen)  ss = { ...ss, ...design.startScreen };
       if (design.loadingScreen) ls = { ...ls, ...design.loadingScreen };
       if (design.guideScreen)  gs = { ...gs, ...design.guideScreen };
-      dlog('📋 Layer 2 (extractDesign):', { ss, ls, gs });
+
     } catch (e) {
       arViewerLogger.warn('⚠️ extractDesign failed (fallback to raw project blocks):', e?.message || e);
     }
@@ -2007,7 +1964,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (tgs.surfaceDetection) gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...tgs.surfaceDetection };
         if (tgs.worldTracking)    gs.worldTracking = { ...(gs.worldTracking || {}), ...tgs.worldTracking };
       }
-      dlog('📋 Layer 3 (templateSettings):', { ss, ls, gs });
+
     }
 
     // --- Layer 4: editorSettings（ユーザー明示設定 - 最高優先度）---
@@ -2021,7 +1978,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (eg.surfaceDetection) gs.surfaceDetection = { ...(gs.surfaceDetection || {}), ...eg.surfaceDetection };
         if (eg.worldTracking)    gs.worldTracking = { ...(gs.worldTracking || {}), ...eg.worldTracking };
       }
-      dlog('📋 Layer 4 (editorSettings):', { ss, ls, gs });
+
     }
 
     // --- Layer 5: localStorage補完（?ls=on のときのみ、不足分を補完）---
@@ -2034,7 +1991,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (localSettings.startScreen)  ss = { ...localSettings.startScreen, ...ss };
           if (localSettings.loadingScreen) ls = { ...localSettings.loadingScreen, ...ls };
           if (localSettings.guideScreen)  gs = { ...localSettings.guideScreen, ...gs };
-          dlog('📋 Layer 5 (localStorage complement):', { ss, ls, gs });
+
         }
       }
     } catch (e) {
@@ -2051,7 +2008,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (mergedSettings.loadingScreen) ls = { ...mergedSettings.loadingScreen, ...ls };
       if (mergedSettings.startScreen)   ss = { ...mergedSettings.startScreen, ...ss };
       if (mergedSettings.guideScreen)   gs = { ...mergedSettings.guideScreen, ...gs };
-      dlog('📋 統合システム補完完了:', { ls, ss, gs });
     } catch (error) {
       arViewerLogger.warn('統合システムの適用に失敗（継続）:', error);
     }
@@ -2059,11 +2015,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     // editorSettings は Layer 4 で既に定義済み
 
     if (ls) {
-      dlog('🎨 プロジェクトファイルからローディング画面設定を取得:', ls);
       
       // templateSettingsが存在しない場合はlocalStorageからの補完を常に試行（色があっても詳細が欠けている可能性があるため）
       if (ls.selectedScreenId && !ls.templateSettings) {
-        dlog('🔍 templateSettingsが存在せず設定が不完全のため、localStorageからの補完を試行:', ls.selectedScreenId);
         try {
           const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
           if (stored) {
@@ -2073,19 +2027,16 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
               // ローディング画面設定を補完
               if (template.settings.loadingScreen) {
                 ls = { ...template.settings.loadingScreen, ...ls };
-                dlog('✅ ローディング画面設定をlocalStorageから補完:', template.name);
               }
               
               // スタート画面設定を補完
               if (template.settings.startScreen) {
                 ss = { ...template.settings.startScreen, ...ss };
-                dlog('✅ スタート画面設定をlocalStorageから補完:', template.name);
               }
               
               // ガイド画面設定を補完
               if (template.settings.guideScreen) {
                 currentProject.guideScreen = { ...template.settings.guideScreen, ...(currentProject.guideScreen || {}) };
-                dlog('✅ ガイド画面設定をlocalStorageから補完:', template.name);
               }
             }
           }
@@ -2093,12 +2044,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           arViewerLogger.warn('⚠️ localStorage補完失敗（プロジェクト設定を使用）:', e);
         }
       } else {
-        dlog('✅ 完全な設定がプロジェクトファイルに含まれています');
       }
     }
     
     if (ls) {
-      dlog('🎨 ローディング画面設定を適用:', ls);
 
       const loadingTitle = container.querySelector('#ar-loading-title');
       const loadingMessage = container.querySelector('#ar-loading-message');
@@ -2108,24 +2057,20 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // メッセージ適用（小さめの説明文）
       if (ls.loadingMessage && loadingMessage) {
         loadingMessage.textContent = ls.loadingMessage;
-        dlog('📝 メッセージ適用:', ls.loadingMessage);
       } else if (ls.message && loadingMessage) {
         loadingMessage.textContent = ls.message;
-        dlog('📝 メッセージ適用（旧形式）:', ls.message);
       }
 
       // 背景色適用
       if (ls.backgroundColor && loadingScreen) {
         loadingScreen.style.backgroundColor = ls.backgroundColor;
         loadingScreen.style.background = ls.backgroundColor;
-        dlog('🎨 背景色適用:', ls.backgroundColor);
       }
 
       // テキスト色適用
       if (ls.textColor) {
         if (loadingTitle) loadingTitle.style.color = ls.textColor;
         if (loadingMessage) loadingMessage.style.color = ls.textColor;
-        dlog('📝 テキスト色適用:', ls.textColor);
       }
 
       // プログレス色適用（accentColorもしくはprogressColor）
@@ -2133,13 +2078,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (progressColor && loadingBar) {
         loadingBar.style.backgroundColor = progressColor;
         loadingBar.style.background = progressColor;
-        dlog('📊 プログレス色適用:', progressColor);
       }
 
       // プログレスバー表示制御
       if (ls.showProgress === false && loadingBar) {
         loadingBar.style.display = 'none';
-        dlog('📊 プログレスバー非表示');
         // 既存デザイン保護のため、ラッパー非表示はフラグ時のみ
         if (enableLSFlag && loadingProgressWrap) {
           loadingProgressWrap.style.display = 'none';
@@ -2149,10 +2092,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ブランド/サブタイトル適用（大きめの見出し）
       if (ls.brandName && loadingTitle) {
         loadingTitle.textContent = ls.brandName;
-        dlog('🏢 ブランド名適用:', ls.brandName);
       } else if (ls.subTitle && loadingTitle) {
         loadingTitle.textContent = ls.subTitle;
-        dlog('🏢 サブタイトル適用:', ls.subTitle);
       }
 
       // フォントスケール適用
@@ -2160,7 +2101,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         const scale = Math.max(0.5, Math.min(2.0, ls.fontScale));
         loadingTitle.style.fontSize = `${scale}em`;
         if (loadingMessage) loadingMessage.style.fontSize = `${scale * 0.8}em`;
-        dlog('🔤 フォントスケール適用:', scale);
       }
 
       // ロゴ適用（logoTypeに応じて startScreen.logo または loadingScreen.logo を使用）
@@ -2184,7 +2124,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           loadingLogo.style.top = `${pos}%`;
           loadingLogo.style.maxWidth = `${px}px`;
           loadingLogo.style.maxHeight = `${Math.round(px * 0.5)}px`;
-          dlog('🏷️ ロゴ表示:', { logoType, pos, px });
         }
       } catch (e) {
         arViewerLogger.warn('⚠️ ロゴ適用失敗:', e);
@@ -2196,7 +2135,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (loadingTextGroup) loadingTextGroup.style.top = `${textPos}%`;
       } catch (_) {}
     } else {
-      dlog('ℹ️ ローディング画面設定が見つかりません - デフォルト状態を維持');
       // リセット関数により既にデフォルト状態が設定されているので、追加の処理は不要
     }
 
@@ -2235,24 +2173,18 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       // ★★★ スタート画面レイアウト関数を定義 ★★★
       function layoutStartScreen() {
         if (!startScreen || !ss) {
-          dlog('❌ スタート画面レイアウトスキップ - startScreen:', !!startScreen, 'ss:', !!ss);
           return;
         }
 
-        dlog('🔄 スタート画面レイアウト実行');
-        dlog('🔍 適用する設定:', ss);
 
         // スタート画面を表示
         showScreen(screenStates.START);
 
         // 背景
-        dlog('🎨 背景色適用チェック:', ss.backgroundColor, 'startScreen要素:', !!startScreen);
         if (ss.backgroundColor && startScreen) {
           startScreen.style.setProperty('background', ss.backgroundColor, 'important');
-          dlog('🎨 背景色適用実行:', ss.backgroundColor);
-          dlog('🔍 適用後の背景色:', window.getComputedStyle(startScreen).backgroundColor);
+
         } else {
-          dlog('❌ 背景色適用スキップ - backgroundColor:', ss.backgroundColor, 'startScreen:', !!startScreen);
         }
       // タイトル
       if (startTitle) {
@@ -2274,7 +2206,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startTitle.style.setProperty('width', '90%', 'important');
           startTitle.style.setProperty('text-align', 'center', 'important');
           startTitle.style.setProperty('z-index', '9999', 'important');
-          dlog('🎨 タイトル位置適用 (コンテナ基準%):', `${tpos}%`, 'titlePosition:', ss.titlePosition);
+
         } else {
           // デフォルトは中央揃え（flexセンター）
           startTitle.style.position = '';
@@ -2296,10 +2228,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           // プレビューに合わせて不要な影は付けない
           startTitle.style.setProperty('text-shadow', 'none', 'important');
           startTitle.style.setProperty('margin', '0', 'important');
-          dlog('🎨 タイトルフォントサイズ適用 (!important):', `${computedSize}px`, 'titleSize:', ts);
-          dlog('🔍 startTitle要素:', startTitle, 'computed style:', window.getComputedStyle(startTitle).fontSize);
+
+
         } else {
-          dlog('❌ タイトルサイズ適用スキップ - titleSize:', ss.titleSize, 'type:', typeof ss.titleSize);
         }
       }
       // ロゴ
@@ -2325,8 +2256,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         startLogo.style.height = `${logoWidth}px`;
         startLogo.style.objectFit = 'contain';
         startLogo.style.zIndex = '1202';
-        dlog('🎨 ロゴサイズ適用:', `${logoWidth}px`, 'logoSize:', ss.logoSize);
-        dlog('🔍 ロゴ要素:', startLogo, 'computed maxWidth:', window.getComputedStyle(startLogo).maxWidth);
+
       }
       // CTA
       if (startCTA) {
@@ -2344,7 +2274,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('transform', 'translateX(-50%)', 'important');
           startCTA.style.setProperty('top', `${bpos}%`, 'important');
           startCTA.style.setProperty('z-index', '9999', 'important');
-          dlog('🎨 ボタン位置適用 (コンテナ基準%):', `${bpos}%`, 'buttonPosition:', ss.buttonPosition);
+
         } else {
           startCTA.style.position = '';
           startCTA.style.left = '';
@@ -2364,10 +2294,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           startCTA.style.setProperty('border-radius', '8px', 'important');
           startCTA.style.setProperty('box-shadow', '0 2px 8px rgba(0,0,0,0.2)', 'important');
 
-          dlog('🎨 ボタンサイズ適用（エディター準拠）:', `${fontSize}px`, 'buttonSize:', ss.buttonSize, 'padding:', `${padY}px ${padX}px`);
-          dlog('🔍 ボタン要素:', startCTA, 'computed fontSize:', window.getComputedStyle(startCTA).fontSize, 'computed padding:', window.getComputedStyle(startCTA).padding);
         } else {
-          dlog('❌ ボタンサイズ適用スキップ - buttonSize:', ss.buttonSize, 'type:', typeof ss.buttonSize);
         }
       }
       
@@ -2430,10 +2357,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const abs = (u) => { try { return new URL(u, currentProject.__sourceUrl || (typeof location!== 'undefined' ? location.href : undefined)).href; } catch { return u; } };
       
       if (guideMode === 'marker') {
-        // マーカー用ガイド（プロジェクト保存デザインを優先）
+        // マーカー用ガイド（extractDesignの正規化結果 gs.title/gs.description を優先）
         const markerGuide = gs.markerGuide || gs.surfaceDetection || {};
-        if (markerGuide.title && guideTitle) guideTitle.textContent = markerGuide.title;
-        if (markerGuide.description && guideDescription) guideDescription.textContent = markerGuide.description;
+        const guideTitleText = gs.title || markerGuide.title || 'マーカーをカメラに写してください';
+        const guideDescText = gs.description || markerGuide.description || 'マーカー画像を画面内に収めてください';
+        if (guideTitle) guideTitle.textContent = guideTitleText;
+        if (guideDescription) guideDescription.textContent = guideDescText;
 
         const guideImgUrl = markerGuide.guideImage || markerGuide.imageUrl || markerGuide.url;
         if (guideImgUrl && guideImage) {
@@ -2446,7 +2375,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         }
 
         // 実マーカー画像（あればプレビュー表示）
-        const markerPreview = currentProject.markerGuide?.previewImage || currentProject.markerImage || currentProject.markerImageUrl;
+        const markerPreview = gs.markerImage || currentProject.markerGuide?.previewImage || currentProject.markerImage || currentProject.markerImageUrl;
         if (markerPreview && guideMarkerImage) {
           guideMarkerImage.src = abs(markerPreview);
           guideMarker.style.display = 'block';
@@ -2475,7 +2404,6 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (guideDescription) guideDescription.style.color = gs.textColor;
       }
       
-      dlog('🎯 ガイド画面設定完了:', { guideMode, gs, hasCustomMarkerGuide });
     } catch (guideError) {
       arViewerLogger.warn('⚠️ ガイド画面設定エラー:', guideError);
     }

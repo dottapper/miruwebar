@@ -2,9 +2,6 @@
 
 import { settingsAPI } from '../../components/loading-screen/settings.js';
 
-// DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * ファイルサイズを適切な単位でフォーマットする
@@ -28,9 +25,7 @@ export function loadLoadingSettingsToUI(loadingScreen, savedSelectedScreenId) {
   // プロジェクトにローディング画面エディターの詳細設定が含まれている場合は復元
   if (loadingScreen.editorSettings) {
     try {
-      dlog('🔄 ローディング画面エディターの詳細設定を復元中...');
       settingsAPI.saveSettings(loadingScreen.editorSettings);
-      dlog('✅ ローディング画面エディターの詳細設定を復元完了');
     } catch (error) {
       console.warn('⚠️ ローディング画面エディターの詳細設定復元に失敗:', error);
     }
@@ -44,11 +39,7 @@ export function loadLoadingSettingsToUI(loadingScreen, savedSelectedScreenId) {
       const expectedValue = loadingScreen.selectedScreenId;
       
       if (currentValue !== expectedValue) {
-        dlog('🔄 ローディング画面選択の再復元:', {
-          current: currentValue,
-          expected: expectedValue
-        });
-        
+
         loadingScreenSelect.value = expectedValue;
         savedSelectedScreenId = expectedValue;
         updateEditButtonState();

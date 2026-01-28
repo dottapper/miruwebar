@@ -6,8 +6,6 @@ import { loadLoadingSettingsToUI, resetAllUI } from './ui-handlers.js';
 import { settingsAPI } from '../../components/loading-screen/settings.js';
 
 // DEBUG ログ制御
-const IS_DEBUG = (typeof window !== 'undefined' && !!window.DEBUG);
-const dlog = (...args) => { if (IS_DEBUG) console.log(...args); };
 
 /**
  * プロジェクトを読み込む
@@ -16,7 +14,6 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
   if (!projectId) return;
 
   try {
-    dlog('📁 プロジェクトを読み込み中...', projectId);
     const project = await getProject(projectId);
     
     if (!project) {
@@ -24,15 +21,12 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
       return;
     }
 
-    dlog('📁 プロジェクトデータ取得完了:', project);
 
     // モデルの読み込み（遅延実行で3Dモデルファイル本体も復元）
     if (project.models && project.models.length > 0) {
-      dlog('🔄 プロジェクトからモデルを復元中...');
       const modelsWithData = await loadProjectWithModels(projectId);
       
       if (modelsWithData && modelsWithData.models) {
-        dlog('✅ プロジェクトのモデルデータ復元完了:', modelsWithData.models.length, 'models');
         
         // UIのモデルセレクトに復元
         const modelSelect = document.getElementById('model-select');
@@ -60,7 +54,6 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
 
     // Transform設定の復元
     if (project.transform) {
-      dlog('🔄 Transform設定を復元中...', project.transform);
       
       const { position, rotation, scale } = project.transform;
       
@@ -72,7 +65,6 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
       }
       
       // UIコントロールにも反映（次のupdateUIFromModel呼び出しで同期される）
-      dlog('✅ Transform設定復元完了');
     }
 
     // ローディング設定をUIに反映
@@ -86,7 +78,6 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
           if (loadingScreenSelect) {
             loadingScreenSelect.value = project.loadingScreen.selectedScreenId;
             savedSelectedScreenId = project.loadingScreen.selectedScreenId;
-            dlog('✅ ローディング画面設定を復元:', project.loadingScreen.selectedScreenId);
           }
         }, 200);
       }
@@ -170,16 +161,13 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
       lastModified: new Date().toISOString()
     };
 
-    dlog('💾 プロジェクトを保存中...', projectData);
     
     // ARViewerインスタンスを取得して渡す
     const arViewerInstance = window.arViewer;
-    dlog('🔍 ARViewerインスタンス:', arViewerInstance);
     
     const result = await saveProject(projectData, arViewerInstance);
     
     if (result.success) {
-      dlog('✅ プロジェクト保存完了');
       
       // 保存完了メッセージを表示
       const saveButton = document.getElementById('save-button');
@@ -236,19 +224,10 @@ function getCurrentModelsData() {
   // ARViewerから実際のモデルデータを取得
   const arViewer = window.arViewer;
   const models = [];
-  
-  dlog('🔍 ARViewerインスタンス確認:', {
-    hasArViewer: !!arViewer,
-    hasControls: !!(arViewer && arViewer.controls),
-    hasGetAllModels: !!(arViewer && arViewer.controls && arViewer.controls.getAllModels),
-    arViewerKeys: arViewer ? Object.keys(arViewer) : [],
-    controlsKeys: arViewer && arViewer.controls ? Object.keys(arViewer.controls) : []
-  });
-  
+
   if (arViewer && arViewer.controls && arViewer.controls.getAllModels) {
     try {
       const allModels = arViewer.controls.getAllModels();
-      dlog('🔍 ARViewerからモデルデータを取得:', allModels.length, 'models');
       
       allModels.forEach((model, index) => {
         models.push({
@@ -266,7 +245,6 @@ function getCurrentModelsData() {
         });
       });
       
-      dlog('✅ モデルデータ取得完了:', models);
     } catch (error) {
       console.error('❌ ARViewerからモデルデータ取得エラー:', error);
     }
