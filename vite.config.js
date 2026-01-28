@@ -6,6 +6,9 @@ import { projectsStaticPlugin } from './vite/plugins/projectsStatic.js';
 import { projectsApiPlugin } from './vite/plugins/projectsApi.js';
 import { execSync } from 'child_process';
 
+// 開発環境かどうかを判定（Vercelのビルド環境では本番として扱う）
+const isDev = process.env.NODE_ENV !== 'production' && !process.env.VERCEL;
+
 export default defineConfig({
   // ★★★ HMR設定の改善 ★★★
   server: {
@@ -28,15 +31,19 @@ export default defineConfig({
     host: true,
     port: 4173,
     strictPort: true,
-    // HTTPS対応（basic-sslプラグインを使用）
-    https: true
+    // HTTPS対応（開発環境のみ、basic-sslプラグインを使用）
+    https: isDev
   },
   plugins: [
     // 開発用の簡易HTTPSを有効化（スマホのカメラ許可要件を満たす）
-    basicSsl(),
-    networkInfoPlugin(),
-    projectsStaticPlugin(),
-    projectsApiPlugin()
+    // Vercelのビルド時には無効化
+    ...(isDev ? [basicSsl()] : []),
+    // 開発サーバー専用プラグイン（Vercelのビルド時には無効化）
+    ...(isDev ? [
+      networkInfoPlugin(),
+      projectsStaticPlugin(),
+      projectsApiPlugin()
+    ] : [])
   ],
   build: {
     // チャンクサイズの警告制限を調整（Three.jsを含むため）
@@ -91,7 +98,12 @@ export default defineConfig({
     __LOCATOR_DEV__: false,
     __BUILD_SHA__: JSON.stringify(
       process.env.BUILD_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA?.substring(0, 7) ||
       (() => {
+        // Vercelのビルド環境ではgitコマンドを実行しない
+        if (process.env.VERCEL) {
+          return 'vercel-build';
+        }
         try {
           return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
         } catch (e) {
