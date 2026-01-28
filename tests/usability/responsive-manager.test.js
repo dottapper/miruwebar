@@ -122,6 +122,7 @@ describe('ResponsiveManager', () => {
   describe('デバイス判定ヘルパー', () => {
     it('モバイル判定が正しく動作する', () => {
       mockWindow.innerWidth = 400;
+      manager.handleResize(); // 内部状態を更新
       expect(manager.isMobile()).toBe(true);
       expect(manager.isTablet()).toBe(false);
       expect(manager.isDesktop()).toBe(false);
@@ -129,6 +130,7 @@ describe('ResponsiveManager', () => {
 
     it('タブレット判定が正しく動作する', () => {
       mockWindow.innerWidth = 800;
+      manager.handleResize(); // 内部状態を更新
       expect(manager.isMobile()).toBe(false);
       expect(manager.isTablet()).toBe(true);
       expect(manager.isDesktop()).toBe(false);
@@ -136,6 +138,7 @@ describe('ResponsiveManager', () => {
 
     it('デスクトップ判定が正しく動作する', () => {
       mockWindow.innerWidth = 1200;
+      manager.handleResize(); // 内部状態を更新
       expect(manager.isMobile()).toBe(false);
       expect(manager.isTablet()).toBe(false);
       expect(manager.isDesktop()).toBe(true);
@@ -144,6 +147,7 @@ describe('ResponsiveManager', () => {
     it('向き判定が正しく動作する', () => {
       mockWindow.innerWidth = 400;
       mockWindow.innerHeight = 800;
+      manager.handleResize(); // 内部状態を更新
       expect(manager.isPortrait()).toBe(true);
       expect(manager.isLandscape()).toBe(false);
     });
@@ -151,26 +155,36 @@ describe('ResponsiveManager', () => {
 
   describe('メディアクエリマッチング', () => {
     it('メディアクエリが正しくマッチする', () => {
-      // モックのmatchMediaを設定
-      mockWindow.matchMedia.mockImplementation((query) => ({
-        matches: query.includes('max-width: 767px'),
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),
-        removeListener: vi.fn(),
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn()
-      }));
+      // モックのmatchMediaを設定（ResponsiveManager作成前に設定）
+      mockWindow.matchMedia.mockImplementation((query) => {
+        const matches = query.includes('max-width: 767px');
+        return {
+          matches,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn()
+        };
+      });
 
-      expect(manager.matches('mobile')).toBe(true);
-      expect(manager.matches('desktop')).toBe(false);
+      // 新しいResponsiveManagerインスタンスを作成（モック設定後）
+      const testManager = new ResponsiveManager();
+      
+      expect(testManager.matches('mobile')).toBe(true);
+      expect(testManager.matches('desktop')).toBe(false);
     });
   });
 
   describe('レスポンシブクラス適用', () => {
     it('レスポンシブクラスが正しく適用される', () => {
       const element = document.createElement('div');
+      mockWindow.innerWidth = 400; // モバイルサイズ
+      mockWindow.innerHeight = 800; // 縦向き
+      manager.handleResize(); // 内部状態を更新
+      
       const addedClasses = [];
       element.classList.add = vi.fn((className) => {
         addedClasses.push(className);
@@ -193,30 +207,25 @@ describe('ResponsiveManager', () => {
 
     it('既存のレスポンシブクラスが削除される', () => {
       const element = document.createElement('div');
-      const addedClasses = [];
-      const removedClasses = [];
+      mockWindow.innerWidth = 400; // モバイルサイズに変更
+      manager.handleResize(); // 内部状態を更新
       
-      element.classList.add = vi.fn((className) => {
-        addedClasses.push(className);
-      });
-      element.classList.remove = vi.fn((className) => {
-        removedClasses.push(className);
-        const index = addedClasses.indexOf(className);
-        if (index > -1) {
-          addedClasses.splice(index, 1);
-        }
-      });
-      element.classList.contains = vi.fn((className) => {
-        return addedClasses.includes(className);
-      });
-      
-      // 既存のクラスを追加
+      // 既存のクラスを追加（実際のDOM操作）
       element.classList.add('test-lg', 'test-desktop');
       
+      // クラスが追加されていることを確認
+      expect(element.classList.contains('test-lg')).toBe(true);
+      expect(element.classList.contains('test-desktop')).toBe(true);
+      
+      // レスポンシブクラスを適用（既存のクラスが削除される）
       manager.applyResponsiveClasses(element, { prefix: 'test' });
       
+      // 既存のクラスが削除されていることを確認
       expect(element.classList.contains('test-lg')).toBe(false);
       expect(element.classList.contains('test-desktop')).toBe(false);
+      // 新しいクラスが追加されていることを確認
+      expect(element.classList.contains('test-xs')).toBe(true);
+      expect(element.classList.contains('test-mobile')).toBe(true);
     });
   });
 
@@ -230,6 +239,7 @@ describe('ResponsiveManager', () => {
       };
 
       mockWindow.innerWidth = 400; // モバイルサイズ
+      manager.handleResize(); // 内部状態を更新
       manager.applyResponsiveStyles(element, styles);
 
       expect(element.style.fontSize).toBe('14px');
@@ -248,6 +258,7 @@ describe('ResponsiveManager', () => {
       };
 
       mockWindow.innerWidth = 400; // モバイルサイズ
+      manager.handleResize(); // 内部状態を更新
       manager.setResponsiveImage(img, sources);
 
       // 画像のsrcが設定されていることを確認（完全なURLになる可能性がある）
@@ -276,6 +287,7 @@ describe('ResponsiveManager', () => {
       };
 
       mockWindow.innerWidth = 400; // モバイルサイズ
+      manager.handleResize(); // 内部状態を更新
       manager.adjustLayout(container, layout);
 
       expect(container.style.display).toBe('grid');
@@ -307,6 +319,7 @@ describe('ResponsiveManager', () => {
     it('現在の状態が正しく取得される', () => {
       mockWindow.innerWidth = 800;
       mockWindow.innerHeight = 600;
+      manager.handleResize(); // 内部状態を更新
       
       const state = manager.getCurrentState();
       
