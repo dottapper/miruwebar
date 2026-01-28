@@ -836,11 +836,22 @@ export async function showQRCodeModal(options = {}) {
 
       } catch (error) {
         console.error('Firebase公開エラー:', error);
-        statusEl.textContent = `❌ エラー: ${error.message}`;
+        let errorMessage = error.message;
+        
+        // Firebase設定エラーの場合、より分かりやすいメッセージを表示
+        if (error.message.includes('Firebase設定が完了していません') || 
+            error.message.includes('Firebase設定')) {
+          errorMessage = 'Firebase設定が必要です。.envファイルにFirebase設定を追加してください。\n詳細は env.example を参照してください。';
+        }
+        
+        statusEl.textContent = `❌ エラー: ${errorMessage}`;
         statusEl.style.background = '#FFEBEE';
         statusEl.style.color = '#C62828';
         publishBtn.disabled = false;
         publishBtn.textContent = '🔥 Firebaseに公開する';
+        
+        // ユーザーに通知
+        alert(`Firebase公開に失敗しました:\n\n${errorMessage}\n\nFirebase機能を使用しない場合は、エクスポート機能をご利用ください。`);
       }
     });
 

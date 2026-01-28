@@ -1,5 +1,5 @@
 // Firebase Storage utilities for miruwebAR
-import { storage } from './config.js';
+import { storage, isFirebaseConfigured } from './config.js';
 import {
   ref,
   uploadBytes,
@@ -9,6 +9,19 @@ import {
 } from "firebase/storage";
 
 /**
+ * Firebase設定のチェック
+ * @throws {Error} Firebase設定がない場合
+ */
+function checkFirebaseConfig() {
+  if (!isFirebaseConfigured || !storage) {
+    throw new Error(
+      'Firebase設定が完了していません。Firebase機能を使用するには、.envファイルにFirebase設定を追加してください。\n' +
+      '詳細は env.example を参照してください。'
+    );
+  }
+}
+
+/**
  * プロジェクトのモデル（GLB）をアップロード
  * @param {string} projectId - プロジェクトID
  * @param {string} fileName - ファイル名
@@ -16,6 +29,7 @@ import {
  * @returns {Promise<string>} ダウンロードURL
  */
 export async function uploadModel(projectId, fileName, data) {
+  checkFirebaseConfig();
   const path = `projects/${projectId}/models/${fileName}`;
   const storageRef = ref(storage, path);
 
@@ -40,6 +54,7 @@ export async function uploadModel(projectId, fileName, data) {
  * @returns {Promise<string>} ダウンロードURL
  */
 export async function uploadAsset(projectId, fileName, data, contentType = 'image/png') {
+  checkFirebaseConfig();
   const path = `projects/${projectId}/assets/${fileName}`;
   const storageRef = ref(storage, path);
 
@@ -67,6 +82,7 @@ export async function uploadAsset(projectId, fileName, data, contentType = 'imag
  * @returns {Promise<string>} ダウンロードURL
  */
 export async function uploadProjectJson(projectId, projectData) {
+  checkFirebaseConfig();
   const path = `projects/${projectId}/project.json`;
   const storageRef = ref(storage, path);
 
@@ -317,6 +333,7 @@ export async function fetchProjectFromFirebase(projectUrl) {
  * @param {string} projectId - プロジェクトID
  */
 export async function deleteProject(projectId) {
+  checkFirebaseConfig();
   const projectRef = ref(storage, `projects/${projectId}`);
   const list = await listAll(projectRef);
 

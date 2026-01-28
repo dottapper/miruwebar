@@ -3,8 +3,8 @@ import { initializeApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
 
 // 環境変数から読み込む（Viteでは import.meta.env.VITE_* を使用）
-// セキュリティのため、環境変数のみを使用（デフォルト値は設定しない）
-const requiredEnvVars = {
+// Firebase設定はオプショナル（BYO ホスティングのため）
+const envVars = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
@@ -13,30 +13,48 @@ const requiredEnvVars = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// 必須環境変数のチェック
-const missingVars = Object.entries(requiredEnvVars)
+// Firebase設定の有無をチェック
+const missingVars = Object.entries(envVars)
   .filter(([_, value]) => !value)
   .map(([key]) => key);
 
-if (missingVars.length > 0) {
-  const errorMessage = `❌ Firebase設定エラー: 以下の環境変数が設定されていません: ${missingVars.join(", ")}\n\n.env ファイルを作成し、env.example を参考に設定してください。`;
-  console.error(errorMessage);
-  throw new Error(errorMessage);
+const isFirebaseConfigured = missingVars.length === 0;
+
+if (!isFirebaseConfigured) {
+  console.warn(
+    `⚠️ Firebase設定が不完全です（オプショナル）: 以下の環境変数が設定されていません: ${missingVars.join(", ")}\n` +
+    `Firebase機能を使用する場合は、.env ファイルを作成し、env.example を参考に設定してください。\n` +
+    `Firebase設定がない場合でも、ローカルストレージ（IndexedDB）を使用してプロジェクトを編集・保存できます。`
+  );
 }
 
-const firebaseConfig = {
-  apiKey: requiredEnvVars.apiKey,
-  authDomain: requiredEnvVars.authDomain,
-  projectId: requiredEnvVars.projectId,
-  storageBucket: requiredEnvVars.storageBucket,
-  messagingSenderId: requiredEnvVars.messagingSenderId,
-  appId: requiredEnvVars.appId,
-};
+// Firebase設定がある場合のみ初期化
+let app = null;
+let storage = null;
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+if (isFirebaseConfigured) {
+  try {
+    const firebaseConfig = {
+      apiKey: envVars.apiKey,
+      authDomain: envVars.authDomain,
+      projectId: envVars.projectId,
+      storageBucket: envVars.storageBucket,
+      messagingSenderId: envVars.messagingSenderId,
+      appId: envVars.appId,
+    };
 
-// Initialize Storage
-const storage = getStorage(app);
+    // Initialize Firebase
+    app = initializeApp(firebaseConfig);
 
-export { app, storage };
+    // Initialize Storage
+    storage = getStorage(app);
+
+    console.log("✅ Firebase初期化完了");
+  } catch (error) {
+    console.error("❌ Firebase初期化エラー:", error);
+    app = null;
+    storage = null;
+  }
+}
+
+export { app, storage, isFirebaseConfigured };
