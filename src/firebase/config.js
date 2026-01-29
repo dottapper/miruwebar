@@ -1,6 +1,7 @@
 // Firebase configuration for miruwebAR
 import { initializeApp } from "firebase/app";
 import { getStorage } from "firebase/storage";
+import { getAuth } from "firebase/auth";
 
 // 環境変数から読み込む（Viteでは import.meta.env.VITE_* を使用）
 // Firebase設定はオプショナル（BYO ホスティングのため）
@@ -31,6 +32,7 @@ if (!isFirebaseConfigured) {
 // Firebase設定がある場合のみ初期化
 let app = null;
 let storage = null;
+let auth = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -49,6 +51,9 @@ if (isFirebaseConfigured) {
     // Initialize Storage
     storage = getStorage(app);
 
+    // Initialize Auth
+    auth = getAuth(app);
+
     console.log("✅ Firebase初期化完了");
   } catch (error) {
     console.error("❌ Firebase初期化エラー:", error);
@@ -57,4 +62,4 @@ if (isFirebaseConfigured) {
   }
 }
 
-export { app, storage, isFirebaseConfigured };
+export { app, storage, auth, isFirebaseConfigured };

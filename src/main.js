@@ -24,6 +24,9 @@ import { logger, createLogger } from './utils/logger.js';
 // IndexedDB マイグレーション機能をインポート
 import { initializeMigration } from './storage/migrate.js';
 
+// Firebase認証
+import { onAuthChange, getCurrentUser } from './firebase/auth.js';
+
 // メインロガーを作成
 const mainLogger = createLogger('Main');
 
@@ -155,6 +158,15 @@ async function render() {
     // 現在のハッシュを取得
     let hash = window.location.hash || '#/login';
     mainLogger.debug('現在のハッシュ', { hash });
+
+    // 認証ガード: ログインとビューア以外は認証必須
+    const publicRoutes = ['#/login', '#/viewer'];
+    const baseForAuth = hash.split('?')[0];
+    if (!publicRoutes.includes(baseForAuth) && !getCurrentUser()) {
+      mainLogger.warn('未認証のアクセス。ログイン画面にリダイレクトします');
+      window.location.hash = '#/login';
+      return;
+    }
     
     // デバッグ用：usage-guideルートの特別確認
     if (hash === '#/usage-guide') {
@@ -278,10 +290,10 @@ window.addEventListener('hashchange', () => {
   });
 });
 
-// 初期表示
-mainLogger.info('初期表示開始');
-render().then(() => {
-  mainLogger.success('初期表示完了');
-}).catch((error) => {
-  mainLogger.error('初期表示エラー', error);
+// Firebase認証状態の監視 → 初期表示
+onAuthChange((user) => {
+  mainLogger.info('認証状態変更', { loggedIn: !!user });
+  render().catch((error) => {
+    mainLogger.error('認証状態変更後のレンダリングエラー', error);
+  });
 });
