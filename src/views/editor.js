@@ -3,6 +3,9 @@ import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
 import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects-new.js';
+import { publishProjectToFirebase } from '../firebase/storage.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { updateProjectPublishInfo } from '../storage/project-store.js';
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { settingsAPI } from '../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';
@@ -2551,60 +2554,94 @@ export function showEditor(container) {
           // QRコード用のproject.jsonファイル＋モデルファイルをサーバーに生成
           try {
 
-            // IndexedDBからモデルBlobを取得してBase64に変換
+            // IndexedDBからモデルBlobを取得
             const { loadProjectWithModels } = await import('../api/projects-new.js');
             const projectWithModels = await loadProjectWithModels(savedProject);
-            const modelPayload = [];
 
-            const blobToBase64 = (blob) => new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-
-            const toVec3 = (value, fallback) => {
-              if (Array.isArray(value) && value.length >= 3) return value.slice(0, 3).map((v, i) => { const n = Number(v); return Number.isFinite(n) ? n : fallback[i]; });
-              if (value && typeof value === 'object') { const x = Number(value.x), y = Number(value.y), z = Number(value.z); return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1], Number.isFinite(z) ? z : fallback[2]]; }
-              return [...fallback];
-            };
-
-            for (const m of projectWithModels.modelData || []) {
-              if (m.blob) {
-                const dataBase64 = await blobToBase64(m.blob);
-                const transform = m.transform || {};
-                modelPayload.push({
-                  fileName: m.fileName || 'model.glb',
-                  dataBase64,
-                  position: toVec3(m.position || transform.position, [0, 0, 0]),
-                  rotation: toVec3(m.rotation || transform.rotation, [0, 0, 0]),
-                  scale: toVec3(m.scale || transform.scale, [1, 1, 1])
-                });
-              }
-            }
-
-            // /api/publish-project を呼び出してモデルファイルをdiskに書き出す
-            const publishData = {
+            const publishBase = {
               id: savedProject.id,
+              name: savedProject.name || 'Untitled',
               type: savedProject.type || arType,
               loadingScreen: savedProject.loadingScreen || null,
               startScreen: savedProject.startScreen || null,
               guideScreen: savedProject.guideScreen || null,
+              theme: savedProject.theme || null,
+              arSettings: savedProject.arSettings || {},
               markerImage: savedProject.markerImage || markerImageData || null,
-              markerPattern: savedProject.markerPattern || markerPattern || null,
-              models: modelPayload
+              markerPattern: savedProject.markerPattern || markerPattern || null
             };
 
-            const serverResponse = await fetch('/api/publish-project', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(publishData)
-            });
+            const publishToLocalServer = async () => {
+              const modelPayload = [];
 
-            if (serverResponse.ok) {
-              const serverResult = await serverResponse.json();
+              const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+
+              const toVec3 = (value, fallback) => {
+                if (Array.isArray(value) && value.length >= 3) return value.slice(0, 3).map((v, i) => { const n = Number(v); return Number.isFinite(n) ? n : fallback[i]; });
+                if (value && typeof value === 'object') { const x = Number(value.x), y = Number(value.y), z = Number(value.z); return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1], Number.isFinite(z) ? z : fallback[2]]; }
+                return [...fallback];
+              };
+
+              for (const m of projectWithModels.modelData || []) {
+                if (m.blob) {
+                  const dataBase64 = await blobToBase64(m.blob);
+                  const transform = m.transform || {};
+                  modelPayload.push({
+                    fileName: m.fileName || 'model.glb',
+                    dataBase64,
+                    position: toVec3(m.position || transform.position, [0, 0, 0]),
+                    rotation: toVec3(m.rotation || transform.rotation, [0, 0, 0]),
+                    scale: toVec3(m.scale || transform.scale, [1, 1, 1])
+                  });
+                }
+              }
+
+              // /api/publish-project を呼び出してモデルファイルをdiskに書き出す
+              const publishData = {
+                ...publishBase,
+                models: modelPayload
+              };
+
+              const serverResponse = await fetch('/api/publish-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(publishData)
+              });
+
+              if (serverResponse.ok) {
+                const serverResult = await serverResponse.json();
+              } else {
+                console.warn('⚠️ QRコード用公開失敗:', serverResponse.statusText);
+              }
+            };
+
+            if (isFirebaseConfigured) {
+              try {
+                const firebaseResult = await publishProjectToFirebase({
+                  ...publishBase,
+                  modelData: projectWithModels.modelData || []
+                });
+
+                if (firebaseResult?.viewerUrl) {
+                  updateProjectPublishInfo(savedProject.id, {
+                    firebase: {
+                      viewerUrl: firebaseResult.viewerUrl,
+                      projectUrl: firebaseResult.projectUrl,
+                      publishedAt: new Date().toISOString()
+                    }
+                  });
+                }
+              } catch (firebaseError) {
+                console.warn('⚠️ Firebase公開失敗、ローカル公開にフォールバック:', firebaseError.message);
+                await publishToLocalServer();
+              }
             } else {
-              console.warn('⚠️ QRコード用公開失敗:', serverResponse.statusText);
+              await publishToLocalServer();
             }
           } catch (apiError) {
             console.warn('⚠️ QRコード用公開API呼び出し失敗:', apiError.message);

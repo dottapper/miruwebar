@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger.js';
 import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
 import { publishProjectToFirebase } from '../firebase/storage.js';
+import { updateProjectPublishInfo } from '../storage/project-store.js';
 
 // UI専用ロガーを作成
 const uiLogger = createLogger('UI');
@@ -524,6 +525,14 @@ export async function showQRCodeModal(options = {}) {
     
     // プロジェクトIDを正確に使用（modelNameにIDが来ている想定）
     const projectId = options.modelName ? decodeURIComponent(options.modelName) : 'sample';
+
+    let storedFirebaseUrl = '';
+    try {
+      const project = await getProject(projectId);
+      storedFirebaseUrl = project?.publishInfo?.firebase?.viewerUrl || '';
+    } catch (error) {
+      uiLogger.warn('⚠️ 公開情報の取得に失敗:', error);
+    }
     
     // ローカルネットワークIPを取得
     const localIP = await getLocalNetworkIP();
@@ -546,7 +555,7 @@ export async function showQRCodeModal(options = {}) {
     let localUrl = localUrlInfo.viewerUrl;
     const appOrigin = window.location.origin;
     // 初期表示用の公開URL（プレースホルダー）。実際の公開先は入力欄で更新
-    const webUrl = `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+    const webUrl = storedFirebaseUrl || `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
     
     uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
@@ -673,11 +682,11 @@ export async function showQRCodeModal(options = {}) {
     const localSettings = modalOverlay.querySelector('#local-settings');
     const webSettings = modalOverlay.querySelector('#web-settings');
     
-    let currentMethod = options.defaultMethod || 'local';
+    let currentMethod = options.defaultMethod || (storedFirebaseUrl ? 'web' : 'local');
     let currentUrl = localUrl;
 
     // Firebase公開済みURL（公開後に設定される）
-    let firebasePublishedUrl = '';
+    let firebasePublishedUrl = storedFirebaseUrl;
 
     async function switchTab(method) {
       currentMethod = method;
@@ -812,6 +821,18 @@ export async function showQRCodeModal(options = {}) {
         currentUrl = firebasePublishedUrl;
         
         uiLogger.log('🔗 更新されたURL:', currentUrl);
+
+        try {
+          updateProjectPublishInfo(projectId, {
+            firebase: {
+              viewerUrl: result.viewerUrl,
+              projectUrl: result.projectUrl,
+              publishedAt: new Date().toISOString()
+            }
+          });
+        } catch (updateError) {
+          uiLogger.warn('⚠️ 公開情報の保存に失敗:', updateError);
+        }
 
         statusEl.textContent = '✅ 公開完了！';
         statusEl.style.background = '#E8F5E9';

@@ -243,6 +243,11 @@ export async function saveProject(data, viewerInstance) {
     
     // プロジェクトデータを作成（モデルを IndexedDB に保存）
     const projectData = await createProjectDataWithIDB(data, viewerInstance);
+
+    const existingProject = projectData.id ? getProject(projectData.id) : null;
+    if (existingProject?.publishInfo) {
+      projectData.publishInfo = existingProject.publishInfo;
+    }
     
     console.log('✅ プロジェクトデータ作成完了:', {
       id: projectData.id,
