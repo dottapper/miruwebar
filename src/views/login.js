@@ -112,14 +112,22 @@ export default async function showLogin(container) {
         body: JSON.stringify({ password }),
       });
 
-      const data = await response.json();
+      let data = {};
+      const text = await response.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (_) {
+          data = { error: `サーバーエラー (${response.status})` };
+        }
+      }
 
       if (response.ok && data.success) {
         logger.success('認証成功');
         window.location.hash = '#/projects';
       } else {
         logger.warn('認証失敗', data.error);
-        showError(data.error || '認証に失敗しました');
+        showError(data.error || `認証に失敗しました (${response.status})`);
       }
     } catch (error) {
       logger.error('認証エラー', error);
