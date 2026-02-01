@@ -5,9 +5,9 @@ import {
   getProject, 
   getProjects, 
   deleteProject,
-  exportProjectBundleById,
   loadProjectModels
 } from '../../src/api/projects.js';
+import { exportProjectBundleById } from '../../src/api/projects-new.js';
 import { testLogger } from '../../src/utils/logger.js';
 import { createMockFile, resetMocks } from '../setup.js';
 

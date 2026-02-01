@@ -2,8 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, loadProjectWithModels } from '../api/projects-new.js'; // 新しいIndexedDB 対応 API をインポート
-import { exportProjectBundleById } from '../api/projects.js'; // エクスポート機能は従来版を使用
+import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects-new.js';
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { settingsAPI } from '../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';

@@ -308,11 +308,11 @@ class ErrorBoundary {
   }
 
   /**
-   * プロジェクトデータの復旧
+   * プロジェクトデータの復旧（project-store と同一のデータソースを使用）
    */
   async recoverProjectData() {
     try {
-      const { getProjects } = await import('../api/projects.js');
+      const { getProjects } = await import('../storage/project-store.js');
       const projects = getProjects();
       
       // プロジェクトデータの基本構造チェック

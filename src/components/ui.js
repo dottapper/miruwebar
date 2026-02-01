@@ -1,8 +1,7 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
-import { getProject, loadProjectWithModels } from '../api/projects-new.js';
-import { exportProjectBundleById } from '../api/projects.js';
+import { getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects-new.js';
 import { settingsAPI } from './loading-screen/settings.js';
 import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';

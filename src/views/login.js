@@ -72,6 +72,14 @@ export default async function showLogin(container) {
   const buttonText = container.querySelector('.login-btn-text');
   const buttonLoading = container.querySelector('.login-btn-loading');
 
+  // 認証チェック失敗（サーバーエラー・ネットワークエラー）でリダイレクトされた場合のメッセージ表示
+  const loginMessage = sessionStorage.getItem('loginMessage');
+  if (loginMessage === 'auth_check_failed') {
+    sessionStorage.removeItem('loginMessage');
+    errorMessage.textContent = '認証の確認に一時的に失敗しました。しばらくしてから再度お試しください。';
+    errorMessage.style.display = 'block';
+  }
+
   // 認証設定をチェック（フォーム表示後に実行）
   try {
     const response = await fetch('/api/auth/check', {

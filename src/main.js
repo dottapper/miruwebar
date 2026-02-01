@@ -162,12 +162,13 @@ async function checkAuthentication(baseHash) {
       return { needsAuth: true };
     }
     
-    // エラー時は認証不要として扱う（開発便宜）
-    return { needsAuth: false };
+    // 非200時は fail-closed: 認証状態を断定できないためログインへ誘導
+    mainLogger.warn('認証チェックが失敗しました（非200）', { status: response.status });
+    return { needsAuth: true, authCheckFailed: true };
   } catch (error) {
-    mainLogger.warn('認証チェックエラー', error);
-    // ネットワークエラー時は認証不要として扱う
-    return { needsAuth: false };
+    mainLogger.warn('認証チェックエラー（ネットワーク等）', error);
+    // ネットワークエラー時も fail-closed: ログインへ誘導
+    return { needsAuth: true, authCheckFailed: true };
   }
 }
 
@@ -193,9 +194,12 @@ async function render() {
     }
     
     // 認証チェック
-    const { needsAuth } = await checkAuthentication(baseHash);
+    const { needsAuth, authCheckFailed } = await checkAuthentication(baseHash);
     if (needsAuth) {
       mainLogger.info('未認証のため認証ページへリダイレクト');
+      if (authCheckFailed) {
+        sessionStorage.setItem('loginMessage', 'auth_check_failed');
+      }
       window.location.hash = '#/login';
       return;
     }

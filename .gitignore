@@ -19,7 +19,6 @@ build/
 # Data and uploads (local development)
 data/
 uploads/projects/*
-!uploads/projects/sample-keep-me/
 
 # Generated project artifacts (published via API)
 public/projects/*
@@ -53,6 +52,9 @@ pids/
 
 # Coverage directory used by tools like istanbul
 coverage/
+
+# Test output / snapshots（誤コミット・リポジトリ肥大化防止）
+test-results/
 
 # Temporary folders
 tmp/

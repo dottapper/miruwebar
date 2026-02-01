@@ -4,6 +4,7 @@
 import { saveModelToIDB, loadModelBlob, loadModelMeta, removeModel } from '../storage/indexeddb-storage.js';
 import { saveProject as saveProjectToLocalList, getProjects, getProject, deleteProject as deleteProjectSettings } from '../storage/project-store.js';
 import { loadGLBFromIDB, createTemporaryObjectURL, revokeModelObjectURL } from '../loader/loadGLBFromIDB.js';
+import { exportProjectBundle } from '../utils/publish.js';
 
 /**
  * モデルデータを IndexedDB に保存し、軽量化されたプロジェクトデータを作成
@@ -392,6 +393,60 @@ export async function deleteProject(id) {
     console.error('❌ プロジェクト削除エラー [IndexedDB版]:', error);
     return false;
   }
+}
+
+/**
+ * プロジェクトの公開用ZIPを生成（project-store を参照し一貫したデータソースを使用）
+ * @param {string} projectId
+ * @returns {Promise<Blob>} ZIP Blob
+ */
+export async function exportProjectBundleById(projectId) {
+  const project = getProject(projectId);
+  if (!project) {
+    throw new Error('プロジェクトが見つかりません');
+  }
+
+  let loadingScreen = project.loadingScreen || {};
+  let startScreen = project.startScreen || null;
+  let guideScreen = project.guideScreen || null;
+
+  try {
+    if ((!loadingScreen.templateSettings || Object.keys(loadingScreen.templateSettings || {}).length === 0) && loadingScreen.selectedScreenId && loadingScreen.selectedScreenId !== 'none') {
+      const { TEMPLATES_STORAGE_KEY } = await import('../components/loading-screen/template-manager.js');
+      const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
+      if (stored) {
+        const templates = JSON.parse(stored);
+        const tpl = templates.find(t => t.id === loadingScreen.selectedScreenId);
+        if (tpl && tpl.settings) {
+          const { startScreen: ts, loadingScreen: tl, guideScreen: tg } = tpl.settings;
+          loadingScreen = { ...loadingScreen, templateSettings: {} };
+          if (tl) loadingScreen.templateSettings.loadingScreen = tl;
+          if (ts && !startScreen) startScreen = ts;
+          if (tg && !guideScreen) guideScreen = tg;
+        }
+      }
+    }
+  } catch (_) {}
+
+  const projectJson = {
+    name: project.name,
+    description: project.description,
+    type: project.type,
+    loadingScreen,
+    startScreen,
+    guideScreen,
+    models: (project.modelSettings || []).map((m) => ({
+      url: `/assets/${m.fileName}`,
+      fileName: m.fileName,
+      fileSize: m.fileSize
+    }))
+  };
+
+  const assetUrls = (project.modelSettings || [])
+    .filter(m => m.fileName)
+    .map(m => `${window.location.origin}/assets/${m.fileName}`);
+
+  return await exportProjectBundle({ project: projectJson, assetUrls });
 }
 
 // 既存 API との互換性のため、従来の関数をエクスポート

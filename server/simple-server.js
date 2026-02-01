@@ -20,6 +20,7 @@ const USE_HTTPS = process.env.USE_HTTPS === 'true' || false; // HTTPS有効化�
 // データストレージ
 const dataDir = path.join(__dirname, '../data');
 const uploadsDir = path.join(__dirname, '../uploads');
+const publicDir = path.join(__dirname, '../public');
 
 // ディレクトリの作成（非同期）
 async function ensureDirectories() {
@@ -625,18 +626,18 @@ async function requestHandler(req, res) {
       }
     }
 
-    // /projects 配下の静的配信（uploads/projects をマッピング）
+    // /projects 配下の静的配信（uploads/projects を優先、なければ public/projects にフォールバック・一本化）
     if (pathname.startsWith('/projects/')) {
       try {
+        const relativePath = pathname.replace(/^\/projects\/?/, '');
         let filePath;
         try {
-          filePath = safeJoin(path.join(uploadsDir, 'projects'), pathname.replace('/projects/', ''));
+          filePath = safeJoin(path.join(uploadsDir, 'projects'), relativePath);
         } catch (e) {
           res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'invalid path' }));
           return;
         }
-        
         if (await fileExists(filePath)) {
           const ext = path.extname(filePath);
           const contentType = mimeTypes[ext] || 'application/octet-stream';
@@ -644,11 +645,22 @@ async function requestHandler(req, res) {
           res.writeHead(200, { 'Content-Type': contentType });
           res.end(data);
           return;
-        } else {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Not found' }));
-          return;
         }
+        try {
+          const fallbackPath = safeJoin(path.join(publicDir, 'projects'), relativePath);
+          if (await fileExists(fallbackPath)) {
+            const ext = path.extname(fallbackPath);
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            const data = await readFile(fallbackPath);
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(data);
+            return;
+          }
+        } catch (_) {
+          // フォールバックパスが無効な場合は 404 のまま
+        }
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
       } catch (error) {
         simpleServerLogger.error('プロジェクトファイル配信エラー', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
