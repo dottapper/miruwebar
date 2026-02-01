@@ -22,9 +22,19 @@ const AR_TYPE_NAMES = {
   'faceswitch': 'FaceSwitch AR'
 };
 
-// デバッグ用：サンプルプロジェクトの作成
+// 初回のみサンプルプロジェクトを作成（初期化フラグで制御）
+const INITIALIZED_KEY = 'miruwebAR_initialized';
+
 function createSampleProjects() {
   const existingProjects = getProjects();
+  const hasInitialized = localStorage.getItem(INITIALIZED_KEY);
+  
+  // 初期化済みの場合は既存プロジェクトをそのまま返す
+  if (hasInitialized) {
+    return existingProjects;
+  }
+  
+  // 初回のみサンプルプロジェクトを作成
   if (existingProjects.length === 0) {
     const now = Date.now();
     const sampleProjects = [
@@ -60,8 +70,12 @@ function createSampleProjects() {
       }
     ];
     localStorage.setItem('miruwebAR_projects', JSON.stringify(sampleProjects));
+    localStorage.setItem(INITIALIZED_KEY, 'true');
     return sampleProjects;
   }
+  
+  // 既存プロジェクトがある場合も初期化済みフラグを設定
+  localStorage.setItem(INITIALIZED_KEY, 'true');
   return existingProjects;
 }
 
