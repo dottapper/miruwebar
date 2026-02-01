@@ -3,8 +3,8 @@
 
 /**
  * 認証ミドルウェアプラグイン
- * - app-auth CookieでセッションをチェックDeveloperError
- * - 認証されていない場合は /auth-login へリダイレクト
+ * - app-auth Cookieでセッションをチェック
+ * - 認証されていない場合はフロントエンドで #/login へリダイレクト
  * - 特定のパスは認証をスキップ
  */
 export function authMiddlewarePlugin() {
@@ -39,12 +39,6 @@ export function authMiddlewarePlugin() {
           '.json',             // JSON
           '.map',              // ソースマップ
         ];
-
-        // ハッシュベースのルーティングをチェック
-        // auth-loginページへのアクセスは許可
-        if (url.includes('#/auth-login')) {
-          return next();
-        }
 
         // スキップパスに該当する場合は認証をスキップ
         const shouldSkip = skipPaths.some(path => 

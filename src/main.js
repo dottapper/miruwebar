@@ -3,7 +3,6 @@
 import './styles/style.css'
 import './styles/editor.css'
 import './styles/login.css';
-import './styles/auth-login.css'; // 認証用ログインページのスタイル
 import './styles/select-ar.css';
 import './styles/marker-upload.css';
 import './styles/version-info.css';
@@ -92,8 +91,7 @@ initializeMigration().catch((error) => {
 
 // 動的インポート用のビュー関数マッパー
 const viewModules = {
-  '#/auth-login': () => import('./views/auth-login.js'), // 認証用ログインページ
-  '#/login': () => import('./views/login.js'),
+  '#/login': () => import('./views/login.js'), // パスワード認証ログインページ
   '#/select-ar': () => import('./views/select-ar.js'),
   '#/projects': () => import('./views/projects.js'),
   '#/editor': () => import('./views/editor.js'),
@@ -138,7 +136,7 @@ let currentCleanup = null;
 // 認証チェック（認証が必要かどうかを判定）
 async function checkAuthentication(baseHash) {
   // 認証をスキップするルート
-  const publicRoutes = ['#/auth-login', '#/viewer'];
+  const publicRoutes = ['#/login', '#/viewer'];
   
   if (publicRoutes.includes(baseHash)) {
     return { needsAuth: false };
@@ -182,12 +180,23 @@ async function render() {
     // 現在のハッシュを取得（認証チェック用に先に取得）
     let hash = window.location.hash || '#/login';
     const [baseHash] = hash.split('?');
+
+    // ハッシュが空の場合はURLを #/login に更新
+    if (!window.location.hash) {
+      window.location.hash = '#/login';
+    }
+
+    // 旧ルート #/auth-login は #/login へリダイレクト
+    if (baseHash === '#/auth-login') {
+      window.location.hash = '#/login';
+      return;
+    }
     
     // 認証チェック
     const { needsAuth } = await checkAuthentication(baseHash);
     if (needsAuth) {
       mainLogger.info('未認証のため認証ページへリダイレクト');
-      window.location.hash = '#/auth-login';
+      window.location.hash = '#/login';
       return;
     }
     
@@ -237,7 +246,9 @@ async function render() {
         
         if (typeof view === 'function') {
           mainLogger.debug('ビュー関数を実行します');
-          currentCleanup = view(app);
+          const result = view(app);
+          // async関数の場合はPromiseを待機
+          currentCleanup = result instanceof Promise ? await result : result;
           mainLogger.success('ビュー表示完了');
         } else {
           mainLogger.error('ビュー関数が見つかりません', { view });

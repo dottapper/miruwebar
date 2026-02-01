@@ -572,7 +572,7 @@ export async function initARViewer(containerId, options = {}) {
       if (animations.length > 0) {
         try {
           const mixer = new THREE.AnimationMixer(model);
-          
+
           const validAnimations = animations.filter(clip => {
             if (!clip) {
               console.warn('⚠️ null/undefinedアニメーションクリップを除外');
@@ -584,17 +584,22 @@ export async function initARViewer(containerId, options = {}) {
             }
             return true;
           });
-          
+
+          // modelDataのアニメーション情報を有効なクリップのみに更新
+          // （検出と再生で同じデータを参照するようにする）
+          modelData.animations = validAnimations;
+          modelData.hasAnimations = validAnimations.length > 0;
+
           if (validAnimations.length === 0) {
             console.warn('⚠️ 有効なアニメーションクリップが見つかりません');
           } else {
             animationMixers.set(model, mixer);
             animationClips.set(model, validAnimations);
-            
+
             // 最初のアニメーションを準備（再生はしない）
             const firstAction = mixer.clipAction(validAnimations[0]);
             animationActions.set(model, [firstAction]);
-            
+
           }
         } catch (error) {
           console.error('❌ アニメーションミキサー初期化エラー:', error);
@@ -602,8 +607,9 @@ export async function initARViewer(containerId, options = {}) {
           console.error('- model:', model);
           console.error('- animations:', animations);
           // アニメーションエラーでもモデル読み込みは継続
+          modelData.animations = [];
+          modelData.hasAnimations = false;
         }
-      } else {
       }
       
       // カメラを適切な位置に調整してからその位置を保存

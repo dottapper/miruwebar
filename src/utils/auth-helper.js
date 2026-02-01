@@ -68,7 +68,7 @@ export async function requireAuth() {
 
   if (!authenticated) {
     logger.info('未認証のため認証ページへリダイレクト');
-    window.location.hash = '#/auth-login';
+    window.location.hash = '#/login';
     return false;
   }
 
@@ -90,7 +90,7 @@ export async function redirectIfAuthenticated() {
 
   if (authenticated) {
     logger.info('認証済みのためメインページへリダイレクト');
-    window.location.hash = '#/login';
+    window.location.hash = '#/projects';
     return false;
   }
 
