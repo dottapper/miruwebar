@@ -2142,6 +2142,22 @@ export function showEditor(container) {
       console.warn('❌ アニメーション再生機能が利用できません');
       return;
     }
+
+    if (viewerInstance?.controls?.getActiveModelIndex && viewerInstance?.controls?.getAllModels) {
+      const activeIndex = viewerInstance.controls.getActiveModelIndex();
+      if (activeIndex < 0) {
+        const models = viewerInstance.controls.getAllModels() || [];
+        if (models.length === 1 && viewerInstance?.controls?.switchToModel) {
+          viewerInstance.controls.switchToModel(0);
+        } else if (models.some(model => model.hasAnimations)) {
+          showNotification('アニメーション付きのモデルを選択してください', 'error');
+          return;
+        } else {
+          showNotification('アニメーションが見つかりません', 'error');
+          return;
+        }
+      }
+    }
     
     const success = viewerInstance.controls.playAnimation(0);
     if (success) {
@@ -2167,6 +2183,19 @@ export function showEditor(container) {
   const updateAnimationInfo = () => {
     if (!viewerInstance?.controls?.hasAnimations || !viewerInstance?.controls?.getAnimationList) {
       return;
+    }
+
+    if (viewerInstance?.controls?.getActiveModelIndex) {
+      const activeIndex = viewerInstance.controls.getActiveModelIndex();
+      if (activeIndex < 0) {
+        if (animationControls) {
+          animationControls.style.display = 'none';
+        }
+        if (animationList) {
+          animationList.innerHTML = '';
+        }
+        return;
+      }
     }
     
     const hasAnims = viewerInstance.controls.hasAnimations();
