@@ -415,6 +415,15 @@ export async function initARViewer(containerId, options = {}) {
     }
 
     try {
+      // アニメーション関連のMapをクリーンアップ
+      const animRoot = modelData._animRoot || modelData.model;
+      if (animationMixers.has(animRoot)) {
+        animationMixers.get(animRoot).stopAllAction();
+        animationMixers.delete(animRoot);
+      }
+      animationClips.delete(animRoot);
+      animationActions.delete(animRoot);
+
       // Object URLを解放
       if (modelData.objectUrl && modelData.objectUrl.startsWith('blob:')) {
         URL.revokeObjectURL(modelData.objectUrl);
@@ -545,17 +554,31 @@ export async function initARViewer(containerId, options = {}) {
       box.setFromObject(model);
       const center = new THREE.Vector3();
       box.getCenter(center);
-      
+
+      // ラッパーGroupを作成：位置調整をラッパーに適用し、
+      // アニメーションがmodel.positionを上書きしても配置位置がずれないようにする
+      const wrapper = new THREE.Group();
+      wrapper.add(model);
+
       if (center && isFinite(center.x) && isFinite(center.y) && isFinite(center.z) &&
           box && box.min && isFinite(box.min.y)) {
-        model.position.sub(center);
-        model.position.y -= box.min.y;
-      } else {
+        // 位置調整とスケールをラッパーに移す
+        wrapper.position.set(-center.x, -center.y - box.min.y, -center.z);
+        wrapper.scale.copy(model.scale);
+        // モデル本体はアイデンティティに戻す（アニメーションの座標空間を保持）
         model.position.set(0, 0, 0);
+        model.scale.set(1, 1, 1);
+      } else {
+        wrapper.scale.copy(model.scale);
+        model.position.set(0, 0, 0);
+        model.scale.set(1, 1, 1);
       }
 
       // IndexedDB対応createModelDataに正しいデータを渡す
-      const modelData = createModelData(model, createdObjectUrl, fileName, fileSize, animations, sourceFile);
+      // modelDataのmodelはwrapperを指す（シーン管理・TransformControls用）
+      const modelData = createModelData(wrapper, createdObjectUrl, fileName, fileSize, animations, sourceFile);
+      // アニメーション用にgltf.sceneへの参照を保持
+      modelData._animRoot = model;
       
       // IndexedDB保存用のBlobを設定
       if (storedModelBlob) {
@@ -564,9 +587,9 @@ export async function initARViewer(containerId, options = {}) {
       
       
       
-      modelData.position.copy(model.position);
-      modelData.rotation.copy(model.rotation);
-      modelData.scale.copy(model.scale);
+      modelData.position.copy(wrapper.position);
+      modelData.rotation.copy(wrapper.rotation);
+      modelData.scale.copy(wrapper.scale);
       
       // アニメーションセットアップ
       if (animations.length > 0) {
@@ -613,14 +636,14 @@ export async function initARViewer(containerId, options = {}) {
       }
       
       // カメラを適切な位置に調整してからその位置を保存
-      adjustCameraToModel(model);  
+      adjustCameraToModel(wrapper);
       modelData.initialCameraPosition = camera.position.clone();
       modelData.initialCameraTarget = controls.target.clone();
-      
+
       modelList.push(modelData);
 
       loadingManager.updateProgress(loaderId, 80, 'モデルを配置中...');
-      scene.add(model);
+      scene.add(wrapper);
       
       // ローディング完了 - 即時非表示
       loadingManager.updateProgress(loaderId, 100, 'モデルの読み込みが完了しました');
@@ -993,8 +1016,13 @@ export async function initARViewer(containerId, options = {}) {
     
     // AnimationMixerを更新
     const delta = clock.getDelta();
-    animationMixers.forEach(mixer => {
+    animationMixers.forEach((mixer, animRoot) => {
       mixer.update(delta);
+      // アニメーションがルートノードの位置を書き換えた場合、元の位置に戻す
+      // （ラッパーGroupで配置位置を管理しているため、内部モデルは固定）
+      if (animRoot._savedPosition) {
+        animRoot.position.copy(animRoot._savedPosition);
+      }
     });
     
     if (container && (lastWidth !== container.clientWidth || lastHeight !== container.clientHeight)) {
@@ -1417,10 +1445,10 @@ export async function initARViewer(containerId, options = {}) {
           console.warn('❌ アクティブなモデルにアニメーションがありません');
           return false;
         }
-        
-        const model = modelData.model;
-        const mixer = animationMixers.get(model);
-        const clips = animationClips.get(model);
+
+        const animRoot = modelData._animRoot || modelData.model;
+        const mixer = animationMixers.get(animRoot);
+        const clips = animationClips.get(animRoot);
         
         
         if (!mixer) {
@@ -1440,7 +1468,7 @@ export async function initARViewer(containerId, options = {}) {
         }
         
         // 現在のアクションを停止
-        const currentActions = animationActions.get(model) || [];
+        const currentActions = animationActions.get(animRoot) || [];
         currentActions.forEach(action => {
           try {
             action.stop();
@@ -1448,15 +1476,18 @@ export async function initARViewer(containerId, options = {}) {
             console.warn('アニメーション停止エラー:', stopError);
           }
         });
-        
+
+        // アニメーション再生前の内部モデル位置を保存（ルートモーション補正用）
+        animRoot._savedPosition = animRoot.position.clone();
+
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
         const newAction = mixer.clipAction(targetClip);
         newAction.reset();
         newAction.setLoop(THREE.LoopRepeat);
         newAction.play();
-        
-        animationActions.set(model, [newAction]);
+
+        animationActions.set(animRoot, [newAction]);
         return true;
         
       } catch (error) {
@@ -1474,8 +1505,8 @@ export async function initARViewer(containerId, options = {}) {
           return false;
         }
         
-        const model = modelData.model;
-        const currentActions = animationActions.get(model) || [];
+        const animRoot = modelData._animRoot || modelData.model;
+        const currentActions = animationActions.get(animRoot) || [];
         currentActions.forEach(action => {
           try {
             action.stop();
@@ -1483,7 +1514,13 @@ export async function initARViewer(containerId, options = {}) {
             console.warn('アニメーション停止エラー:', stopError);
           }
         });
-        
+
+        // アニメーション停止後、内部モデルの位置をリセット
+        if (animRoot._savedPosition) {
+          animRoot.position.copy(animRoot._savedPosition);
+          delete animRoot._savedPosition;
+        }
+
         return true;
       } catch (error) {
         console.error('❌ stopAnimation エラー:', error);
