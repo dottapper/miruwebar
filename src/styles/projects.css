@@ -588,6 +588,39 @@
   color: var(--color-text-primary);
 }
 
+/* 確認ダイアログのボタン（サイズ・縦横比を統一） */
+.confirm-dialog .button-group {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  justify-content: center;
+}
+
+.confirm-dialog .button-group .primary-button,
+.confirm-dialog .button-group .cancel-button {
+  min-width: 120px;
+  padding: 0.8rem 1.5rem;
+  font-size: 0.95rem;
+  flex: 1;
+  max-width: 140px;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.confirm-dialog .button-group .primary-button {
+  background: var(--gradient-primary);
+  color: var(--color-text-primary);
+  border: none;
+  border-radius: var(--border-radius-medium);
+  cursor: pointer;
+  transition: all var(--transition-quick);
+}
+
+.confirm-dialog .button-group .primary-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-small);
+}
+
 /* アニメーション */
 @keyframes fadeIn {
   from { opacity: 0; }
