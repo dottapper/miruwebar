@@ -95,6 +95,55 @@
   letter-spacing: 0.5px;
 }
 
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.login-btn-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 32px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  letter-spacing: 0.3px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.login-btn-google:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.login-btn-google:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.login-google-icon {
+  flex-shrink: 0;
+}
+
+.login-error {
+  color: #FF5252;
+  font-size: 14px;
+  text-align: center;
+}
+
 .login-cta {
   display: flex;
   flex-direction: column;
