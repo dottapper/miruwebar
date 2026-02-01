@@ -4,7 +4,12 @@ import basicSsl from '@vitejs/plugin-basic-ssl';
 import { networkInfoPlugin } from './vite/plugins/networkInfo.js';
 import { projectsStaticPlugin } from './vite/plugins/projectsStatic.js';
 import { projectsApiPlugin } from './vite/plugins/projectsApi.js';
+import { authMiddlewarePlugin } from './vite/plugins/authMiddleware.js';
 import { execSync } from 'child_process';
+import dotenv from 'dotenv';
+
+// 環境変数の読み込み（Viteプラグインで使用するため）
+dotenv.config();
 
 // 開発環境かどうかを判定（Vercelのビルド環境では本番として扱う）
 const isDev = process.env.NODE_ENV !== 'production' && !process.env.VERCEL;
@@ -40,6 +45,7 @@ export default defineConfig({
     ...(isDev ? [basicSsl()] : []),
     // 開発サーバー専用プラグイン（Vercelのビルド時には無効化）
     ...(isDev ? [
+      authMiddlewarePlugin(), // 認証ミドルウェア（最初に配置）
       networkInfoPlugin(),
       projectsStaticPlugin(),
       projectsApiPlugin()

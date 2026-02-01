@@ -1,0 +1,188 @@
+/* src/styles/auth-login.css */
+/* 認証用ログインページのスタイル - auth-login- プレフィックスで他への干渉を防止 */
+@import './common.css';
+
+.auth-login-container {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: 
+    radial-gradient(circle at 30% 20%, rgba(124, 77, 255, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 70% 80%, rgba(0, 188, 212, 0.08) 0%, transparent 50%),
+    linear-gradient(135deg, #0d0d0d 0%, #1a1a1a 100%);
+  padding: 20px;
+}
+
+.auth-login-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 48px 40px;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(124, 77, 255, 0.05);
+}
+
+.auth-login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.auth-login-logo {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 16px;
+  filter: drop-shadow(0 0 20px rgba(124, 77, 255, 0.3));
+}
+
+.auth-login-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, #7c4dff, #00bcd4);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-login-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+}
+
+.auth-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-login-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-login-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.auth-login-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.auth-login-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.auth-login-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #7c4dff);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 4px rgba(124, 77, 255, 0.15);
+}
+
+.auth-login-error {
+  padding: 12px 16px;
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 8px;
+  color: #ff6b6b;
+  font-size: 14px;
+  text-align: center;
+}
+
+.auth-login-button {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary, #7c4dff), var(--color-secondary, #00bcd4));
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(124, 77, 255, 0.3);
+}
+
+.auth-login-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(124, 77, 255, 0.4);
+}
+
+.auth-login-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-login-button-text {
+  display: inline;
+}
+
+.auth-login-button-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-login-spinner {
+  width: 20px;
+  height: 20px;
+  animation: auth-spin 1s linear infinite;
+}
+
+@keyframes auth-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.auth-login-footer {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.auth-login-footer p {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 480px) {
+  .auth-login-card {
+    padding: 36px 24px;
+  }
+
+  .auth-login-logo {
+    width: 64px;
+    height: 64px;
+  }
+
+  .auth-login-title {
+    font-size: 24px;
+  }
+}

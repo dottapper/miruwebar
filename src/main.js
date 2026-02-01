@@ -3,6 +3,7 @@
 import './styles/style.css'
 import './styles/editor.css'
 import './styles/login.css';
+import './styles/auth-login.css'; // 認証用ログインページのスタイル
 import './styles/select-ar.css';
 import './styles/marker-upload.css';
 import './styles/version-info.css';
@@ -91,6 +92,7 @@ initializeMigration().catch((error) => {
 
 // 動的インポート用のビュー関数マッパー
 const viewModules = {
+  '#/auth-login': () => import('./views/auth-login.js'), // 認証用ログインページ
   '#/login': () => import('./views/login.js'),
   '#/select-ar': () => import('./views/select-ar.js'),
   '#/projects': () => import('./views/projects.js'),
@@ -133,11 +135,61 @@ mainLogger.success('アプリケーションコンテナ取得成功', { appId: 
 // 現在のビューのクリーンアップ関数
 let currentCleanup = null;
 
+// 認証チェック（認証が必要かどうかを判定）
+async function checkAuthentication(baseHash) {
+  // 認証をスキップするルート
+  const publicRoutes = ['#/auth-login', '#/viewer'];
+  
+  if (publicRoutes.includes(baseHash)) {
+    return { needsAuth: false };
+  }
+
+  try {
+    const response = await fetch('/api/auth/check', {
+      method: 'GET',
+      credentials: 'same-origin',
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      // authRequired が false なら認証不要（AUTH_SECRET未設定）
+      if (!data.authRequired) {
+        return { needsAuth: false };
+      }
+      // 認証済みなら通過
+      if (data.authenticated) {
+        return { needsAuth: false };
+      }
+      // 未認証
+      return { needsAuth: true };
+    }
+    
+    // エラー時は認証不要として扱う（開発便宜）
+    return { needsAuth: false };
+  } catch (error) {
+    mainLogger.warn('認証チェックエラー', error);
+    // ネットワークエラー時は認証不要として扱う
+    return { needsAuth: false };
+  }
+}
+
 // ルーティング処理
 async function render() {
   mainLogger.debug('render関数開始');
   try {
     mainLogger.debug('ルーティング処理開始');
+
+    // 現在のハッシュを取得（認証チェック用に先に取得）
+    let hash = window.location.hash || '#/login';
+    const [baseHash] = hash.split('?');
+    
+    // 認証チェック
+    const { needsAuth } = await checkAuthentication(baseHash);
+    if (needsAuth) {
+      mainLogger.info('未認証のため認証ページへリダイレクト');
+      window.location.hash = '#/auth-login';
+      return;
+    }
     
     // 現在のビューをクリーンアップ
     if (typeof currentCleanup === 'function') {
@@ -152,8 +204,6 @@ async function render() {
     }
     mainLogger.debug('DOMクリア完了');
 
-    // 現在のハッシュを取得
-    let hash = window.location.hash || '#/login';
     mainLogger.debug('現在のハッシュ', { hash });
     
     // デバッグ用：usage-guideルートの特別確認
@@ -161,8 +211,6 @@ async function render() {
       mainLogger.debug('usage-guideルートが検出されました');
     }
     
-    // ハッシュにクエリパラメータがある場合は分離
-    const [baseHash] = hash.split('?');
     mainLogger.debug('ベースハッシュ', { baseHash });
     
     // 対応するビューモジュールを取得
