@@ -2,7 +2,7 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects-new.js';
+import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects.js';
 import { publishProjectToFirebase } from '../firebase/storage.js';
 import { isFirebaseConfigured } from '../firebase/config.js';
 import { updateProjectPublishInfo } from '../storage/project-store.js';
@@ -10,6 +10,7 @@ import { getLoadingScreenTemplate } from '../components/loading-screen-selector.
 import { settingsAPI } from '../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
+import { security } from '../utils/security-manager.js';
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -1435,8 +1436,8 @@ export function showEditor(container) {
     const fileInfo = document.createElement('div');
     fileInfo.className = 'file-info';
     fileInfo.innerHTML = `
-      <span class="file-name">${modelSetting.fileName}</span>
-      <span class="file-size">${modelSetting.fileSize}MB (復元済み)</span>
+      <span class="file-name">${security.escape(modelSetting.fileName)}</span>
+      <span class="file-size">${security.escape(String(modelSetting.fileSize))}MB (復元済み)</span>
     `;
 
     const fileActions = document.createElement('div');
@@ -1504,8 +1505,8 @@ export function showEditor(container) {
     
     infoItem.innerHTML = `
       <div class="file-info">
-        <div class="file-name" title="${modelSetting.fileName}">${modelSetting.fileName}</div>
-        <div class="file-size">${modelSetting.fileSize}MB (要再アップロード)</div>
+        <div class="file-name" title="${security.escape(modelSetting.fileName)}">${security.escape(modelSetting.fileName)}</div>
+        <div class="file-size">${security.escape(String(modelSetting.fileSize))}MB (要再アップロード)</div>
         <div class="file-status" style="color: #666; font-size: 12px;">
           📁 モデルファイルが必要です
         </div>
@@ -1584,8 +1585,8 @@ export function showEditor(container) {
     const fileInfo = document.createElement('div');
     fileInfo.className = 'file-info';
     fileInfo.innerHTML = `
-      <span class="file-name">${file.name}</span>
-      <span class="file-size">${formatFileSize(file.size)}</span>
+      <span class="file-name">${security.escape(file.name)}</span>
+      <span class="file-size">${security.escape(formatFileSize(file.size))}</span>
     `;
 
     const fileActions = document.createElement('div');
@@ -2210,7 +2211,7 @@ export function showEditor(container) {
     if (hasAnims && animationList) {
       const animations = viewerInstance.controls.getAnimationList();
       animationList.innerHTML = animations.map(anim => 
-        `${anim.name} (${anim.duration.toFixed(1)}s)`
+        `${security.escape(anim.name)} (${anim.duration.toFixed(1)}s)`
       ).join('<br>');
        
       // アニメーション発見の通知
@@ -2555,7 +2556,7 @@ export function showEditor(container) {
           try {
 
             // IndexedDBからモデルBlobを取得
-            const { loadProjectWithModels } = await import('../api/projects-new.js');
+            const { loadProjectWithModels } = await import('../api/projects.js');
             const projectWithModels = await loadProjectWithModels(savedProject);
 
             const publishBase = {

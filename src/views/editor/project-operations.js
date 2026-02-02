@@ -1,6 +1,6 @@
 // src/views/editor/project-operations.js - プロジェクト関連の操作
 
-import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../../api/projects-new.js';
+import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../../api/projects.js';
 import { loadLoadingSettingsToUI, resetAllUI } from './ui-handlers.js';
 import { settingsAPI } from '../../components/loading-screen/settings.js';
 

@@ -5,7 +5,8 @@ const LOG_LEVELS = {
   DEBUG: 0,
   INFO: 1,
   WARN: 2,
-  ERROR: 3
+  ERROR: 3,
+  CRITICAL: 4  // unified-logger互換
 };
 
 const LOG_PREFIXES = {
@@ -14,7 +15,22 @@ const LOG_PREFIXES = {
   WARN: '⚠️',
   ERROR: '❌',
   SUCCESS: '✅',
-  LOADING: '🔄'
+  LOADING: '🔄',
+  CRITICAL: '🚨'
+};
+
+/**
+ * ログカテゴリ（unified-logger互換）
+ */
+const LOG_CATEGORIES = {
+  SYSTEM: 'system',
+  USER: 'user',
+  PERFORMANCE: 'performance',
+  ERROR: 'error',
+  DEBUG: 'debug',
+  NETWORK: 'network',
+  STORAGE: 'storage',
+  RENDERING: 'rendering'
 };
 
 // 環境変数によるログレベル制御
@@ -127,6 +143,32 @@ class Logger {
     return this.log('LOADING', message, data);
   }
 
+  critical(message, data = null) {
+    return this.log('CRITICAL', message, data);
+  }
+
+  // カテゴリ付きログ（unified-logger互換）
+  logWithCategory(level, category, message, data = null) {
+    const categoryPrefix = `[${category.toUpperCase()}]`;
+    return this.log(level, `${categoryPrefix} ${message}`, data);
+  }
+
+  performance(message, data = null) {
+    return this.logWithCategory('INFO', LOG_CATEGORIES.PERFORMANCE, message, data);
+  }
+
+  network(message, data = null) {
+    return this.logWithCategory('INFO', LOG_CATEGORIES.NETWORK, message, data);
+  }
+
+  storage(message, data = null) {
+    return this.logWithCategory('INFO', LOG_CATEGORIES.STORAGE, message, data);
+  }
+
+  rendering(message, data = null) {
+    return this.logWithCategory('INFO', LOG_CATEGORIES.RENDERING, message, data);
+  }
+
   // テスト用メソッド
   getLogs(level = null) {
     if (level) {
@@ -192,4 +234,4 @@ export function createLogger(moduleName, options = {}) {
   });
 }
 
-export { Logger, LOG_LEVELS, LOG_PREFIXES };
+export { Logger, LOG_LEVELS, LOG_PREFIXES, LOG_CATEGORIES };

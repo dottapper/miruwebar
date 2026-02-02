@@ -1,8 +1,9 @@
 // src/views/projects.js
 import { showNewProjectModal, showConfirmDialog } from '../components/ui.js';
-import { getProjects, deleteProject } from '../api/projects-new.js';
+import { getProjects, deleteProject } from '../api/projects.js';
 import { showVersionInfoModal } from '../components/version-info.js';
 import { showLoadingScreenSelector } from '../components/loading-screen-selector.js';
+import { security } from '../utils/security-manager.js';
 import '../styles/projects.css';
 import '../styles/version-info.css'; // バージョン情報モーダル用のスタイル
 
@@ -308,9 +309,9 @@ export default function showProjects(container) {
             </div>
           </div>
           
-          <div class="project-title">${project.name}</div>
+          <div class="project-title">${security.escape(project.name)}</div>
           
-          <div class="project-type">${AR_TYPE_NAMES[project.type] || project.type}</div>
+          <div class="project-type">${security.escape(AR_TYPE_NAMES[project.type] || project.type)}</div>
           
           <div class="project-info">
             <span class="model-count">3Dモデル: ${project.modelCount || project.modelSettings?.length || project.models?.length || 0}個</span>

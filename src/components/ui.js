@@ -1,7 +1,7 @@
 // src/components/ui.js
 
 import { showMarkerUpload } from '../views/marker-upload.js';
-import { getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects-new.js';
+import { getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects.js';
 import { settingsAPI } from './loading-screen/settings.js';
 import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';
@@ -9,6 +9,7 @@ import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
 import { publishProjectToFirebase } from '../firebase/storage.js';
 import { updateProjectPublishInfo } from '../storage/project-store.js';
+import { security } from '../utils/security-manager.js';
 
 // UI専用ロガーを作成
 const uiLogger = createLogger('UI');
@@ -100,7 +101,7 @@ export function showNewProjectModal() {
     
     modalOverlay.innerHTML = `
       <div class="modal-content confirm-dialog">
-        <p>${message}</p>
+        <p>${security.escape(message)}</p>
         <div class="button-group">
           <button id="confirm-yes" class="primary-button">はい</button>
           <button id="confirm-no" class="cancel-button">いいえ</button>
@@ -219,12 +220,12 @@ export function showNewProjectModal() {
             <form id="save-project-form">
                 <div class="form-group">
                     <label for="project-name">プロジェクト名:</label>
-                    <input type="text" id="project-name" value="${currentName}" placeholder="プロジェクト名を入力" required>
+                    <input type="text" id="project-name" value="${security.escapeAttr(currentName)}" placeholder="プロジェクト名を入力" required>
                 </div>
                 
                 <div class="form-group">
                     <label for="project-description">説明（任意）:</label>
-                    <textarea id="project-description" placeholder="プロジェクトの説明を入力">${currentDescription}</textarea>
+                    <textarea id="project-description" placeholder="プロジェクトの説明を入力">${security.escape(currentDescription)}</textarea>
                 </div>
                 
                 <div class="form-actions">
@@ -978,7 +979,7 @@ export async function showQRCodeModal(options = {}) {
                 container.innerHTML = `
                     <div style="color: #D32F2F; text-align: center; padding: 1rem; background: #FFEBEE; border-radius: 4px;">
                         <h3 style="margin: 0 0 0.5rem 0; font-size: 1rem;">QRコード生成失敗</h3>
-                        <p style="margin: 0; font-size: 0.85rem;">${error.message}</p>
+                        <p style="margin: 0; font-size: 0.85rem;">${security.escape(error.message)}</p>
                         <button onclick="location.reload()" style="margin-top: 0.5rem; padding: 0.3rem 0.8rem; background: #D32F2F; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">
                             再読み込み
                         </button>

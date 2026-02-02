@@ -5,7 +5,7 @@
 
 import { getProjects, getProject } from '../storage/project-store.js';
 import { removeModel } from '../storage/indexeddb-storage.js';
-import { exportProjectBundleById } from '../api/projects-new.js';
+import { exportProjectBundleById } from '../api/projects.js';
 import { createLogger } from '../utils/logger.js';
 
 export { exportProjectBundleById };
