@@ -512,6 +512,23 @@ export async function initARViewer(containerId, options = {}) {
       
       // アニメーション情報を取得
       const animations = gltf.animations || [];
+      // 初期姿勢を反映してから配置計算する（初動ジャンプを防ぐ）
+      if (animations.length > 0) {
+        try {
+          const tempMixer = new THREE.AnimationMixer(model);
+          const firstClip = animations[0];
+          if (firstClip) {
+            const tempAction = tempMixer.clipAction(firstClip);
+            tempAction.play();
+            tempMixer.setTime(0);
+            tempMixer.update(0);
+            tempAction.stop();
+            tempMixer.uncacheRoot(model);
+          }
+        } catch (error) {
+          console.warn('⚠️ 初期アニメーション姿勢の適用に失敗:', error);
+        }
+      }
       
       let storedObjectUrl = null;
       if (modelUrl.startsWith('blob:')) {
@@ -1016,31 +1033,8 @@ export async function initARViewer(containerId, options = {}) {
     
     // AnimationMixerを更新
     const delta = clock.getDelta();
-    animationMixers.forEach((mixer, animRoot) => {
+    animationMixers.forEach((mixer) => {
       mixer.update(delta);
-      // アニメーションがルートノードのトランスフォームを書き換えた場合、元に戻す
-      // （ラッパーGroupで配置位置を管理しているため、内部モデルは固定）
-      if (animRoot._savedPosition) {
-        animRoot.position.copy(animRoot._savedPosition);
-      }
-      if (animRoot._savedQuaternion) {
-        animRoot.quaternion.copy(animRoot._savedQuaternion);
-      }
-      if (animRoot._savedScale) {
-        animRoot.scale.copy(animRoot._savedScale);
-      }
-      // バウンディングボックスベースのY軸補正：
-      // ボーン/スケルトンがモデル全体をY軸方向にずらした分を補正する
-      if (animRoot._refBboxMinY !== undefined && animRoot._wrapper) {
-        animRoot._wrapper.updateMatrixWorld(true);
-        const curBbox = new THREE.Box3().setFromObject(animRoot._wrapper);
-        if (isFinite(curBbox.min.y)) {
-          const yDelta = curBbox.min.y - animRoot._refBboxMinY;
-          if (Math.abs(yDelta) > 0.0001) {
-            animRoot.position.y -= yDelta;
-          }
-        }
-      }
     });
     
     if (container && (lastWidth !== container.clientWidth || lastHeight !== container.clientHeight)) {
@@ -1495,21 +1489,6 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
 
-        // アニメーション再生前のトランスフォームを保存（ルートモーション補正用）
-        animRoot._savedPosition = animRoot.position.clone();
-        animRoot._savedQuaternion = animRoot.quaternion.clone();
-        animRoot._savedScale = animRoot.scale.clone();
-
-        // バウンディングボックスベースのY軸補正用：再生前の基準位置を記録
-        // アニメーションがボーン（スケルトン）を動かしてモデル全体がY軸にずれるのを防ぐ
-        const wrapper = modelData.model;
-        wrapper.updateMatrixWorld(true);
-        const refBbox = new THREE.Box3().setFromObject(wrapper);
-        if (isFinite(refBbox.min.y)) {
-          animRoot._refBboxMinY = refBbox.min.y;
-          animRoot._wrapper = wrapper;
-        }
-
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
         const newAction = mixer.clipAction(targetClip);
@@ -1548,23 +1527,6 @@ export async function initARViewer(containerId, options = {}) {
             console.warn('アニメーション停止エラー:', stopError);
           }
         });
-
-        // アニメーション停止後、内部モデルのトランスフォームをリセット
-        if (animRoot._savedPosition) {
-          animRoot.position.copy(animRoot._savedPosition);
-          delete animRoot._savedPosition;
-        }
-        if (animRoot._savedQuaternion) {
-          animRoot.quaternion.copy(animRoot._savedQuaternion);
-          delete animRoot._savedQuaternion;
-        }
-        if (animRoot._savedScale) {
-          animRoot.scale.copy(animRoot._savedScale);
-          delete animRoot._savedScale;
-        }
-        // Y軸補正用データをクリーンアップ
-        delete animRoot._refBboxMinY;
-        delete animRoot._wrapper;
 
         return true;
       } catch (error) {
