@@ -1029,6 +1029,12 @@ export async function initARViewer(containerId, options = {}) {
       if (animRoot._savedScale) {
         animRoot.scale.copy(animRoot._savedScale);
       }
+      // 直接子ノード（Armature等）の位置も復元（ルートモーション補正）
+      if (animRoot._savedChildTransforms) {
+        animRoot._savedChildTransforms.forEach((saved, child) => {
+          child.position.copy(saved.position);
+        });
+      }
     });
     
     if (container && (lastWidth !== container.clientWidth || lastHeight !== container.clientHeight)) {
@@ -1483,10 +1489,21 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
 
-        // アニメーション再生前の内部モデルのトランスフォームを保存（ルートモーション補正用）
+        // アニメーション再生前のトランスフォームを保存（ルートモーション補正用）
+        // animRoot自体のトランスフォーム
         animRoot._savedPosition = animRoot.position.clone();
         animRoot._savedQuaternion = animRoot.quaternion.clone();
         animRoot._savedScale = animRoot.scale.clone();
+        // animRootの直接子ノード（Armature等）の位置も保存
+        // アニメーションがArmatureの位置を変えてモデル全体がずれるのを防ぐ
+        animRoot._savedChildTransforms = new Map();
+        animRoot.children.forEach(child => {
+          animRoot._savedChildTransforms.set(child, {
+            position: child.position.clone(),
+            quaternion: child.quaternion.clone(),
+            scale: child.scale.clone()
+          });
+        });
 
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
@@ -1539,6 +1556,15 @@ export async function initARViewer(containerId, options = {}) {
         if (animRoot._savedScale) {
           animRoot.scale.copy(animRoot._savedScale);
           delete animRoot._savedScale;
+        }
+        // 直接子ノード（Armature等）の位置も復元
+        if (animRoot._savedChildTransforms) {
+          animRoot._savedChildTransforms.forEach((saved, child) => {
+            child.position.copy(saved.position);
+            child.quaternion.copy(saved.quaternion);
+            child.scale.copy(saved.scale);
+          });
+          delete animRoot._savedChildTransforms;
         }
 
         return true;
