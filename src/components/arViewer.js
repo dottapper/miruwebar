@@ -1018,10 +1018,16 @@ export async function initARViewer(containerId, options = {}) {
     const delta = clock.getDelta();
     animationMixers.forEach((mixer, animRoot) => {
       mixer.update(delta);
-      // アニメーションがルートノードの位置を書き換えた場合、元の位置に戻す
+      // アニメーションがルートノードのトランスフォームを書き換えた場合、元に戻す
       // （ラッパーGroupで配置位置を管理しているため、内部モデルは固定）
       if (animRoot._savedPosition) {
         animRoot.position.copy(animRoot._savedPosition);
+      }
+      if (animRoot._savedQuaternion) {
+        animRoot.quaternion.copy(animRoot._savedQuaternion);
+      }
+      if (animRoot._savedScale) {
+        animRoot.scale.copy(animRoot._savedScale);
       }
     });
     
@@ -1477,8 +1483,10 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
 
-        // アニメーション再生前の内部モデル位置を保存（ルートモーション補正用）
+        // アニメーション再生前の内部モデルのトランスフォームを保存（ルートモーション補正用）
         animRoot._savedPosition = animRoot.position.clone();
+        animRoot._savedQuaternion = animRoot.quaternion.clone();
+        animRoot._savedScale = animRoot.scale.clone();
 
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
@@ -1500,11 +1508,15 @@ export async function initARViewer(containerId, options = {}) {
     stopAnimation: () => {
       try {
         const modelData = getActiveModelData();
-        if (!modelData || !modelData.hasAnimations) {
-          console.warn('❌ 停止するアニメーションがありません');
+        if (!modelData) {
+          // モデル未選択時は静かに失敗（ユーザー操作エラーではない）
           return false;
         }
-        
+        if (!modelData.hasAnimations) {
+          // アニメーションなしモデルの場合も静かに失敗
+          return false;
+        }
+
         const animRoot = modelData._animRoot || modelData.model;
         const currentActions = animationActions.get(animRoot) || [];
         currentActions.forEach(action => {
@@ -1515,10 +1527,18 @@ export async function initARViewer(containerId, options = {}) {
           }
         });
 
-        // アニメーション停止後、内部モデルの位置をリセット
+        // アニメーション停止後、内部モデルのトランスフォームをリセット
         if (animRoot._savedPosition) {
           animRoot.position.copy(animRoot._savedPosition);
           delete animRoot._savedPosition;
+        }
+        if (animRoot._savedQuaternion) {
+          animRoot.quaternion.copy(animRoot._savedQuaternion);
+          delete animRoot._savedQuaternion;
+        }
+        if (animRoot._savedScale) {
+          animRoot.scale.copy(animRoot._savedScale);
+          delete animRoot._savedScale;
         }
 
         return true;
