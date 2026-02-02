@@ -1029,11 +1029,17 @@ export async function initARViewer(containerId, options = {}) {
       if (animRoot._savedScale) {
         animRoot.scale.copy(animRoot._savedScale);
       }
-      // 直接子ノード（Armature等）の位置も復元（ルートモーション補正）
-      if (animRoot._savedChildTransforms) {
-        animRoot._savedChildTransforms.forEach((saved, child) => {
-          child.position.copy(saved.position);
-        });
+      // バウンディングボックスベースのY軸補正：
+      // ボーン/スケルトンがモデル全体をY軸方向にずらした分を補正する
+      if (animRoot._refBboxMinY !== undefined && animRoot._wrapper) {
+        animRoot._wrapper.updateMatrixWorld(true);
+        const curBbox = new THREE.Box3().setFromObject(animRoot._wrapper);
+        if (isFinite(curBbox.min.y)) {
+          const yDelta = curBbox.min.y - animRoot._refBboxMinY;
+          if (Math.abs(yDelta) > 0.0001) {
+            animRoot.position.y -= yDelta;
+          }
+        }
       }
     });
     
@@ -1490,20 +1496,19 @@ export async function initARViewer(containerId, options = {}) {
         });
 
         // アニメーション再生前のトランスフォームを保存（ルートモーション補正用）
-        // animRoot自体のトランスフォーム
         animRoot._savedPosition = animRoot.position.clone();
         animRoot._savedQuaternion = animRoot.quaternion.clone();
         animRoot._savedScale = animRoot.scale.clone();
-        // animRootの直接子ノード（Armature等）の位置も保存
-        // アニメーションがArmatureの位置を変えてモデル全体がずれるのを防ぐ
-        animRoot._savedChildTransforms = new Map();
-        animRoot.children.forEach(child => {
-          animRoot._savedChildTransforms.set(child, {
-            position: child.position.clone(),
-            quaternion: child.quaternion.clone(),
-            scale: child.scale.clone()
-          });
-        });
+
+        // バウンディングボックスベースのY軸補正用：再生前の基準位置を記録
+        // アニメーションがボーン（スケルトン）を動かしてモデル全体がY軸にずれるのを防ぐ
+        const wrapper = modelData.model;
+        wrapper.updateMatrixWorld(true);
+        const refBbox = new THREE.Box3().setFromObject(wrapper);
+        if (isFinite(refBbox.min.y)) {
+          animRoot._refBboxMinY = refBbox.min.y;
+          animRoot._wrapper = wrapper;
+        }
 
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
@@ -1557,15 +1562,9 @@ export async function initARViewer(containerId, options = {}) {
           animRoot.scale.copy(animRoot._savedScale);
           delete animRoot._savedScale;
         }
-        // 直接子ノード（Armature等）の位置も復元
-        if (animRoot._savedChildTransforms) {
-          animRoot._savedChildTransforms.forEach((saved, child) => {
-            child.position.copy(saved.position);
-            child.quaternion.copy(saved.quaternion);
-            child.scale.copy(saved.scale);
-          });
-          delete animRoot._savedChildTransforms;
-        }
+        // Y軸補正用データをクリーンアップ
+        delete animRoot._refBboxMinY;
+        delete animRoot._wrapper;
 
         return true;
       } catch (error) {
