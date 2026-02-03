@@ -1087,7 +1087,7 @@ export function setupButtons() {
           };
           
           const savedTemplate = await saveLoadingScreenTemplate(templateData);
-          showNotification(`テンプレート「${savedTemplate.name}」を保存しました`, 'success');
+          showNotification('保存されました', 'success');
           // ストレージ使用量を更新
           updateStorageUsageDisplay();
           
@@ -1117,7 +1117,7 @@ export function setupButtons() {
                 settings: settings
               });
               
-              showNotification(`テンプレート「${template.name}」を更新しました`, 'success');
+              showNotification('保存されました', 'success');
               // ストレージ使用量を更新
               updateStorageUsageDisplay();
               
@@ -1135,14 +1135,14 @@ export function setupButtons() {
             } else {
               // テンプレートが見つからない場合は通常保存
               await settingsAPI.saveSettings(settings);
-              showNotification('設定を保存しました', 'success');
+              showNotification('保存されました', 'success');
               // ストレージ使用量を更新
               updateStorageUsageDisplay();
             }
           } else {
             // 通常の設定保存
             await settingsAPI.saveSettings(settings);
-            showNotification('設定を保存しました', 'success');
+            showNotification('保存されました', 'success');
             // ストレージ使用量を更新
             updateStorageUsageDisplay();
           }
@@ -1500,9 +1500,10 @@ function showSaveConfirmDialog(onNavigate) {
         }
       }
       
-      // 保存完了後に遷移
+      // 保存完了の通知を表示してから遷移
       console.log('💾 保存完了 - プロジェクト一覧に遷移');
       hideDialog();
+      showNotification('保存されました', 'success');
       onNavigate();
       
     } catch (error) {

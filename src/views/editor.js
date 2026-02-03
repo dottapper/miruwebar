@@ -451,28 +451,110 @@ export function showEditor(container) {
     return hasUnsavedChanges;
   }
 
-  // 戻る前の保存確認ダイアログ
+  // 戻る前の保存確認ダイアログ（デザイン済みモーダル・ブラウザ標準 confirm を使わない）
   function showUnsavedChangesDialog() {
     return new Promise((resolve) => {
-      const message = "変更内容が保存されていません。\n\n保存してからプロジェクト一覧に戻りますか？";
-      const result = confirm(message);
-      
-      if (result) {
-        // 「OK」を選択 - 保存してから戻る
+      const existing = document.getElementById('editor-unsaved-dialog-overlay');
+      if (existing) existing.remove();
+
+      const overlayHTML = `
+        <div class="editor-unsaved-dialog-overlay" id="editor-unsaved-dialog-overlay">
+          <div class="editor-unsaved-dialog" id="editor-unsaved-dialog-main">
+            <div class="editor-unsaved-dialog-header">
+              <h3>変更を保存しますか？</h3>
+            </div>
+            <div class="editor-unsaved-dialog-content">
+              <p>変更内容が保存されていません。保存してからプロジェクト一覧に戻りますか？</p>
+            </div>
+            <div class="editor-unsaved-dialog-actions">
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-unsaved-cancel">キャンセル</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-unsaved-discard">保存せずに戻る</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--primary" id="editor-unsaved-save-and-go">保存して戻る</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.insertAdjacentHTML('beforeend', overlayHTML);
+
+      const overlay = document.getElementById('editor-unsaved-dialog-overlay');
+      const mainContent = document.getElementById('editor-unsaved-dialog-main');
+
+      function hideDialog() {
+        overlay.classList.remove('show');
+        setTimeout(() => overlay.remove(), 300);
+      }
+
+      function showDiscardConfirm() {
+        mainContent.innerHTML = `
+          <div class="editor-unsaved-dialog-header">
+            <h3>破棄して戻りますか？</h3>
+          </div>
+          <div class="editor-unsaved-dialog-content">
+            <p>変更内容を破棄してプロジェクト一覧に戻りますか？</p>
+          </div>
+          <div class="editor-unsaved-dialog-actions">
+            <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-discard-no">いいえ</button>
+            <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-discard-yes">はい、戻る</button>
+          </div>
+        `;
+        document.getElementById('editor-discard-no').addEventListener('click', () => {
+          mainContent.innerHTML = `
+            <div class="editor-unsaved-dialog-header">
+              <h3>変更を保存しますか？</h3>
+            </div>
+            <div class="editor-unsaved-dialog-content">
+              <p>変更内容が保存されていません。保存してからプロジェクト一覧に戻りますか？</p>
+            </div>
+            <div class="editor-unsaved-dialog-actions">
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-unsaved-cancel">キャンセル</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-unsaved-discard">保存せずに戻る</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--primary" id="editor-unsaved-save-and-go">保存して戻る</button>
+            </div>
+          `;
+          document.getElementById('editor-unsaved-cancel').addEventListener('click', onCancel);
+          document.getElementById('editor-unsaved-discard').addEventListener('click', onDiscard);
+          document.getElementById('editor-unsaved-save-and-go').addEventListener('click', onSaveAndGo);
+        });
+        document.getElementById('editor-discard-yes').addEventListener('click', () => {
+          hideDialog();
+          resolve(true);
+        });
+      }
+
+      function onCancel() {
+        hideDialog();
+        resolve(false);
+      }
+
+      function onDiscard() {
+        showDiscardConfirm();
+      }
+
+      function onSaveAndGo() {
+        hideDialog();
         handleSaveProject()
-          .then(() => {
-            resolve(true);
-          })
+          .then(() => resolve(true))
           .catch((error) => {
             console.error('保存に失敗しました:', error);
-            alert('保存に失敗しました。もう一度お試しください。');
+            const notification = document.createElement('div');
+            notification.className = 'notification error';
+            notification.style.cssText = 'position:fixed;top:20px;right:20px;background:#f44336;color:white;padding:12px 20px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2);z-index:10001;';
+            notification.textContent = '保存に失敗しました。もう一度お試しください。';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
             resolve(false);
           });
-      } else {
-        // 「キャンセル」を選択 - 保存せずに戻る
-        const confirmDiscard = confirm("変更内容を破棄してプロジェクト一覧に戻りますか？");
-        resolve(confirmDiscard);
       }
+
+      document.getElementById('editor-unsaved-cancel').addEventListener('click', onCancel);
+      document.getElementById('editor-unsaved-discard').addEventListener('click', onDiscard);
+      document.getElementById('editor-unsaved-save-and-go').addEventListener('click', onSaveAndGo);
+
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) onCancel();
+      });
+
+      requestAnimationFrame(() => overlay.classList.add('show'));
     });
   }
 
@@ -779,6 +861,9 @@ export function showEditor(container) {
           }
         }, 200);
       }
+
+      // 読み込み完了後、UIの反映が落ちついてから「保存済み」とみなす（プログラム的な復元で transformChanged / change が飛んでも未保存にしない）
+      setTimeout(() => markAsSaved(), 400);
       
     } catch (error) {
       console.error('プロジェクト読み込みエラー:', error);
@@ -1066,11 +1151,12 @@ export function showEditor(container) {
     
     // ローディング設定のイベントリスナー
     
-    // ローディング画面選択のイベントリスナー
+    // ローディング画面選択のイベントリスナー（ユーザー操作時のみ未保存マーク）
     const loadingScreenSelect = document.getElementById('loading-screen-select');
     if (loadingScreenSelect) {
       loadingScreenSelect.addEventListener('change', (event) => {
         savedSelectedScreenId = event.target.value; // グローバル変数を更新
+        markAsChanged(); // 選択変更を未保存として記録
         updateEditButtonState();
       });
     }

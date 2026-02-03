@@ -526,7 +526,7 @@ describe('QR読み込みとAR表示テスト', () => {
         }
       }
       
-      await page.click('#save-loading-settings');
+      await page.click('[data-testid="save-loading-settings"]');
       await page.waitForSelector('.loading-screen-editor', { hidden: true });
     }
     

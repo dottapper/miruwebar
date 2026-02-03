@@ -595,7 +595,7 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
               <button class="loading-screen-editor__button loading-screen-editor__button--secondary" id="cancel-button">
                 キャンセル
               </button>
-              <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button">
+              <button class="loading-screen-editor__button loading-screen-editor__button--primary" id="save-button" data-testid="save-loading-settings">
                 保存
               </button>
             </div>
