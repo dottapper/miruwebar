@@ -2,7 +2,7 @@
 // 抽象化レイヤー管理システムのテスト
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { abstractionLayerManager, ABSTRACTION_LEVELS, LAYER_PROTOCOLS } from '../../src/architecture/abstraction-layers.js';
+import { AbstractionLayerManager, abstractionLayerManager, ABSTRACTION_LEVELS, LAYER_PROTOCOLS } from '../../src/architecture/abstraction-layers.js';
 
 describe('AbstractionLayerManager', () => {
   let manager;

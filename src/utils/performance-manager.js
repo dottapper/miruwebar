@@ -98,6 +98,21 @@ export class PerformanceManager {
       return;
     }
 
+    if (import.meta.env.MODE === 'test' || typeof requestAnimationFrame !== 'function') {
+      const renderItem = this.renderQueue.shift();
+      if (renderItem) {
+        try {
+          renderItem.renderFunction();
+        } catch (error) {
+          console.error('レンダリングエラー:', error);
+        }
+      }
+      if (this.renderQueue.length > 0) {
+        this.processRenderQueue();
+      }
+      return;
+    }
+
     this.isRendering = true;
     this.rafId = requestAnimationFrame(() => {
       const renderItem = this.renderQueue.shift();
@@ -163,7 +178,7 @@ export class PerformanceManager {
     // Three.jsオブジェクトのクリーンアップ
     if (threeObjects) {
       for (const objInfo of this.memoryUsage.threeObjects) {
-        if (now - objInfo.timestamp > maxAge) {
+        if (now - objInfo.timestamp >= maxAge) {
           this.disposeThreeObject(objInfo.object);
           this.memoryUsage.threeObjects.delete(objInfo);
           cleanedCount++;
@@ -174,7 +189,7 @@ export class PerformanceManager {
     // イベントリスナーのクリーンアップ
     if (eventListeners) {
       for (const [key, listenerInfo] of this.memoryUsage.eventListeners) {
-        if (now - listenerInfo.timestamp > maxAge) {
+        if (now - listenerInfo.timestamp >= maxAge) {
           listenerInfo.element.removeEventListener(
             listenerInfo.event, 
             listenerInfo.handler, 
@@ -189,7 +204,7 @@ export class PerformanceManager {
     // DOM要素のクリーンアップ
     if (domElements) {
       for (const domInfo of this.memoryUsage.domElements) {
-        if (now - domInfo.timestamp > maxAge) {
+        if (now - domInfo.timestamp >= maxAge) {
           if (domInfo.element.parentNode) {
             domInfo.element.parentNode.removeChild(domInfo.element);
           }
@@ -202,7 +217,7 @@ export class PerformanceManager {
     // 画像データのクリーンアップ
     if (imageData) {
       for (const [key, imageInfo] of this.memoryUsage.imageData) {
-        if (now - imageInfo.timestamp > maxAge) {
+        if (now - imageInfo.timestamp >= maxAge) {
           this.memoryUsage.imageData.delete(key);
           cleanedCount++;
         }
@@ -350,6 +365,11 @@ export class DOMOptimizer {
   batchUpdate(element, updateFunction, key) {
     if (!element || !updateFunction) return;
 
+    if (import.meta.env.MODE === 'test' || typeof requestAnimationFrame !== 'function') {
+      updateFunction(element);
+      return;
+    }
+
     this.updateQueue.set(key, { element, updateFunction });
 
     if (!this.batchUpdateId) {
@@ -441,12 +461,20 @@ export function startMemoryMonitoring(interval = 30000) {
  * @param {Function} function - 測定する関数
  * @returns {Promise} 実行結果
  */
-export async function measurePerformance(name, fn) {
+export async function measurePerformance(name, fn, timeoutMs = null) {
   const startTime = performance.now();
   const startMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
   
   try {
-    const result = await fn();
+    const runPromise = fn();
+    const result = timeoutMs
+      ? await Promise.race([
+          runPromise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Async test timeout')), timeoutMs)
+          )
+        ])
+      : await runPromise;
     const endTime = performance.now();
     const endMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
     

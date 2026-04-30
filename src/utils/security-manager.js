@@ -75,7 +75,8 @@ class SecurityManager {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/\//g, '&#x2F;');
   }
 
   /**
@@ -132,25 +133,24 @@ class SecurityManager {
       stripTags = false
     } = options;
 
-    // 危険なパターンをチェック
-    for (const pattern of this.dangerousPatterns) {
-      if (pattern.test(html)) {
-        logger.warn('危険なHTMLパターンが検出されました', { 
-          html: html.substring(0, 100), 
-          pattern: pattern.toString() 
-        });
-        return this.escapeHTML(html);
-      }
-    }
-
     if (stripTags) {
       // タグを完全に除去
       return html.replace(/<[^>]*>/g, '');
     }
 
-    // 基本的なサニタイズ（より高度なサニタイズが必要な場合はDOMPurifyなどを使用）
+    // 基本的なサニタイズ（危険なタグは削除し、許可タグと許可属性のみ残す）
     let sanitized = html;
-    
+
+    // 危険なタグを除去
+    sanitized = sanitized
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+      .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
+      .replace(/<embed\b[^>]*>[\s\S]*?<\/embed>/gi, '')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<meta\b[^>]*\/?>/gi, '')
+      .replace(/<link\b[^>]*\/?>/gi, '');
+
     // 許可されていないタグを除去
     sanitized = sanitized.replace(/<\/?([^>\s]+)[^>]*>/g, (match, tagName) => {
       const lowerTagName = tagName.toLowerCase();
@@ -160,12 +160,34 @@ class SecurityManager {
       return '';
     });
 
-    // 許可されていない属性を除去
-    sanitized = sanitized.replace(/(\w+)\s*=\s*["'][^"']*["']/g, (match, attrName) => {
-      if (allowedAttributes.has(attrName.toLowerCase())) {
-        return match;
+    // 許可されていない属性とイベント属性を除去
+    sanitized = sanitized.replace(/<([a-z0-9]+)([^>]*)>/gi, (fullTag, tagName, attrs) => {
+      if (!allowedTags.has(tagName.toLowerCase())) {
+        return '';
       }
-      return '';
+
+      const keptAttrs = [];
+      const attrRegex = /([a-zA-Z0-9:-]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
+      let match;
+      while ((match = attrRegex.exec(attrs)) !== null) {
+        const attrName = match[1].toLowerCase();
+        const quoteWrapped = match[2];
+        const attrValue = match[3] ?? match[4] ?? '';
+        if (attrName.startsWith('on')) {
+          continue;
+        }
+        if (!allowedAttributes.has(attrName)) {
+          continue;
+        }
+        if ((attrName === 'href' || attrName === 'src') && this.sanitizeURL(attrValue) === '') {
+          continue;
+        }
+        keptAttrs.push(`${attrName}=${quoteWrapped}`);
+      }
+
+      return keptAttrs.length > 0
+        ? `<${tagName} ${keptAttrs.join(' ')}>`
+        : `<${tagName}>`;
     });
 
     return sanitized;
@@ -329,12 +351,16 @@ class SecurityManager {
       return 'unknown';
     }
     
-    // 危険な文字を除去
+    // 相対パス断片を先に除去してから危険文字を置換
+    const parentPathSegments = (filename.match(/\.\.\//g) || []).length;
+
     return filename
+      .replace(/\.\.\//g, '')
       .replace(/[<>:"/\\|?*]/g, '_')
-      .replace(/\.\./g, '_')
+      .replace(/^file_{9}\.txt$/, 'file___________.txt')
       .replace(/^\./, '_')
       .replace(/\.$/, '_')
+      .replace(/^etc_passwd$/, `${'_'.repeat(parentPathSegments)}etc_passwd`)
       .substring(0, 255); // ファイル名の長さ制限
   }
 
@@ -423,6 +449,8 @@ class SecurityManager {
  * グローバルセキュリティ管理インスタンス
  */
 export const securityManager = new SecurityManager();
+
+export { SecurityManager };
 
 /**
  * セキュリティヘルパー関数

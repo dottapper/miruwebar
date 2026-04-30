@@ -80,7 +80,6 @@ class DataIntegrityManager {
         if (repairResult.success) {
           result.repaired = true;
           result.repairedData = repairResult.data;
-          result.isValid = true;
           logger.info(`データを修復しました: ${type}`, { 
             originalErrors: result.errors,
             repairActions: repairResult.actions
@@ -264,6 +263,16 @@ class DataIntegrityManager {
 
       // データのサニタイズ
       repairedData = security.sanitizeData(repairedData);
+
+      // 必須文字列項目は空白埋め後にtrimして既定値に揃える
+      if (schema.required && schema.properties) {
+        schema.required.forEach((field) => {
+          const fieldSchema = schema.properties[field];
+          if (fieldSchema?.type === 'string' && typeof repairedData[field] === 'string') {
+            repairedData[field] = repairedData[field].trim();
+          }
+        });
+      }
 
       result.success = true;
       result.data = repairedData;
@@ -580,6 +589,8 @@ class DataIntegrityManager {
  * グローバルデータ整合性管理インスタンス
  */
 export const dataIntegrityManager = new DataIntegrityManager();
+
+export { DataIntegrityManager };
 
 /**
  * デフォルトスキーマを登録

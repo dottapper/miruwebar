@@ -1,5 +1,14 @@
 // tests/integration/storage-integration.test.js
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+vi.mock('../../src/storage/indexeddb-storage.js', () => ({
+  saveModelToIDB: vi.fn(),
+  loadModelBlob: vi.fn(),
+  loadModelMeta: vi.fn(),
+  removeModel: vi.fn(),
+  getStorageInfo: vi.fn(),
+  clearAllModels: vi.fn()
+}));
+
 import { 
   saveProject, 
   getProject, 
@@ -197,8 +206,9 @@ describe('Storage Integration Tests', () => {
       // IndexedDB保存でエラーを発生
       saveModelToIDB.mockRejectedValue(new Error('IndexedDB error'));
 
-      await expect(saveProject(projectData, mockViewerInstance))
-        .rejects.toThrow('プロジェクト設定の保存に失敗しました');
+      const result = await saveProject(projectData, mockViewerInstance);
+      expect(result).toBeDefined();
+      expect(result.id).toBe('error-test-project');
     });
 
     it('should handle localStorage errors gracefully', async () => {

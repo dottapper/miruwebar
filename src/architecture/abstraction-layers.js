@@ -153,7 +153,7 @@ class AbstractionLayerManager {
   registerLayer(level, config) {
     this.layers.set(level, {
       ...config,
-      level,
+      level: config.level || level,
       registeredAt: Date.now(),
       violations: []
     });
@@ -380,7 +380,7 @@ class AbstractionLayerManager {
    * @returns {number} 距離（-1は無効）
    */
   calculateLayerDistance(fromLayer, toLayer) {
-    const levels = Object.keys(ABSTRACTION_LEVELS);
+    const levels = Object.values(ABSTRACTION_LEVELS);
     const fromIndex = levels.indexOf(fromLayer);
     const toIndex = levels.indexOf(toLayer);
     
@@ -436,6 +436,15 @@ class AbstractionLayerManager {
         });
       }
     });
+
+    // レイヤー横断での高低混在をチェック
+    const layers = Array.from(layerOperations.keys());
+    if (layers.includes(ABSTRACTION_LEVELS.DOM) && layers.includes(ABSTRACTION_LEVELS.SYSTEM)) {
+      violations.push({
+        type: 'cross-layer-abstraction-mix',
+        message: 'DOMレイヤーとSYSTEMレイヤーの操作が混在しています'
+      });
+    }
     
     return {
       consistent: violations.length === 0,
@@ -485,6 +494,10 @@ class AbstractionLayerManager {
    * @returns {boolean} 責任範囲内かどうか
    */
   isOperationInLayerResponsibility(operation, layerInfo) {
+    if (operation.layer && operation.layer === layerInfo.level) {
+      return true;
+    }
+
     // 責任のキーワードマッチング
     const responsibilityKeywords = layerInfo.responsibilities.map(r => 
       r.toLowerCase().split(' ').join('')
@@ -626,34 +639,38 @@ class AbstractionLayerManager {
    */
   generateLayerRecommendations() {
     const recommendations = [];
-    const report = this.generateAbstractionReport();
+    const quality = {
+      consistency: this.calculateConsistencyScore(),
+      separation: this.calculateSeparationScore(),
+      coupling: this.calculateCouplingScore()
+    };
     
-    if (report.quality.consistency < 0.8) {
+    if (quality.consistency < 0.8) {
       recommendations.push({
         type: 'consistency',
         priority: 'high',
         action: 'レイヤー間の一貫性を向上',
-        current: `${(report.quality.consistency * 100).toFixed(1)}%`,
+        current: `${(quality.consistency * 100).toFixed(1)}%`,
         target: '80%'
       });
     }
     
-    if (report.quality.separation < 0.7) {
+    if (quality.separation < 0.7) {
       recommendations.push({
         type: 'separation',
         priority: 'medium',
         action: 'レイヤー間の分離を改善',
-        current: `${(report.quality.separation * 100).toFixed(1)}%`,
+        current: `${(quality.separation * 100).toFixed(1)}%`,
         target: '70%'
       });
     }
     
-    if (report.quality.coupling > 0.5) {
+    if (quality.coupling > 0.5) {
       recommendations.push({
         type: 'coupling',
         priority: 'medium',
         action: 'レイヤー間の結合度を削減',
-        current: `${(report.quality.coupling * 100).toFixed(1)}%`,
+        current: `${(quality.coupling * 100).toFixed(1)}%`,
         target: '50%'
       });
     }
@@ -667,4 +684,7 @@ class AbstractionLayerManager {
  */
 export const abstractionLayerManager = new AbstractionLayerManager();
 
+// 既存利用側との互換性のため再エクスポート
+export { ABSTRACTION_LEVELS };
+export { AbstractionLayerManager };
 export default abstractionLayerManager;

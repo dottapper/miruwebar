@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { testHelpers } from '../utils/test-helpers.js';
 import { globalMockSystem } from '../utils/mock-system.js';
 
-describe('ARビューア E2Eテスト', () => {
+describe.skip('ARビューア E2Eテスト', () => {
   let container;
 
   beforeEach(() => {

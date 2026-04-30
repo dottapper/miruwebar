@@ -14,42 +14,54 @@ global.console = {
 
 // ロガーのモック
 vi.mock('../src/utils/logger.js', () => ({
-  logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    loading: vi.fn(),
-    getLogs: vi.fn(() => []),
-    clearLogs: vi.fn(),
-    getErrors: vi.fn(() => []),
-    findLogs: vi.fn(() => [])
-  },
-  testLogger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    loading: vi.fn(),
-    getLogs: vi.fn(() => []),
-    clearLogs: vi.fn(),
-    getErrors: vi.fn(() => []),
-    findLogs: vi.fn(() => [])
-  },
-  createLogger: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-    loading: vi.fn(),
-    getLogs: vi.fn(() => []),
-    clearLogs: vi.fn(),
-    getErrors: vi.fn(() => []),
-    findLogs: vi.fn(() => [])
-  })),
+  logger: (() => {
+    const logs = [];
+    const push = (level, message, data = null) => logs.push({ level, message, data });
+    return {
+      debug: vi.fn((message, data) => push('DEBUG', message, data)),
+      info: vi.fn((message, data) => push('INFO', message, data)),
+      warn: vi.fn((message, data) => push('WARN', message, data)),
+      error: vi.fn((message, data) => push('ERROR', message, data)),
+      success: vi.fn((message, data) => push('SUCCESS', message, data)),
+      loading: vi.fn((message, data) => push('LOADING', message, data)),
+      getLogs: vi.fn((level = null) => level ? logs.filter((log) => log.level === level) : [...logs]),
+      clearLogs: vi.fn(() => { logs.length = 0; }),
+      getErrors: vi.fn(() => logs.filter((log) => log.level === 'ERROR')),
+      findLogs: vi.fn((pattern) => logs.filter((log) => log.message?.includes(pattern)))
+    };
+  })(),
+  testLogger: (() => {
+    const logs = [];
+    const push = (level, message, data = null) => logs.push({ level, message, data });
+    return {
+      debug: vi.fn((message, data) => push('DEBUG', message, data)),
+      info: vi.fn((message, data) => push('INFO', message, data)),
+      warn: vi.fn((message, data) => push('WARN', message, data)),
+      error: vi.fn((message, data) => push('ERROR', message, data)),
+      success: vi.fn((message, data) => push('SUCCESS', message, data)),
+      loading: vi.fn((message, data) => push('LOADING', message, data)),
+      getLogs: vi.fn((level = null) => level ? logs.filter((log) => log.level === level) : [...logs]),
+      clearLogs: vi.fn(() => { logs.length = 0; }),
+      getErrors: vi.fn(() => logs.filter((log) => log.level === 'ERROR')),
+      findLogs: vi.fn((pattern) => logs.filter((log) => log.message?.includes(pattern)))
+    };
+  })(),
+  createLogger: vi.fn(() => {
+    const logs = [];
+    const push = (level, message, data = null) => logs.push({ level, message, data });
+    return {
+      debug: vi.fn((message, data) => push('DEBUG', message, data)),
+      info: vi.fn((message, data) => push('INFO', message, data)),
+      warn: vi.fn((message, data) => push('WARN', message, data)),
+      error: vi.fn((message, data) => push('ERROR', message, data)),
+      success: vi.fn((message, data) => push('SUCCESS', message, data)),
+      loading: vi.fn((message, data) => push('LOADING', message, data)),
+      getLogs: vi.fn((level = null) => level ? logs.filter((log) => log.level === level) : [...logs]),
+      clearLogs: vi.fn(() => { logs.length = 0; }),
+      getErrors: vi.fn(() => logs.filter((log) => log.level === 'ERROR')),
+      findLogs: vi.fn((pattern) => logs.filter((log) => log.message?.includes(pattern)))
+    };
+  }),
   Logger: vi.fn(),
   LOG_LEVELS: { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 },
   LOG_PREFIXES: { DEBUG: '🐛', INFO: 'ℹ️', WARN: '⚠️', ERROR: '❌', SUCCESS: '✅', LOADING: '🔄' }
@@ -97,14 +109,15 @@ Object.defineProperty(window, 'sessionStorage', {
   writable: true
 });
 
-// URL.createObjectURLのモック
-Object.defineProperty(window, 'URL', {
-  value: {
-    createObjectURL: vi.fn(() => 'blob:mock-url'),
-    revokeObjectURL: vi.fn()
-  },
-  writable: true
-});
+// URL コンストラクタを維持しつつ createObjectURL/revokeObjectURL のみモック
+const OriginalURL = globalThis.URL;
+if (OriginalURL) {
+  OriginalURL.createObjectURL = vi.fn(() => 'blob:mock-url');
+  OriginalURL.revokeObjectURL = vi.fn();
+  Object.defineProperty(window, 'URL', { value: OriginalURL, writable: true });
+  if (typeof global !== 'undefined') Object.defineProperty(global, 'URL', { value: OriginalURL, writable: true });
+  if (globalThis !== window) Object.defineProperty(globalThis, 'URL', { value: OriginalURL, writable: true });
+}
 
 // fetchのモック
 global.fetch = vi.fn();

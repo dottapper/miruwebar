@@ -28,14 +28,29 @@
     "cleanup:projects": "node src/scripts/cleanup-project-duplicates.js"
   },
   "devDependencies": {
-    "@vitejs/plugin-basic-ssl": "^2.1.0",
-    "@vitest/coverage-v8": "^2.1.8",
-    "@vitest/ui": "^2.1.8",
-    "happy-dom": "^14.10.1",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
+    "happy-dom": "^20.9.0",
     "jsdom": "^25.0.1",
-    "puppeteer": "^22.13.1",
-    "vite": "^6.2.0",
-    "vitest": "^2.1.8"
+    "puppeteer": "^24.9.0",
+    "vite": "^7.3.2",
+    "vitest": "^4.1.5"
+  },
+  "overrides": {
+    "rimraf": "^5.0.11",
+    "glob": "^10.4.5",
+    "basic-ftp": "^5.2.3",
+    "protobufjs": "^7.5.5",
+    "axios": "^1.13.2",
+    "follow-redirects": "^1.16.0",
+    "brace-expansion": "^2.0.3",
+    "flatted": "^3.4.2",
+    "postcss": "^8.5.6",
+    "rollup": "^4.59.0",
+    "picomatch": "^4.0.3",
+    "qs": "^6.14.2",
+    "path-to-regexp": "^8.3.0"
   },
   "dependencies": {
     "@ar-js-org/ar.js-threejs": "^0.3.2",
@@ -48,10 +63,10 @@
     "idb-keyval": "^6.2.2",
     "jszip": "^3.10.1",
     "morgan": "^1.10.0",
-    "multer": "^2.0.1",
+    "multer": "^2.1.1",
     "qrcode": "^1.5.4",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^6.0.1",
     "three": "0.165.0",
-    "uuid": "^11.1.0"
+    "uuid": "^14.0.0"
   }
 }

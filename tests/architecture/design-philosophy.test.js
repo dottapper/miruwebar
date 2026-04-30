@@ -2,7 +2,7 @@
 // 設計思想管理システムのテスト
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { designPhilosophyManager, DESIGN_PRINCIPLES, FEATURE_PRIORITY } from '../../src/architecture/design-philosophy.js';
+import { DesignPhilosophyManager, designPhilosophyManager, DESIGN_PRINCIPLES, FEATURE_PRIORITY } from '../../src/architecture/design-philosophy.js';
 
 describe('DesignPhilosophyManager', () => {
   let manager;

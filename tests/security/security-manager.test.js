@@ -2,7 +2,7 @@
 // セキュリティ管理システムのテスト
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { securityManager, security } from '../../src/utils/security-manager.js';
+import { SecurityManager, securityManager, security } from '../../src/utils/security-manager.js';
 
 describe('SecurityManager', () => {
   let securityManager;

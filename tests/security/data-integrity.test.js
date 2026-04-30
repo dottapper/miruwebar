@@ -2,7 +2,7 @@
 // データ整合性管理システムのテスト
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { dataIntegrityManager } from '../../src/utils/data-integrity-manager.js';
+import { DataIntegrityManager, dataIntegrityManager } from '../../src/utils/data-integrity-manager.js';
 
 describe('DataIntegrityManager', () => {
   let manager;

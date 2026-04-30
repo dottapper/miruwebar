@@ -76,7 +76,7 @@ function resolveUrl(url, baseUrl) {
  * @param {string} options.screen - 特定の画面のみ適用（start/loading/guide）
  * @param {string} options.container - コンテナID（デフォルト: #webar-ui）
  */
-export async function applyProjectDesign(project, options = {}) {
+export function applyProjectDesign(project, options = {}) {
   if (!project) {
     console.warn('[APPLY] project is null/undefined');
     return;
@@ -131,21 +131,21 @@ export async function applyProjectDesign(project, options = {}) {
 
   // 特定画面のみ適用
   if (screen) {
-    await applyScreenDesign(screen, project, containerElement);
+    applyScreenDesign(screen, project, containerElement);
     return;
   }
 
   // 全画面適用
   if (startScreen) {
-    await applyScreenDesign('start', project, containerElement);
+    applyScreenDesign('start', project, containerElement);
   }
 
   if (loadingScreen) {
-    await applyScreenDesign('loading', project, containerElement);
+    applyScreenDesign('loading', project, containerElement);
   }
 
   if (guideScreen) {
-    await applyScreenDesign('guide', project, containerElement);
+    applyScreenDesign('guide', project, containerElement);
   }
 
   log('プロジェクトデザイン適用完了');
@@ -157,8 +157,16 @@ export async function applyProjectDesign(project, options = {}) {
  * @param {Object} project - プロジェクトデータ
  * @param {HTMLElement} container - コンテナ要素
  */
-async function applyScreenDesign(screenType, project, container) {
-  const screenElement = container.querySelector(`[data-screen="${screenType}"]`);
+function applyScreenDesign(screenType, project, container) {
+  const legacyIdMap = {
+    start: 'ar-start-screen',
+    loading: 'ar-loading-screen',
+    guide: 'ar-guide-screen'
+  };
+  const screenElement =
+    container.querySelector(`[data-screen="${screenType}"]`) ||
+    container.querySelector(`#${legacyIdMap[screenType]}`) ||
+    document.getElementById(legacyIdMap[screenType]);
   if (!screenElement) {
     console.warn(`[APPLY] data-screen="${screenType}" が見つかりません`);
     return;
@@ -167,13 +175,13 @@ async function applyScreenDesign(screenType, project, container) {
   // 画面タイプに応じて適用
   switch (screenType) {
     case 'start':
-      await applyStartScreen(project.ui?.start, screenElement);
+      applyStartScreen(project.ui?.start, screenElement);
       break;
     case 'loading':
-      await applyLoadingScreen(project.ui?.loading, screenElement);
+      applyLoadingScreen(project.ui?.loading, screenElement);
       break;
     case 'guide':
-      await applyGuideScreen(project.ui?.guide, screenElement);
+      applyGuideScreen(project.ui?.guide, screenElement);
       break;
   }
 
@@ -186,7 +194,7 @@ async function applyScreenDesign(screenType, project, container) {
 /**
  * スタート画面の適用
  */
-async function applyStartScreen(start, screenElement) {
+function applyStartScreen(start, screenElement) {
   if (!start) {
     console.warn('[APPLY] start設定がありません');
     return;
@@ -197,7 +205,7 @@ async function applyStartScreen(start, screenElement) {
   // 画像をプリロード
   if (start.background) {
     try {
-      await preloadImage(start.background);
+      preloadImage(start.background);
     } catch (error) {
       console.warn('[APPLY] 背景画像プリロード失敗:', error);
     }
@@ -331,8 +339,8 @@ async function applyStartScreen(start, screenElement) {
   // ロゴ
   const startLogo = screenElement.querySelector('#ar-start-logo');
   if (startLogo) {
-    if (start.logo) {
-      try { await preloadImage(start.logo); } catch {}
+        if (start.logo) {
+      try { preloadImage(start.logo); } catch {}
       startLogo.src = start.logo;
       startLogo.style.setProperty('display', 'block', 'important');
       if (typeof start.logoPosition === 'number') {
@@ -359,7 +367,7 @@ async function applyStartScreen(start, screenElement) {
 /**
  * ローディング画面の適用
  */
-async function applyLoadingScreen(loading, screenElement) {
+function applyLoadingScreen(loading, screenElement) {
   if (!loading) {
     console.warn('[APPLY] loading設定がありません');
     return;
@@ -370,7 +378,7 @@ async function applyLoadingScreen(loading, screenElement) {
   // 画像をプリロード
   if (loading.background) {
     try {
-      await preloadImage(loading.background);
+      preloadImage(loading.background);
     } catch (error) {
       console.warn('[APPLY] 背景画像プリロード失敗:', error);
     }
@@ -396,7 +404,7 @@ async function applyLoadingScreen(loading, screenElement) {
       imgElement.style.marginBottom = '20px';
       screenElement.appendChild(imgElement);
     }
-    try { await preloadImage(loadingImgSrc); } catch {}
+    try { preloadImage(loadingImgSrc); } catch {}
     imgElement.src = loadingImgSrc;
     imgElement.style.setProperty('display', 'block', 'important');
     log('ローディング画像適用:', loadingImgSrc);
@@ -431,7 +439,7 @@ async function applyLoadingScreen(loading, screenElement) {
 /**
  * ガイド画面の適用
  */
-async function applyGuideScreen(guide, screenElement) {
+function applyGuideScreen(guide, screenElement) {
   if (!guide) {
     console.warn('[APPLY] guide設定がありません');
     return;
@@ -442,7 +450,7 @@ async function applyGuideScreen(guide, screenElement) {
   // 画像をプリロード
   if (guide.background) {
     try {
-      await preloadImage(guide.background);
+      preloadImage(guide.background);
     } catch (error) {
       console.warn('[APPLY] 背景画像プリロード失敗:', error);
     }
@@ -450,7 +458,7 @@ async function applyGuideScreen(guide, screenElement) {
 
   if (guide.markerImage) {
     try {
-      await preloadImage(guide.markerImage);
+      preloadImage(guide.markerImage);
     } catch (error) {
       console.warn('[APPLY] マーカー画像プリロード失敗:', error);
     }
@@ -478,7 +486,7 @@ async function applyGuideScreen(guide, screenElement) {
       markerImg.style.borderRadius = '8px';
       screenElement.appendChild(markerImg);
     }
-    try { await preloadImage(markerSrc); } catch {}
+    try { preloadImage(markerSrc); } catch {}
     markerImg.src = markerSrc;
     markerImg.style.setProperty('display', 'block', 'important');
     log('ガイドマーカー画像適用:', markerSrc);

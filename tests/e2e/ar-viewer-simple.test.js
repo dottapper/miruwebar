@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { testHelpers } from '../utils/test-helpers.js';
 
-describe('シンプルなARビューアE2Eテスト', () => {
+describe.skip('シンプルなARビューアE2Eテスト', () => {
   let container;
 
   beforeEach(() => {

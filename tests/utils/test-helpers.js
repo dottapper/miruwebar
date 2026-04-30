@@ -2,6 +2,7 @@
 // テスト用のユーティリティとヘルパー関数
 
 import { vi } from 'vitest';
+import { URL as NodeURL } from 'node:url';
 
 /**
  * DOM操作のテスト用ヘルパー
@@ -29,6 +30,10 @@ export class DOMTestHelper {
     global.document = dom.window.document;
     global.window = dom.window;
     global.navigator = dom.window.navigator;
+    // JSDOM の window に Node の URL コンストラクタを設定（ar-viewer 等の new URL() 用）
+    dom.window.URL = NodeURL;
+    if (typeof global !== 'undefined') global.URL = NodeURL;
+    if (typeof globalThis !== 'undefined') globalThis.URL = NodeURL;
 
     // テスト用のコンテナを作成
     this.container = document.createElement('div');

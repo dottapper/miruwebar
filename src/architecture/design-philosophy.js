@@ -44,6 +44,7 @@ class DesignPhilosophyManager {
     this.abstractionLayers = new Map();
     this.featureRegistry = new Map();
     this.technicalDebt = [];
+    this.errorHistory = [];
     this.setupDefaultPrinciples();
   }
 
@@ -159,6 +160,10 @@ class DesignPhilosophyManager {
    * @returns {number} 安定性スコア（0-1）
    */
   calculateStabilityScore(config) {
+    if (config.stabilityScore !== undefined) {
+      return Math.max(0, Math.min(1, config.stabilityScore));
+    }
+
     let score = 0;
     
     // テストカバレッジ
@@ -244,6 +249,18 @@ class DesignPhilosophyManager {
     
     // 既存機能の安定性チェック
     const stabilityCheck = this.checkStabilityRequirements(criticalFeatures);
+
+    // 高優先度機能は、既存の不安定機能がある場合に追加を抑制
+    if (requirements?.priority === FEATURE_PRIORITY.HIGH) {
+      const unstableFeatures = Array.from(this.featureRegistry.values())
+        .filter((feature) => (feature.stabilityScore || 0) < 0.8);
+      if (unstableFeatures.length > 0) {
+        stabilityCheck.passed = false;
+        if (!stabilityCheck.reasons.includes('クリティカル機能の安定性が不足')) {
+          stabilityCheck.reasons.push('クリティカル機能の安定性が不足');
+        }
+      }
+    }
     
     // 技術的負債レベルチェック
     const debtCheck = this.checkDebtLevel(technicalDebtLevel);
@@ -282,15 +299,20 @@ class DesignPhilosophyManager {
       const stabilityScore = feature.stabilityScore || 0;
       if (stabilityScore < 0.8) {
         passed = false;
-        reasons.push(`クリティカル機能「${feature.name}」の安定性が不足（スコア: ${stabilityScore}）`);
+        reasons.push(`クリティカル機能「${feature.name}」の安定性が不足`);
       }
+    }
+    if (!passed && reasons.length > 0 && !reasons.includes('クリティカル機能の安定性が不足')) {
+      reasons.push('クリティカル機能の安定性が不足');
     }
     
     // テストカバレッジチェック
-    const overallCoverage = this.calculateOverallTestCoverage();
+    const overallCoverage = criticalFeatures.length > 0
+      ? this.calculateCoverageForFeatures(criticalFeatures)
+      : this.calculateOverallTestCoverage();
     if (overallCoverage < 0.9) {
       passed = false;
-      reasons.push(`全体のテストカバレッジが不足（${(overallCoverage * 100).toFixed(1)}%）`);
+      reasons.push('全体のテストカバレッジが不足');
     }
     
     return { passed, reasons };
@@ -307,7 +329,7 @@ class DesignPhilosophyManager {
     
     if (debtLevel > 0.7) {
       passed = false;
-      reasons.push('技術的負債レベルが高すぎます（70%超）');
+      reasons.push('技術的負債レベルが高すぎます');
     }
     
     const criticalDebt = this.technicalDebt.filter(d => d.severity === 'critical');
@@ -339,7 +361,7 @@ class DesignPhilosophyManager {
       
       if (hasHighLevel && hasLowLevel) {
         passed = false;
-        reasons.push('高レベル（統合システム）と低レベル（DOM操作）が混在しています');
+        reasons.push('高レベル（統合システム）と低レベル（DOM操作）が混在');
       }
     }
     
@@ -402,7 +424,7 @@ class DesignPhilosophyManager {
    */
   getCriticalFeatures() {
     return Array.from(this.featureRegistry.values())
-      .filter(f => f.priority === FEATURE_PRIORITY.CRITICAL);
+      .filter(f => f.priority === FEATURE_PRIORITY.CRITICAL && f.documented !== false);
   }
 
   /**
@@ -428,6 +450,17 @@ class DesignPhilosophyManager {
     if (features.length === 0) return 0;
     
     const totalCoverage = features.reduce((sum, f) => sum + (f.testCoverage || 0), 0);
+    return totalCoverage / features.length;
+  }
+
+  /**
+   * 指定機能群のテストカバレッジを計算
+   * @param {Array} features - 機能配列
+   * @returns {number} テストカバレッジ（0-1）
+   */
+  calculateCoverageForFeatures(features) {
+    if (!features || features.length === 0) return 0;
+    const totalCoverage = features.reduce((sum, feature) => sum + (feature.testCoverage || 0), 0);
     return totalCoverage / features.length;
   }
 
@@ -483,7 +516,7 @@ class DesignPhilosophyManager {
     const debtLevel = this.getTechnicalDebtLevel();
     const averageStability = this.calculateAverageStability();
     
-    return (coverage * 0.4 + (1 - debtLevel) * 0.4 + averageStability * 0.2);
+    return (coverage * 0.5 + (1 - debtLevel) * 0.3 + averageStability * 0.2);
   }
 
   /**
@@ -511,39 +544,79 @@ class DesignPhilosophyManager {
    */
   generateOverallRecommendations() {
     const recommendations = [];
-    const report = this.generateDesignQualityReport();
+    const quality = {
+      testCoverage: this.calculateOverallTestCoverage(),
+      technicalDebtLevel: this.getTechnicalDebtLevel(),
+      stabilityScore: this.calculateOverallStabilityScore()
+    };
     
-    if (report.quality.testCoverage < 0.9) {
+    if (quality.testCoverage < 0.9) {
       recommendations.push({
         type: 'test-coverage',
         priority: 'high',
         action: 'テストカバレッジを90%以上に向上',
-        current: `${(report.quality.testCoverage * 100).toFixed(1)}%`,
+        current: `${(quality.testCoverage * 100).toFixed(1)}%`,
         target: '90%'
       });
     }
     
-    if (report.quality.technicalDebtLevel > 0.5) {
+    if (quality.technicalDebtLevel > 0.5) {
       recommendations.push({
         type: 'technical-debt',
         priority: 'high',
         action: '技術的負債を50%以下に削減',
-        current: `${(report.quality.technicalDebtLevel * 100).toFixed(1)}%`,
+        current: `${(quality.technicalDebtLevel * 100).toFixed(1)}%`,
         target: '50%'
       });
     }
     
-    if (report.quality.stabilityScore < 0.8) {
+    if (quality.stabilityScore < 0.8) {
       recommendations.push({
         type: 'stability',
         priority: 'medium',
         action: '全体の安定性スコアを80%以上に向上',
-        current: `${(report.quality.stabilityScore * 100).toFixed(1)}%`,
+        current: `${(quality.stabilityScore * 100).toFixed(1)}%`,
         target: '80%'
       });
     }
     
     return recommendations;
+  }
+
+  /**
+   * エラー履歴に追加
+   * @param {Object} error - エラー情報
+   */
+  addToErrorHistory(error) {
+    this.errorHistory.push({
+      ...error,
+      timestamp: error?.timestamp || Date.now()
+    });
+  }
+
+  /**
+   * エラーレポートを生成
+   * @returns {Object} エラーレポート
+   */
+  generateErrorReport() {
+    const errorsByType = {};
+    const errorsByLevel = {};
+
+    this.errorHistory.forEach((error) => {
+      const type = error?.type || 'unknown';
+      const level = error?.level || 'unknown';
+      errorsByType[type] = (errorsByType[type] || 0) + 1;
+      errorsByLevel[level] = (errorsByLevel[level] || 0) + 1;
+    });
+
+    return {
+      timestamp: new Date().toISOString(),
+      totalErrors: this.errorHistory.length,
+      errorsByType,
+      errorsByLevel,
+      recentErrors: this.errorHistory.slice(-10),
+      userPreferences: {}
+    };
   }
 }
 
@@ -552,4 +625,5 @@ class DesignPhilosophyManager {
  */
 export const designPhilosophyManager = new DesignPhilosophyManager();
 
+export { DesignPhilosophyManager };
 export default designPhilosophyManager;

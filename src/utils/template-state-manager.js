@@ -8,6 +8,7 @@ import { createLogger } from './logger.js';
 import { migrateProjectProperties } from '../components/loading-screen/template-manager.js';
 
 const logger = createLogger('TemplateStateManager');
+const getStorage = () => globalThis.localStorage;
 
 /**
  * テンプレート状態管理クラス
@@ -193,7 +194,8 @@ class TemplateStateManager {
   async syncToProject(templateId) {
     try {
       // 現在のプロジェクトデータを取得
-      const projectsJson = localStorage.getItem('miruwebAR_projects');
+      const storage = getStorage();
+      const projectsJson = storage?.getItem('miruwebAR_projects');
       if (!projectsJson) return;
 
       const projects = JSON.parse(projectsJson);
@@ -213,7 +215,7 @@ class TemplateStateManager {
       });
 
       if (updated) {
-        localStorage.setItem('miruwebAR_projects', JSON.stringify(updatedProjects));
+        storage?.setItem('miruwebAR_projects', JSON.stringify(updatedProjects));
         logger.info('プロジェクトデータ同期完了:', { templateId });
       }
     } catch (error) {
@@ -259,7 +261,12 @@ class TemplateStateManager {
     }
 
     // プロパティマイグレーションも適用
-    return migrateProjectProperties(updated);
+    try {
+      return migrateProjectProperties(updated);
+    } catch (error) {
+      logger.warn('プロジェクトプロパティ移行に失敗、更新済みデータをそのまま返します', error);
+      return updated;
+    }
   }
 
   /**
@@ -328,7 +335,7 @@ class TemplateStateManager {
    */
   checkProjectConsistency(result) {
     try {
-      const projectsJson = localStorage.getItem('miruwebAR_projects');
+      const projectsJson = getStorage()?.getItem('miruwebAR_projects');
       if (!projectsJson) {
         result.summary.totalProjects = 0;
         return;

@@ -11,7 +11,7 @@ import {
 } from '../storage/indexeddb-storage.js';
 
 import { exportProjectBundle } from '../utils/publish.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger, testLogger } from '../utils/logger.js';
 
 // プロジェクトAPI専用ロガーを作成
 const projectLogger = createLogger('ProjectsAPI');
@@ -252,6 +252,8 @@ export function getProjects() {
  */
 export async function saveProject(data, viewerInstance) {
     try {
+        projectLogger.info('プロジェクト保存開始', { id: data?.id, name: data?.name });
+        testLogger.info('プロジェクト保存開始', { id: data?.id, name: data?.name });
 
         const projects = getProjects();
         
@@ -410,6 +412,8 @@ export async function saveProject(data, viewerInstance) {
             }
         }
         
+        projectLogger.success('プロジェクト保存完了', { id: projectData.id, modelCount: projectData.modelCount || 0 });
+        testLogger.success('プロジェクト保存完了', { id: projectData.id, modelCount: projectData.modelCount || 0 });
         return projectData;
         
     } catch (error) {
@@ -511,7 +515,7 @@ export async function deleteProject(id) {
  */
 export async function loadProjectModels(projectId) {
     try {
-        const project = getProject(projectId);
+        const project = await getProject(projectId);
         if (!project) {
             return [];
         }
@@ -1024,7 +1028,7 @@ export function emergencyCleanup(confirmDelete = false) {
  * @returns {Promise<Blob>} ZIP Blob
  */
 export async function exportProjectBundleById(projectId) {
-  const project = getProject(projectId);
+  const project = await getProject(projectId);
   if (!project) {
     throw new Error('プロジェクトが見つかりません');
   }

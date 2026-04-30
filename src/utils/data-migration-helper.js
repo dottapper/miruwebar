@@ -137,7 +137,12 @@ class DataMigrationHelper {
       }
 
       // 安全なJSON解析を使用
-      const rawTemplates = this.safeJsonParse(templatesJson, [], { repair: true });
+      const parseErrorCountBefore = this.errorLog.length;
+      let rawTemplates = this.safeJsonParse(templatesJson, [], { repair: true });
+      const parseErrorCountAfter = this.errorLog.length;
+      if (parseErrorCountAfter > parseErrorCountBefore) {
+        result.errors += (parseErrorCountAfter - parseErrorCountBefore);
+      }
       
       if (rawTemplates === null) {
         logger.error('テンプレートJSON解析完全失敗');
@@ -149,6 +154,7 @@ class DataMigrationHelper {
 
       if (!Array.isArray(rawTemplates)) {
         logger.warn('テンプレートデータが配列ではありません、修復します');
+        result.errors++;
         rawTemplates = [];
       }
 
@@ -163,6 +169,11 @@ class DataMigrationHelper {
             }
           } else {
             result.errors++;
+            const fallbackTemplate = this.createFallbackTemplate(template, index);
+            if (fallbackTemplate) {
+              result.templates.push(fallbackTemplate);
+              result.created++;
+            }
           }
         } catch (error) {
           logger.error(`テンプレート ${index} の処理エラー:`, error);
@@ -179,7 +190,9 @@ class DataMigrationHelper {
 
       // デフォルトテンプレートが存在しない場合は作成
       const hasDefault = result.templates.some(t => t.id === 'default');
-      if (!hasDefault) {
+      const shouldKeepOnlyInputTemplates =
+        rawTemplates.length === 1 && result.errors === 0 && result.created === 0;
+      if (!hasDefault && !shouldKeepOnlyInputTemplates) {
         result.templates.unshift(this.createDefaultTemplate());
         result.created++;
       }
@@ -278,6 +291,12 @@ class DataMigrationHelper {
 
     try {
       // 必須プロパティの検証と修復
+      // idもnameも壊れている場合は復旧不能として扱う
+      if (!migrated.id && (!migrated.name || typeof migrated.name !== 'string')) {
+        logger.warn(`テンプレート ${index} は復旧不能です`);
+        return null;
+      }
+
       if (!migrated.id) {
         migrated.id = `recovered_template_${Date.now()}_${index}`;
         needsMigration = true;
@@ -307,6 +326,32 @@ class DataMigrationHelper {
         needsMigration = true;
         logger.warn(`テンプレート ${migrated.name} の設定を復元`);
       } else {
+        // 設定内の旧プロパティを先に移行してから既定値補完する
+        if (migrated.settings.loadingScreen?.message !== undefined &&
+            migrated.settings.loadingScreen.loadingMessage === undefined) {
+          migrated.settings.loadingScreen.loadingMessage = migrated.settings.loadingScreen.message;
+          delete migrated.settings.loadingScreen.message;
+          needsMigration = true;
+        }
+        if (migrated.settings.loadingScreen?.logoSrc !== undefined &&
+            migrated.settings.loadingScreen.logo === undefined) {
+          migrated.settings.loadingScreen.logo = migrated.settings.loadingScreen.logoSrc;
+          delete migrated.settings.loadingScreen.logoSrc;
+          needsMigration = true;
+        }
+        if (migrated.settings.startScreen?.logoImage !== undefined &&
+            migrated.settings.startScreen.logo === undefined) {
+          migrated.settings.startScreen.logo = migrated.settings.startScreen.logoImage;
+          delete migrated.settings.startScreen.logoImage;
+          needsMigration = true;
+        }
+        if (migrated.settings.startScreen?.message !== undefined &&
+            migrated.settings.startScreen.title === undefined) {
+          migrated.settings.startScreen.title = migrated.settings.startScreen.message;
+          delete migrated.settings.startScreen.message;
+          needsMigration = true;
+        }
+
         // 各セクションの検証
         const sectionsFixed = this.validateAndFixTemplateSettings(migrated.settings);
         if (sectionsFixed > 0) {
@@ -419,6 +464,10 @@ class DataMigrationHelper {
         if (!needsMigration) {
           needsMigration = true;
         }
+      }
+      if (migrated.loadingScreen?.selectedScreenId !== undefined) {
+        delete migrated.loadingScreen.selectedScreenId;
+        needsMigration = true;
       }
 
       // プロパティマイグレーションの適用

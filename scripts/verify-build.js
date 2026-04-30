@@ -64,8 +64,8 @@ if (fs.existsSync(assetsDir)) {
     
     // ファイル名パターンの検証
     console.log('\n🔍 ファイル名パターンの検証:');
-    // Viteの実際の出力パターンに合わせて修正（大文字小文字数字を含む8文字以上）
-    const hashPattern = /\.[A-Za-z0-9]{8,}\./;
+    // Vite 6 の出力パターン（ハッシュに - _ を含む base64url 形式）
+    const hashPattern = /\.[A-Za-z0-9_-]{8,}\./;
     
     for (const asset of assets) {
       if (hashPattern.test(asset)) {

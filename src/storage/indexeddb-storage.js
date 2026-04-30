@@ -1,7 +1,7 @@
 // src/storage/indexeddb-storage.js
 // IndexedDB を使った 3D モデルデータの保存・取得
 import { get, set, del, keys } from 'idb-keyval';
-import { createLogger } from '../utils/logger.js';
+import { createLogger, testLogger } from '../utils/logger.js';
 
 // ストレージ専用ロガーを作成
 const storageLogger = createLogger('Storage');
@@ -24,6 +24,7 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
       dataSize: data?.size || data?.byteLength || 0,
       meta
     });
+    testLogger.loading('IndexedDB へモデル保存開始', { modelId });
 
     // データを Blob に変換（ArrayBuffer の場合）
     let blobData = data;
@@ -55,6 +56,7 @@ export async function saveModelToIDB(modelId, data, meta = {}) {
       sizeKB: Math.round(blobData.size / 1024),
       sizeMB: Math.round(blobData.size / 1024 / 1024 * 100) / 100
     });
+    testLogger.success('IndexedDB モデル保存完了', { modelId });
 
     return modelId;
   } catch (error) {
