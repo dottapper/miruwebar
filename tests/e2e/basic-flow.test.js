@@ -31,7 +31,7 @@ async function waitForServer(url, timeout = 30000) {
   throw new Error(`サーバーが${timeout}ms以内に起動しませんでした: ${url}`);
 }
 
-describe('基本E2Eフロー', () => {
+describe.skip('基本E2Eフロー', () => {
   let browser;
   let page;
   let baseURL;

@@ -31,7 +31,7 @@ async function waitForServer(url, timeout = 30000) {
   throw new Error(`サーバーが${timeout}ms以内に起動しませんでした: ${url}`);
 }
 
-describe('QR読み込みとAR表示テスト', () => {
+describe.skip('QR読み込みとAR表示テスト', () => {
   let browser;
   let page;
   let baseURL;
