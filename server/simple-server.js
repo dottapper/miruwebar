@@ -4,7 +4,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
+import dotenv from 'dotenv';
 import { createLogger } from './utils/logger.js';
+
+// 環境変数の読み込み
+dotenv.config();
 
 // ES Modules対応
 const __filename = fileURLToPath(import.meta.url);
@@ -16,6 +20,7 @@ const USE_HTTPS = process.env.USE_HTTPS === 'true' || false; // HTTPS有効化�
 // データストレージ
 const dataDir = path.join(__dirname, '../data');
 const uploadsDir = path.join(__dirname, '../uploads');
+const publicDir = path.join(__dirname, '../public');
 
 // ディレクトリの作成（非同期）
 async function ensureDirectories() {
@@ -132,6 +137,22 @@ function parsePostData(req) {
   });
 }
 
+// Cookie文字列をパースしてオブジェクトに変換
+function parseCookies(cookieString) {
+  const cookies = {};
+  if (!cookieString) return cookies;
+
+  cookieString.split(';').forEach(cookie => {
+    const [name, ...rest] = cookie.split('=');
+    const value = rest.join('=');
+    if (name && value) {
+      cookies[name.trim()] = decodeURIComponent(value.trim());
+    }
+  });
+
+  return cookies;
+}
+
 // ファイルアップロード処理（簡易版）
 function parseMultipartData(req) {
   return new Promise((resolve, reject) => {
@@ -224,6 +245,77 @@ async function requestHandler(req, res) {
       }));
       return;
     }
+
+    // ========== 認証API ==========
+    
+    // 認証状態チェック: GET /api/auth/check
+    if (pathname === '/api/auth/check' && req.method === 'GET') {
+      const cookies = parseCookies(req.headers.cookie || '');
+      const authToken = cookies['app-auth'];
+      const authSecret = process.env.AUTH_SECRET;
+
+      // AUTH_SECRETが設定されていない場合は認証不要
+      if (!authSecret) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ authenticated: true, authRequired: false }));
+        return;
+      }
+
+      const authenticated = authToken === authSecret;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ authenticated, authRequired: true }));
+      return;
+    }
+
+    // ログイン: POST /api/auth/login
+    if (pathname === '/api/auth/login' && req.method === 'POST') {
+      try {
+        const body = await parsePostData(req);
+        const { password } = body;
+        const authPassword = process.env.AUTH_PASSWORD;
+        const authSecret = process.env.AUTH_SECRET;
+
+        if (!authPassword || !authSecret) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: '認証設定が不完全です' }));
+          return;
+        }
+
+        if (password === authPassword) {
+          // 認証成功
+          const maxAge = 7 * 24 * 60 * 60; // 7日間
+          res.writeHead(200, { 
+            'Content-Type': 'application/json',
+            'Set-Cookie': `app-auth=${authSecret}; HttpOnly; SameSite=Lax; Max-Age=${maxAge}; Path=/`
+          });
+          res.end(JSON.stringify({ success: true }));
+          simpleServerLogger.success('認証成功');
+        } else {
+          // 認証失敗
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'パスワードが間違っています' }));
+          simpleServerLogger.warn('認証失敗: パスワードが一致しません');
+        }
+      } catch (error) {
+        simpleServerLogger.error('ログインエラー', error);
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'リクエストの解析に失敗しました' }));
+      }
+      return;
+    }
+
+    // ログアウト: POST /api/auth/logout
+    if (pathname === '/api/auth/logout' && req.method === 'POST') {
+      res.writeHead(200, { 
+        'Content-Type': 'application/json',
+        'Set-Cookie': 'app-auth=; HttpOnly; SameSite=Lax; Max-Age=0; Path=/'
+      });
+      res.end(JSON.stringify({ success: true }));
+      simpleServerLogger.info('ログアウト');
+      return;
+    }
+
+    // ========== 認証API ここまで ==========
     
     // プロジェクト一覧取得
     if (pathname === '/api/projects' && req.method === 'GET') {
@@ -534,18 +626,18 @@ async function requestHandler(req, res) {
       }
     }
 
-    // /projects 配下の静的配信（uploads/projects をマッピング）
+    // /projects 配下の静的配信（uploads/projects を優先、なければ public/projects にフォールバック・一本化）
     if (pathname.startsWith('/projects/')) {
       try {
+        const relativePath = pathname.replace(/^\/projects\/?/, '');
         let filePath;
         try {
-          filePath = safeJoin(path.join(uploadsDir, 'projects'), pathname.replace('/projects/', ''));
+          filePath = safeJoin(path.join(uploadsDir, 'projects'), relativePath);
         } catch (e) {
           res.writeHead(e.status || 400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'invalid path' }));
           return;
         }
-        
         if (await fileExists(filePath)) {
           const ext = path.extname(filePath);
           const contentType = mimeTypes[ext] || 'application/octet-stream';
@@ -553,11 +645,22 @@ async function requestHandler(req, res) {
           res.writeHead(200, { 'Content-Type': contentType });
           res.end(data);
           return;
-        } else {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Not found' }));
-          return;
         }
+        try {
+          const fallbackPath = safeJoin(path.join(publicDir, 'projects'), relativePath);
+          if (await fileExists(fallbackPath)) {
+            const ext = path.extname(fallbackPath);
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            const data = await readFile(fallbackPath);
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(data);
+            return;
+          }
+        } catch (_) {
+          // フォールバックパスが無効な場合は 404 のまま
+        }
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Not found' }));
       } catch (error) {
         simpleServerLogger.error('プロジェクトファイル配信エラー', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });

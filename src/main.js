@@ -24,9 +24,6 @@ import { logger, createLogger } from './utils/logger.js';
 // IndexedDB マイグレーション機能をインポート
 import { initializeMigration } from './storage/migrate.js';
 
-// Firebase認証
-import { onAuthChange, getCurrentUser } from './firebase/auth.js';
-
 // メインロガーを作成
 const mainLogger = createLogger('Main');
 
@@ -94,7 +91,7 @@ initializeMigration().catch((error) => {
 
 // 動的インポート用のビュー関数マッパー
 const viewModules = {
-  '#/login': () => import('./views/login.js'),
+  '#/login': () => import('./views/login.js'), // パスワード認証ログインページ
   '#/select-ar': () => import('./views/select-ar.js'),
   '#/projects': () => import('./views/projects.js'),
   '#/editor': () => import('./views/editor.js'),
@@ -136,11 +133,76 @@ mainLogger.success('アプリケーションコンテナ取得成功', { appId: 
 // 現在のビューのクリーンアップ関数
 let currentCleanup = null;
 
+// 認証チェック（認証が必要かどうかを判定）
+async function checkAuthentication(baseHash) {
+  // 認証をスキップするルート
+  const publicRoutes = ['#/login', '#/viewer'];
+  
+  if (publicRoutes.includes(baseHash)) {
+    return { needsAuth: false };
+  }
+
+  try {
+    const response = await fetch('/api/auth/check', {
+      method: 'GET',
+      credentials: 'same-origin',
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      // authRequired が false なら認証不要（AUTH_SECRET未設定）
+      if (!data.authRequired) {
+        return { needsAuth: false };
+      }
+      // 認証済みなら通過
+      if (data.authenticated) {
+        return { needsAuth: false };
+      }
+      // 未認証
+      return { needsAuth: true };
+    }
+    
+    // 非200時は fail-closed: 認証状態を断定できないためログインへ誘導
+    mainLogger.warn('認証チェックが失敗しました（非200）', { status: response.status });
+    return { needsAuth: true, authCheckFailed: true };
+  } catch (error) {
+    mainLogger.warn('認証チェックエラー（ネットワーク等）', error);
+    // ネットワークエラー時も fail-closed: ログインへ誘導
+    return { needsAuth: true, authCheckFailed: true };
+  }
+}
+
 // ルーティング処理
 async function render() {
   mainLogger.debug('render関数開始');
   try {
     mainLogger.debug('ルーティング処理開始');
+
+    // 現在のハッシュを取得（認証チェック用に先に取得）
+    let hash = window.location.hash || '#/login';
+    const [baseHash] = hash.split('?');
+
+    // ハッシュが空の場合はURLを #/login に更新
+    if (!window.location.hash) {
+      window.location.hash = '#/login';
+    }
+
+    // 旧ルート #/auth-login は #/login へリダイレクト
+    if (baseHash === '#/auth-login') {
+      window.location.hash = '#/login';
+      return;
+    }
+    
+    // 認証チェック
+    const { needsAuth, authCheckFailed } = await checkAuthentication(baseHash);
+    if (needsAuth) {
+      mainLogger.info('未認証のため認証ページへリダイレクト');
+      if (authCheckFailed) {
+        sessionStorage.setItem('loginMessage', 'auth_check_failed');
+      }
+      window.location.hash = '#/login';
+      return;
+    }
     
     // 現在のビューをクリーンアップ
     if (typeof currentCleanup === 'function') {
@@ -155,26 +217,13 @@ async function render() {
     }
     mainLogger.debug('DOMクリア完了');
 
-    // 現在のハッシュを取得
-    let hash = window.location.hash || '#/login';
     mainLogger.debug('現在のハッシュ', { hash });
-
-    // 認証ガード: ログインとビューア以外は認証必須
-    const publicRoutes = ['#/login', '#/viewer'];
-    const baseForAuth = hash.split('?')[0];
-    if (!publicRoutes.includes(baseForAuth) && !getCurrentUser()) {
-      mainLogger.warn('未認証のアクセス。ログイン画面にリダイレクトします');
-      window.location.hash = '#/login';
-      return;
-    }
     
     // デバッグ用：usage-guideルートの特別確認
     if (hash === '#/usage-guide') {
       mainLogger.debug('usage-guideルートが検出されました');
     }
     
-    // ハッシュにクエリパラメータがある場合は分離
-    const [baseHash] = hash.split('?');
     mainLogger.debug('ベースハッシュ', { baseHash });
     
     // 対応するビューモジュールを取得
@@ -201,7 +250,9 @@ async function render() {
         
         if (typeof view === 'function') {
           mainLogger.debug('ビュー関数を実行します');
-          currentCleanup = view(app);
+          const result = view(app);
+          // async関数の場合はPromiseを待機
+          currentCleanup = result instanceof Promise ? await result : result;
           mainLogger.success('ビュー表示完了');
         } else {
           mainLogger.error('ビュー関数が見つかりません', { view });
@@ -290,10 +341,10 @@ window.addEventListener('hashchange', () => {
   });
 });
 
-// Firebase認証状態の監視 → 初期表示
-onAuthChange((user) => {
-  mainLogger.info('認証状態変更', { loggedIn: !!user });
-  render().catch((error) => {
-    mainLogger.error('認証状態変更後のレンダリングエラー', error);
-  });
+// 初期表示
+mainLogger.info('初期表示開始');
+render().then(() => {
+  mainLogger.success('初期表示完了');
+}).catch((error) => {
+  mainLogger.error('初期表示エラー', error);
 });

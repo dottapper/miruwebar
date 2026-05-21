@@ -45,10 +45,7 @@ miruwebar/
 │   │   ├── ar-viewer.js
 │   │   ├── diag.js
 │   │   ├── editor.js
-│   │   ├── editor-backup.js
-│   │   ├── editor.js.backup
 │   │   ├── login.js
-│   │   ├── login-backup.js
 │   │   ├── loading-screen-editor.js
 │   │   ├── marker-upload.js
 │   │   ├── projects.js
@@ -160,10 +157,8 @@ miruwebar/
 │   │   ├── error-experience.css
 │   │   ├── loading-screen.css
 │   │   ├── loading-screen-editor.css
-│   │   ├── loading-screen-editor.css.bak
 │   │   ├── loading-screen-selector.css
 │   │   ├── login.css
-│   │   ├── login-backup.css
 │   │   ├── marker-upload.css
 │   │   ├── projects.css
 │   │   ├── qr-code.css
@@ -300,21 +295,14 @@ miruwebar/
 │   ├── webxr-ar.js
 │   └── _tests_2025-10-05/
 │
-├── backup/ （バックアップ）
-│   └── usage-guide-original/
-│       ├── usage-guide.css
-│       └── usage-guide.js
-│
 ├── data/ （データファイル）
 │   └── projects.json
 │
 ├── uploads/ （アップロードファイル）
 │   └── projects/
 │
-├── ssl/ （SSL証明書）
-│   ├── server.crt
-│   ├── server.key
-│   └── ssl/
+├── ssl/ （HTTPSは .vite/ssl/ を参照。本フォルダは README のみ）
+│   └── README.md
 │
 ├── test-results/ （テスト結果）
 │   └── assets/
@@ -362,10 +350,7 @@ miruwebar/
 ./src/views/ar-viewer.js
 ./src/views/diag.js
 ./src/views/editor.js
-./src/views/editor-backup.js
-./src/views/editor.js.backup
 ./src/views/login.js
-./src/views/login-backup.js
 ./src/views/loading-screen-editor.js
 ./src/views/marker-upload.js
 ./src/views/projects.js
@@ -468,10 +453,8 @@ miruwebar/
 ./src/styles/error-experience.css
 ./src/styles/loading-screen.css
 ./src/styles/loading-screen-editor.css
-./src/styles/loading-screen-editor.css.bak
 ./src/styles/loading-screen-selector.css
 ./src/styles/login.css
-./src/styles/login-backup.css
 ./src/styles/marker-upload.css
 ./src/styles/projects.css
 ./src/styles/qr-code.css
@@ -603,8 +586,6 @@ miruwebar/
 
 ### その他
 ```
-./backup/usage-guide-original/usage-guide.css
-./backup/usage-guide-original/usage-guide.js
 ./data/projects.json
 ./src/main.js
 ./src/counter.js
@@ -627,11 +608,7 @@ miruwebar/
 ./src/docs/security-guidelines.md
 ./src/auto-save-test.js
 ./src/test-auto-restart.js
-./uploads/projects/sample-keep-me/project.json
-./ssl/server.crt
-./ssl/server.key
-./ssl/ssl/server.crt
-./ssl/ssl/server.key
+./ssl/README.md
 ```
 
 

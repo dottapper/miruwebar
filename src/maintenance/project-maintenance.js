@@ -5,8 +5,10 @@
 
 import { getProjects, getProject } from '../storage/project-store.js';
 import { removeModel } from '../storage/indexeddb-storage.js';
-import { exportProjectBundle } from '../utils/publish.js';
+import { exportProjectBundleById } from '../api/projects.js';
 import { createLogger } from '../utils/logger.js';
+
+export { exportProjectBundleById };
 
 const projectLogger = createLogger('ProjectMaintenance');
 
@@ -49,41 +51,6 @@ export async function deleteProject(id) {
         console.error('❌ プロジェクト削除エラー:', error);
         return false;
     }
-}
-
-/**
- * プロジェクトの公開用ZIPエクスポート
- * @param {string} projectId - プロジェクトID
- * @returns {Promise<Blob>} ZIP Blob
- */
-export async function exportProjectBundleById(projectId) {
-    const project = getProject(projectId);
-    if (!project) {
-        throw new Error('プロジェクトが見つかりません');
-    }
-    
-    // project.jsonの組み立て（viewer用の簡易形式）
-    const projectJson = {
-        name: project.name,
-        description: project.description,
-        type: project.type,
-        loadingScreen: project.loadingScreen,
-        startScreen: project.startScreen || null,
-        guideScreen: project.guideScreen || null,
-        // viewer側ではURLで読み込むため、assets配列を生成（IndexedDBは同梱対象外）
-        models: (project.modelSettings || []).map((m) => ({
-            url: `/assets/${m.fileName}`,
-            fileName: m.fileName,
-            fileSize: m.fileSize
-        }))
-    };
-
-    // 同梱対象のアセットURL（ローカルのpublic/assetsから取得を想定）
-    const assetUrls = (project.modelSettings || [])
-        .filter(m => m.fileName)
-        .map(m => `${window.location.origin}/assets/${m.fileName}`);
-
-    return await exportProjectBundle({ project: projectJson, assetUrls });
 }
 
 /**

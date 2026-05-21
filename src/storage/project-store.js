@@ -261,6 +261,10 @@ function createLightweightProject(projectData) {
     base.markerPattern = projectData.markerPattern;
   }
 
+  if (projectData.publishInfo && typeof projectData.publishInfo === 'object') {
+    base.publishInfo = JSON.parse(JSON.stringify(projectData.publishInfo));
+  }
+
   return base;
 }
 
@@ -316,6 +320,44 @@ function createLightweightModelSettings(model) {
 export function getProject(id) {
   const projects = getProjects();
   return projects.find(p => p.id === id) || null;
+}
+
+/**
+ * プロジェクトの公開情報を更新
+ * @param {string} id - プロジェクトID
+ * @param {Object} publishInfo - 公開情報
+ * @returns {boolean} 更新成功の場合 true
+ */
+export function updateProjectPublishInfo(id, publishInfo) {
+  try {
+    const projects = getProjects();
+    const index = projects.findIndex(p => p.id === id);
+
+    if (index < 0) {
+      console.warn('⚠️ 公開情報の更新対象が見つかりません:', id);
+      return false;
+    }
+
+    const current = projects[index] || {};
+    const nextPublishInfo = {
+      ...(current.publishInfo || {}),
+      ...(publishInfo || {})
+    };
+
+    projects[index] = {
+      ...current,
+      publishInfo: nextPublishInfo,
+      updated: Date.now()
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    console.log('✅ プロジェクト公開情報を更新:', id);
+    return true;
+  } catch (error) {
+    console.error('❌ 公開情報の更新エラー:', error);
+    return false;
+  }
 }
 
 /**

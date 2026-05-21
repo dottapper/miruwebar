@@ -1,8 +1,9 @@
 // src/views/projects.js
 import { showNewProjectModal, showConfirmDialog } from '../components/ui.js';
-import { getProjects, deleteProject } from '../api/projects-new.js';
+import { getProjects, deleteProject } from '../api/projects.js';
 import { showVersionInfoModal } from '../components/version-info.js';
 import { showLoadingScreenSelector } from '../components/loading-screen-selector.js';
+import { security } from '../utils/security-manager.js';
 import '../styles/projects.css';
 import '../styles/version-info.css'; // バージョン情報モーダル用のスタイル
 
@@ -22,9 +23,19 @@ const AR_TYPE_NAMES = {
   'faceswitch': 'FaceSwitch AR'
 };
 
-// デバッグ用：サンプルプロジェクトの作成
+// 初回のみサンプルプロジェクトを作成（初期化フラグで制御）
+const INITIALIZED_KEY = 'miruwebAR_initialized';
+
 function createSampleProjects() {
   const existingProjects = getProjects();
+  const hasInitialized = localStorage.getItem(INITIALIZED_KEY);
+  
+  // 初期化済みの場合は既存プロジェクトをそのまま返す
+  if (hasInitialized) {
+    return existingProjects;
+  }
+  
+  // 初回のみサンプルプロジェクトを作成
   if (existingProjects.length === 0) {
     const now = Date.now();
     const sampleProjects = [
@@ -60,8 +71,12 @@ function createSampleProjects() {
       }
     ];
     localStorage.setItem('miruwebAR_projects', JSON.stringify(sampleProjects));
+    localStorage.setItem(INITIALIZED_KEY, 'true');
     return sampleProjects;
   }
+  
+  // 既存プロジェクトがある場合も初期化済みフラグを設定
+  localStorage.setItem(INITIALIZED_KEY, 'true');
   return existingProjects;
 }
 
@@ -294,9 +309,9 @@ export default function showProjects(container) {
             </div>
           </div>
           
-          <div class="project-title">${project.name}</div>
+          <div class="project-title">${security.escape(project.name)}</div>
           
-          <div class="project-type">${AR_TYPE_NAMES[project.type] || project.type}</div>
+          <div class="project-type">${security.escape(AR_TYPE_NAMES[project.type] || project.type)}</div>
           
           <div class="project-info">
             <span class="model-count">3Dモデル: ${project.modelCount || project.modelSettings?.length || project.models?.length || 0}個</span>

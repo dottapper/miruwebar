@@ -415,6 +415,15 @@ export async function initARViewer(containerId, options = {}) {
     }
 
     try {
+      // アニメーション関連のMapをクリーンアップ
+      const animRoot = modelData._animRoot || modelData.model;
+      if (animationMixers.has(animRoot)) {
+        animationMixers.get(animRoot).stopAllAction();
+        animationMixers.delete(animRoot);
+      }
+      animationClips.delete(animRoot);
+      animationActions.delete(animRoot);
+
       // Object URLを解放
       if (modelData.objectUrl && modelData.objectUrl.startsWith('blob:')) {
         URL.revokeObjectURL(modelData.objectUrl);
@@ -503,6 +512,23 @@ export async function initARViewer(containerId, options = {}) {
       
       // アニメーション情報を取得
       const animations = gltf.animations || [];
+      // 初期姿勢を反映してから配置計算する（初動ジャンプを防ぐ）
+      if (animations.length > 0) {
+        try {
+          const tempMixer = new THREE.AnimationMixer(model);
+          const firstClip = animations[0];
+          if (firstClip) {
+            const tempAction = tempMixer.clipAction(firstClip);
+            tempAction.play();
+            tempMixer.setTime(0);
+            tempMixer.update(0);
+            tempAction.stop();
+            tempMixer.uncacheRoot(model);
+          }
+        } catch (error) {
+          console.warn('⚠️ 初期アニメーション姿勢の適用に失敗:', error);
+        }
+      }
       
       let storedObjectUrl = null;
       if (modelUrl.startsWith('blob:')) {
@@ -545,17 +571,31 @@ export async function initARViewer(containerId, options = {}) {
       box.setFromObject(model);
       const center = new THREE.Vector3();
       box.getCenter(center);
-      
+
+      // ラッパーGroupを作成：位置調整をラッパーに適用し、
+      // アニメーションがmodel.positionを上書きしても配置位置がずれないようにする
+      const wrapper = new THREE.Group();
+      wrapper.add(model);
+
       if (center && isFinite(center.x) && isFinite(center.y) && isFinite(center.z) &&
           box && box.min && isFinite(box.min.y)) {
-        model.position.sub(center);
-        model.position.y -= box.min.y;
-      } else {
+        // 位置調整とスケールをラッパーに移す
+        wrapper.position.set(-center.x, -center.y - box.min.y, -center.z);
+        wrapper.scale.copy(model.scale);
+        // モデル本体はアイデンティティに戻す（アニメーションの座標空間を保持）
         model.position.set(0, 0, 0);
+        model.scale.set(1, 1, 1);
+      } else {
+        wrapper.scale.copy(model.scale);
+        model.position.set(0, 0, 0);
+        model.scale.set(1, 1, 1);
       }
 
       // IndexedDB対応createModelDataに正しいデータを渡す
-      const modelData = createModelData(model, createdObjectUrl, fileName, fileSize, animations, sourceFile);
+      // modelDataのmodelはwrapperを指す（シーン管理・TransformControls用）
+      const modelData = createModelData(wrapper, createdObjectUrl, fileName, fileSize, animations, sourceFile);
+      // アニメーション用にgltf.sceneへの参照を保持
+      modelData._animRoot = model;
       
       // IndexedDB保存用のBlobを設定
       if (storedModelBlob) {
@@ -564,15 +604,15 @@ export async function initARViewer(containerId, options = {}) {
       
       
       
-      modelData.position.copy(model.position);
-      modelData.rotation.copy(model.rotation);
-      modelData.scale.copy(model.scale);
+      modelData.position.copy(wrapper.position);
+      modelData.rotation.copy(wrapper.rotation);
+      modelData.scale.copy(wrapper.scale);
       
       // アニメーションセットアップ
       if (animations.length > 0) {
         try {
           const mixer = new THREE.AnimationMixer(model);
-          
+
           const validAnimations = animations.filter(clip => {
             if (!clip) {
               console.warn('⚠️ null/undefinedアニメーションクリップを除外');
@@ -584,17 +624,22 @@ export async function initARViewer(containerId, options = {}) {
             }
             return true;
           });
-          
+
+          // modelDataのアニメーション情報を有効なクリップのみに更新
+          // （検出と再生で同じデータを参照するようにする）
+          modelData.animations = validAnimations;
+          modelData.hasAnimations = validAnimations.length > 0;
+
           if (validAnimations.length === 0) {
             console.warn('⚠️ 有効なアニメーションクリップが見つかりません');
           } else {
             animationMixers.set(model, mixer);
             animationClips.set(model, validAnimations);
-            
+
             // 最初のアニメーションを準備（再生はしない）
             const firstAction = mixer.clipAction(validAnimations[0]);
             animationActions.set(model, [firstAction]);
-            
+
           }
         } catch (error) {
           console.error('❌ アニメーションミキサー初期化エラー:', error);
@@ -602,19 +647,20 @@ export async function initARViewer(containerId, options = {}) {
           console.error('- model:', model);
           console.error('- animations:', animations);
           // アニメーションエラーでもモデル読み込みは継続
+          modelData.animations = [];
+          modelData.hasAnimations = false;
         }
-      } else {
       }
       
       // カメラを適切な位置に調整してからその位置を保存
-      adjustCameraToModel(model);  
+      adjustCameraToModel(wrapper);
       modelData.initialCameraPosition = camera.position.clone();
       modelData.initialCameraTarget = controls.target.clone();
-      
+
       modelList.push(modelData);
 
       loadingManager.updateProgress(loaderId, 80, 'モデルを配置中...');
-      scene.add(model);
+      scene.add(wrapper);
       
       // ローディング完了 - 即時非表示
       loadingManager.updateProgress(loaderId, 100, 'モデルの読み込みが完了しました');
@@ -987,7 +1033,7 @@ export async function initARViewer(containerId, options = {}) {
     
     // AnimationMixerを更新
     const delta = clock.getDelta();
-    animationMixers.forEach(mixer => {
+    animationMixers.forEach((mixer) => {
       mixer.update(delta);
     });
     
@@ -1411,10 +1457,10 @@ export async function initARViewer(containerId, options = {}) {
           console.warn('❌ アクティブなモデルにアニメーションがありません');
           return false;
         }
-        
-        const model = modelData.model;
-        const mixer = animationMixers.get(model);
-        const clips = animationClips.get(model);
+
+        const animRoot = modelData._animRoot || modelData.model;
+        const mixer = animationMixers.get(animRoot);
+        const clips = animationClips.get(animRoot);
         
         
         if (!mixer) {
@@ -1434,7 +1480,7 @@ export async function initARViewer(containerId, options = {}) {
         }
         
         // 現在のアクションを停止
-        const currentActions = animationActions.get(model) || [];
+        const currentActions = animationActions.get(animRoot) || [];
         currentActions.forEach(action => {
           try {
             action.stop();
@@ -1442,15 +1488,15 @@ export async function initARViewer(containerId, options = {}) {
             console.warn('アニメーション停止エラー:', stopError);
           }
         });
-        
+
         // 新しいアクションを開始
         const targetClip = clips[animationIndex];
         const newAction = mixer.clipAction(targetClip);
         newAction.reset();
         newAction.setLoop(THREE.LoopRepeat);
         newAction.play();
-        
-        animationActions.set(model, [newAction]);
+
+        animationActions.set(animRoot, [newAction]);
         return true;
         
       } catch (error) {
@@ -1463,13 +1509,17 @@ export async function initARViewer(containerId, options = {}) {
     stopAnimation: () => {
       try {
         const modelData = getActiveModelData();
-        if (!modelData || !modelData.hasAnimations) {
-          console.warn('❌ 停止するアニメーションがありません');
+        if (!modelData) {
+          // モデル未選択時は静かに失敗（ユーザー操作エラーではない）
           return false;
         }
-        
-        const model = modelData.model;
-        const currentActions = animationActions.get(model) || [];
+        if (!modelData.hasAnimations) {
+          // アニメーションなしモデルの場合も静かに失敗
+          return false;
+        }
+
+        const animRoot = modelData._animRoot || modelData.model;
+        const currentActions = animationActions.get(animRoot) || [];
         currentActions.forEach(action => {
           try {
             action.stop();
@@ -1477,7 +1527,7 @@ export async function initARViewer(containerId, options = {}) {
             console.warn('アニメーション停止エラー:', stopError);
           }
         });
-        
+
         return true;
       } catch (error) {
         console.error('❌ stopAnimation エラー:', error);

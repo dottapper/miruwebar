@@ -2,12 +2,15 @@
 import { initARViewer } from '../components/arViewer.js';
 import { showMarkerUpload } from './marker-upload.js'; // 依存関係を確認
 import { showSaveProjectModal, showQRCodeModal } from '../components/ui.js'; // 保存モーダルとQRコードモーダルをインポート
-import { saveProject, getProject, loadProjectWithModels } from '../api/projects-new.js'; // 新しいIndexedDB 対応 API をインポート
-import { exportProjectBundleById } from '../api/projects.js'; // エクスポート機能は従来版を使用
+import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../api/projects.js';
+import { publishProjectToFirebase } from '../firebase/storage.js';
+import { isFirebaseConfigured } from '../firebase/config.js';
+import { updateProjectPublishInfo } from '../storage/project-store.js';
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { settingsAPI } from '../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
+import { security } from '../utils/security-manager.js';
 
 // CSSファイルのインポート
 import '../styles/common.css';
@@ -448,28 +451,110 @@ export function showEditor(container) {
     return hasUnsavedChanges;
   }
 
-  // 戻る前の保存確認ダイアログ
+  // 戻る前の保存確認ダイアログ（デザイン済みモーダル・ブラウザ標準 confirm を使わない）
   function showUnsavedChangesDialog() {
     return new Promise((resolve) => {
-      const message = "変更内容が保存されていません。\n\n保存してからプロジェクト一覧に戻りますか？";
-      const result = confirm(message);
-      
-      if (result) {
-        // 「OK」を選択 - 保存してから戻る
+      const existing = document.getElementById('editor-unsaved-dialog-overlay');
+      if (existing) existing.remove();
+
+      const overlayHTML = `
+        <div class="editor-unsaved-dialog-overlay" id="editor-unsaved-dialog-overlay">
+          <div class="editor-unsaved-dialog" id="editor-unsaved-dialog-main">
+            <div class="editor-unsaved-dialog-header">
+              <h3>変更を保存しますか？</h3>
+            </div>
+            <div class="editor-unsaved-dialog-content">
+              <p>変更内容が保存されていません。保存してからプロジェクト一覧に戻りますか？</p>
+            </div>
+            <div class="editor-unsaved-dialog-actions">
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-unsaved-cancel">キャンセル</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-unsaved-discard">保存せずに戻る</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--primary" id="editor-unsaved-save-and-go">保存して戻る</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.insertAdjacentHTML('beforeend', overlayHTML);
+
+      const overlay = document.getElementById('editor-unsaved-dialog-overlay');
+      const mainContent = document.getElementById('editor-unsaved-dialog-main');
+
+      function hideDialog() {
+        overlay.classList.remove('show');
+        setTimeout(() => overlay.remove(), 300);
+      }
+
+      function showDiscardConfirm() {
+        mainContent.innerHTML = `
+          <div class="editor-unsaved-dialog-header">
+            <h3>破棄して戻りますか？</h3>
+          </div>
+          <div class="editor-unsaved-dialog-content">
+            <p>変更内容を破棄してプロジェクト一覧に戻りますか？</p>
+          </div>
+          <div class="editor-unsaved-dialog-actions">
+            <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-discard-no">いいえ</button>
+            <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-discard-yes">はい、戻る</button>
+          </div>
+        `;
+        document.getElementById('editor-discard-no').addEventListener('click', () => {
+          mainContent.innerHTML = `
+            <div class="editor-unsaved-dialog-header">
+              <h3>変更を保存しますか？</h3>
+            </div>
+            <div class="editor-unsaved-dialog-content">
+              <p>変更内容が保存されていません。保存してからプロジェクト一覧に戻りますか？</p>
+            </div>
+            <div class="editor-unsaved-dialog-actions">
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--secondary" id="editor-unsaved-cancel">キャンセル</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--danger" id="editor-unsaved-discard">保存せずに戻る</button>
+              <button type="button" class="editor-unsaved-btn editor-unsaved-btn--primary" id="editor-unsaved-save-and-go">保存して戻る</button>
+            </div>
+          `;
+          document.getElementById('editor-unsaved-cancel').addEventListener('click', onCancel);
+          document.getElementById('editor-unsaved-discard').addEventListener('click', onDiscard);
+          document.getElementById('editor-unsaved-save-and-go').addEventListener('click', onSaveAndGo);
+        });
+        document.getElementById('editor-discard-yes').addEventListener('click', () => {
+          hideDialog();
+          resolve(true);
+        });
+      }
+
+      function onCancel() {
+        hideDialog();
+        resolve(false);
+      }
+
+      function onDiscard() {
+        showDiscardConfirm();
+      }
+
+      function onSaveAndGo() {
+        hideDialog();
         handleSaveProject()
-          .then(() => {
-            resolve(true);
-          })
+          .then(() => resolve(true))
           .catch((error) => {
             console.error('保存に失敗しました:', error);
-            alert('保存に失敗しました。もう一度お試しください。');
+            const notification = document.createElement('div');
+            notification.className = 'notification error';
+            notification.style.cssText = 'position:fixed;top:20px;right:20px;background:#f44336;color:white;padding:12px 20px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.2);z-index:10001;';
+            notification.textContent = '保存に失敗しました。もう一度お試しください。';
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 4000);
             resolve(false);
           });
-      } else {
-        // 「キャンセル」を選択 - 保存せずに戻る
-        const confirmDiscard = confirm("変更内容を破棄してプロジェクト一覧に戻りますか？");
-        resolve(confirmDiscard);
       }
+
+      document.getElementById('editor-unsaved-cancel').addEventListener('click', onCancel);
+      document.getElementById('editor-unsaved-discard').addEventListener('click', onDiscard);
+      document.getElementById('editor-unsaved-save-and-go').addEventListener('click', onSaveAndGo);
+
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) onCancel();
+      });
+
+      requestAnimationFrame(() => overlay.classList.add('show'));
     });
   }
 
@@ -776,6 +861,9 @@ export function showEditor(container) {
           }
         }, 200);
       }
+
+      // 読み込み完了後、UIの反映が落ちついてから「保存済み」とみなす（プログラム的な復元で transformChanged / change が飛んでも未保存にしない）
+      setTimeout(() => markAsSaved(), 400);
       
     } catch (error) {
       console.error('プロジェクト読み込みエラー:', error);
@@ -1063,11 +1151,12 @@ export function showEditor(container) {
     
     // ローディング設定のイベントリスナー
     
-    // ローディング画面選択のイベントリスナー
+    // ローディング画面選択のイベントリスナー（ユーザー操作時のみ未保存マーク）
     const loadingScreenSelect = document.getElementById('loading-screen-select');
     if (loadingScreenSelect) {
       loadingScreenSelect.addEventListener('change', (event) => {
         savedSelectedScreenId = event.target.value; // グローバル変数を更新
+        markAsChanged(); // 選択変更を未保存として記録
         updateEditButtonState();
       });
     }
@@ -1433,8 +1522,8 @@ export function showEditor(container) {
     const fileInfo = document.createElement('div');
     fileInfo.className = 'file-info';
     fileInfo.innerHTML = `
-      <span class="file-name">${modelSetting.fileName}</span>
-      <span class="file-size">${modelSetting.fileSize}MB (復元済み)</span>
+      <span class="file-name">${security.escape(modelSetting.fileName)}</span>
+      <span class="file-size">${security.escape(String(modelSetting.fileSize))}MB (復元済み)</span>
     `;
 
     const fileActions = document.createElement('div');
@@ -1502,8 +1591,8 @@ export function showEditor(container) {
     
     infoItem.innerHTML = `
       <div class="file-info">
-        <div class="file-name" title="${modelSetting.fileName}">${modelSetting.fileName}</div>
-        <div class="file-size">${modelSetting.fileSize}MB (要再アップロード)</div>
+        <div class="file-name" title="${security.escape(modelSetting.fileName)}">${security.escape(modelSetting.fileName)}</div>
+        <div class="file-size">${security.escape(String(modelSetting.fileSize))}MB (要再アップロード)</div>
         <div class="file-status" style="color: #666; font-size: 12px;">
           📁 モデルファイルが必要です
         </div>
@@ -1582,8 +1671,8 @@ export function showEditor(container) {
     const fileInfo = document.createElement('div');
     fileInfo.className = 'file-info';
     fileInfo.innerHTML = `
-      <span class="file-name">${file.name}</span>
-      <span class="file-size">${formatFileSize(file.size)}</span>
+      <span class="file-name">${security.escape(file.name)}</span>
+      <span class="file-size">${security.escape(formatFileSize(file.size))}</span>
     `;
 
     const fileActions = document.createElement('div');
@@ -2143,6 +2232,22 @@ export function showEditor(container) {
       console.warn('❌ アニメーション再生機能が利用できません');
       return;
     }
+
+    if (viewerInstance?.controls?.getActiveModelIndex && viewerInstance?.controls?.getAllModels) {
+      const activeIndex = viewerInstance.controls.getActiveModelIndex();
+      if (activeIndex < 0) {
+        const models = viewerInstance.controls.getAllModels() || [];
+        if (models.length === 1 && viewerInstance?.controls?.switchToModel) {
+          viewerInstance.controls.switchToModel(0);
+        } else if (models.some(model => model.hasAnimations)) {
+          showNotification('アニメーション付きのモデルを選択してください', 'error');
+          return;
+        } else {
+          showNotification('アニメーションが見つかりません', 'error');
+          return;
+        }
+      }
+    }
     
     const success = viewerInstance.controls.playAnimation(0);
     if (success) {
@@ -2169,6 +2274,19 @@ export function showEditor(container) {
     if (!viewerInstance?.controls?.hasAnimations || !viewerInstance?.controls?.getAnimationList) {
       return;
     }
+
+    if (viewerInstance?.controls?.getActiveModelIndex) {
+      const activeIndex = viewerInstance.controls.getActiveModelIndex();
+      if (activeIndex < 0) {
+        if (animationControls) {
+          animationControls.style.display = 'none';
+        }
+        if (animationList) {
+          animationList.innerHTML = '';
+        }
+        return;
+      }
+    }
     
     const hasAnims = viewerInstance.controls.hasAnimations();
     
@@ -2179,7 +2297,7 @@ export function showEditor(container) {
     if (hasAnims && animationList) {
       const animations = viewerInstance.controls.getAnimationList();
       animationList.innerHTML = animations.map(anim => 
-        `${anim.name} (${anim.duration.toFixed(1)}s)`
+        `${security.escape(anim.name)} (${anim.duration.toFixed(1)}s)`
       ).join('<br>');
        
       // アニメーション発見の通知
@@ -2523,60 +2641,94 @@ export function showEditor(container) {
           // QRコード用のproject.jsonファイル＋モデルファイルをサーバーに生成
           try {
 
-            // IndexedDBからモデルBlobを取得してBase64に変換
-            const { loadProjectWithModels } = await import('../api/projects-new.js');
+            // IndexedDBからモデルBlobを取得
+            const { loadProjectWithModels } = await import('../api/projects.js');
             const projectWithModels = await loadProjectWithModels(savedProject);
-            const modelPayload = [];
 
-            const blobToBase64 = (blob) => new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-
-            const toVec3 = (value, fallback) => {
-              if (Array.isArray(value) && value.length >= 3) return value.slice(0, 3).map((v, i) => { const n = Number(v); return Number.isFinite(n) ? n : fallback[i]; });
-              if (value && typeof value === 'object') { const x = Number(value.x), y = Number(value.y), z = Number(value.z); return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1], Number.isFinite(z) ? z : fallback[2]]; }
-              return [...fallback];
-            };
-
-            for (const m of projectWithModels.modelData || []) {
-              if (m.blob) {
-                const dataBase64 = await blobToBase64(m.blob);
-                const transform = m.transform || {};
-                modelPayload.push({
-                  fileName: m.fileName || 'model.glb',
-                  dataBase64,
-                  position: toVec3(m.position || transform.position, [0, 0, 0]),
-                  rotation: toVec3(m.rotation || transform.rotation, [0, 0, 0]),
-                  scale: toVec3(m.scale || transform.scale, [1, 1, 1])
-                });
-              }
-            }
-
-            // /api/publish-project を呼び出してモデルファイルをdiskに書き出す
-            const publishData = {
+            const publishBase = {
               id: savedProject.id,
+              name: savedProject.name || 'Untitled',
               type: savedProject.type || arType,
               loadingScreen: savedProject.loadingScreen || null,
               startScreen: savedProject.startScreen || null,
               guideScreen: savedProject.guideScreen || null,
+              theme: savedProject.theme || null,
+              arSettings: savedProject.arSettings || {},
               markerImage: savedProject.markerImage || markerImageData || null,
-              markerPattern: savedProject.markerPattern || markerPattern || null,
-              models: modelPayload
+              markerPattern: savedProject.markerPattern || markerPattern || null
             };
 
-            const serverResponse = await fetch('/api/publish-project', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(publishData)
-            });
+            const publishToLocalServer = async () => {
+              const modelPayload = [];
 
-            if (serverResponse.ok) {
-              const serverResult = await serverResponse.json();
+              const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+
+              const toVec3 = (value, fallback) => {
+                if (Array.isArray(value) && value.length >= 3) return value.slice(0, 3).map((v, i) => { const n = Number(v); return Number.isFinite(n) ? n : fallback[i]; });
+                if (value && typeof value === 'object') { const x = Number(value.x), y = Number(value.y), z = Number(value.z); return [Number.isFinite(x) ? x : fallback[0], Number.isFinite(y) ? y : fallback[1], Number.isFinite(z) ? z : fallback[2]]; }
+                return [...fallback];
+              };
+
+              for (const m of projectWithModels.modelData || []) {
+                if (m.blob) {
+                  const dataBase64 = await blobToBase64(m.blob);
+                  const transform = m.transform || {};
+                  modelPayload.push({
+                    fileName: m.fileName || 'model.glb',
+                    dataBase64,
+                    position: toVec3(m.position || transform.position, [0, 0, 0]),
+                    rotation: toVec3(m.rotation || transform.rotation, [0, 0, 0]),
+                    scale: toVec3(m.scale || transform.scale, [1, 1, 1])
+                  });
+                }
+              }
+
+              // /api/publish-project を呼び出してモデルファイルをdiskに書き出す
+              const publishData = {
+                ...publishBase,
+                models: modelPayload
+              };
+
+              const serverResponse = await fetch('/api/publish-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(publishData)
+              });
+
+              if (serverResponse.ok) {
+                const serverResult = await serverResponse.json();
+              } else {
+                console.warn('⚠️ QRコード用公開失敗:', serverResponse.statusText);
+              }
+            };
+
+            if (isFirebaseConfigured) {
+              try {
+                const firebaseResult = await publishProjectToFirebase({
+                  ...publishBase,
+                  modelData: projectWithModels.modelData || []
+                });
+
+                if (firebaseResult?.viewerUrl) {
+                  updateProjectPublishInfo(savedProject.id, {
+                    firebase: {
+                      viewerUrl: firebaseResult.viewerUrl,
+                      projectUrl: firebaseResult.projectUrl,
+                      publishedAt: new Date().toISOString()
+                    }
+                  });
+                }
+              } catch (firebaseError) {
+                console.warn('⚠️ Firebase公開失敗、ローカル公開にフォールバック:', firebaseError.message);
+                await publishToLocalServer();
+              }
             } else {
-              console.warn('⚠️ QRコード用公開失敗:', serverResponse.statusText);
+              await publishToLocalServer();
             }
           } catch (apiError) {
             console.warn('⚠️ QRコード用公開API呼び出し失敗:', apiError.message);

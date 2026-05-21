@@ -143,7 +143,7 @@ function saveCrossIPSync(data) {
     const recentSync = existingSync.slice(0, 5);
     localStorage.setItem(CROSS_IP_SYNC_KEY, JSON.stringify(recentSync));
     
-    if (DEBUG) {
+    if (typeof window !== 'undefined' && window.DEBUG) {
       console.log('🌐 ローディング画面設定IP間同期データ保存:', { host: currentHost, port: currentPort });
     }
   } catch (error) {
@@ -198,7 +198,7 @@ function syncLastUsedTemplateId(templateId) {
     const recentSync = existingSync.slice(0, 5);
     localStorage.setItem(syncKey, JSON.stringify(recentSync));
     
-    if (DEBUG) {
+    if (typeof window !== 'undefined' && window.DEBUG) {
       console.log('🌐 最後使用テンプレートID IP間同期保存:', { templateId, host: currentHost, port: currentPort });
     }
   } catch (error) {
