@@ -183,7 +183,7 @@ export const productionLogger = new Logger({
 
 // モジュール別ロガーを作成するファクトリ関数
 export function createLogger(moduleName, options = {}) {
-  if (import.meta.env.MODE === 'test' || process?.env?.VITEST) {
+  if (import.meta.env.MODE === 'test' || (typeof process !== 'undefined' && process.env?.VITEST)) {
     testLogger.setModuleName(moduleName);
     return testLogger;
   }

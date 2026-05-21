@@ -1,6 +1,6 @@
 // vite.config.js
 import { defineConfig } from 'vite';
-import basicSsl from '@vitejs/plugin-basic-ssl';
+import { devSslPlugin } from './vite/plugins/devSsl.js';
 import { networkInfoPlugin } from './vite/plugins/networkInfo.js';
 import { projectsStaticPlugin } from './vite/plugins/projectsStatic.js';
 import { projectsApiPlugin } from './vite/plugins/projectsApi.js';
@@ -30,14 +30,11 @@ export default defineConfig({
   preview: {
     host: true,
     port: 4173,
-    strictPort: true,
-    // HTTPS対応（開発環境のみ、basic-sslプラグインを使用）
-    https: isDev
+    strictPort: true
   },
   plugins: [
-    // 開発用の簡易HTTPSを有効化（スマホのカメラ許可要件を満たす）
-    // Vercelのビルド時には無効化
-    ...(isDev ? [basicSsl()] : []),
+    // LAN IP を SAN に含む開発用 HTTPS（スマホ実機テスト用）
+    ...(isDev ? [devSslPlugin()] : []),
     // 開発サーバー専用プラグイン（Vercelのビルド時には無効化）
     ...(isDev ? [
       networkInfoPlugin(),
