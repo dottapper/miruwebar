@@ -4,71 +4,24 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import puppeteer from 'puppeteer';
+import { setupPuppeteerE2E, teardownPuppeteerE2E } from '../helpers/puppeteer-setup.js';
 
-// サーバーが起動するまで待機する関数
-async function waitForServer(url, timeout = 30000) {
-  const startTime = Date.now();
-  const maxTime = startTime + timeout;
-  
-  while (Date.now() < maxTime) {
-    try {
-      const response = await fetch(url, { 
-        method: 'HEAD',
-        signal: AbortSignal.timeout(5000)
-      });
-      if (response.ok) {
-        console.log(`サーバーが起動しました: ${url}`);
-        return;
-      }
-    } catch (error) {
-      // サーバーがまだ起動していない場合は待機
-      console.log(`サーバー待機中... (${url})`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-  
-  throw new Error(`サーバーが${timeout}ms以内に起動しませんでした: ${url}`);
-}
-
-describe.skip('基本E2Eフロー', () => {
+describe('基本E2Eフロー', () => {
   let browser;
   let page;
   let baseURL;
+  let serverProc;
 
   beforeAll(async () => {
-    // ブラウザ起動
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
-        // HTTPS設定
-        '--ignore-certificate-errors',
-        '--allow-running-insecure-content',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor'
-      ]
-    });
-
-    // テストサーバーのURL
-    baseURL = process.env.TEST_BASE_URL || 'https://localhost:3001';
+    const ctx = await setupPuppeteerE2E();
+    browser = ctx.browser;
+    baseURL = ctx.baseURL;
+    serverProc = ctx.serverProc;
     console.log(`E2Eテスト開始: ${baseURL}`);
-    
-    // サーバーが起動するまで待機
-    await waitForServer(baseURL, 30000);
-  });
+  }, 120000);
 
   afterAll(async () => {
-    if (browser) {
-      await browser.close();
-    }
+    await teardownPuppeteerE2E({ browser, serverProc });
   });
 
   beforeEach(async () => {

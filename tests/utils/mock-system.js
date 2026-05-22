@@ -2,6 +2,7 @@
 // テスト用のモックシステム
 
 import { vi } from 'vitest';
+import { URL as NodeURL } from 'node:url';
 
 /**
  * 統合テスト用のモックシステム
@@ -80,11 +81,14 @@ export class MockSystem {
       clearTimeout(id);
     });
 
-    // URL APIのモック
-    global.URL = {
-      createObjectURL: vi.fn(() => 'blob:mock-url'),
-      revokeObjectURL: vi.fn()
-    };
+    // URL コンストラクタを維持しつつ createObjectURL/revokeObjectURL のみモック
+    const OriginalURL = globalThis.URL || NodeURL;
+    if (OriginalURL) {
+      OriginalURL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      OriginalURL.revokeObjectURL = vi.fn();
+      global.URL = OriginalURL;
+      if (typeof globalThis !== 'undefined') globalThis.URL = OriginalURL;
+    }
 
     // fetch APIのモック
     global.fetch = vi.fn();

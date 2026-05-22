@@ -30,6 +30,20 @@ export class DOMTestHelper {
     global.document = dom.window.document;
     global.window = dom.window;
     global.navigator = dom.window.navigator;
+
+    // setup.js のストレージモックを新しい window に引き継ぐ
+    if (global.sessionStorage) {
+      Object.defineProperty(dom.window, 'sessionStorage', {
+        value: global.sessionStorage,
+        configurable: true
+      });
+    }
+    if (global.localStorage) {
+      Object.defineProperty(dom.window, 'localStorage', {
+        value: global.localStorage,
+        configurable: true
+      });
+    }
     // JSDOM の window に Node の URL コンストラクタを設定（ar-viewer 等の new URL() 用）
     dom.window.URL = NodeURL;
     if (typeof global !== 'undefined') global.URL = NodeURL;
