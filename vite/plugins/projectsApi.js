@@ -188,9 +188,10 @@ export function projectsApiPlugin() {
             port = fromHeader || fromServer || server.config.server.port || 3000;
           } catch (_) {}
 
-          const viewerUrl = `${scheme}://${host}:${port}/#/viewer?src=${scheme}://${host}:${port}/projects/${id}/project.json`;
+          const projectUrl = `${scheme}://${host}:${port}/projects/${id}/project.json`;
+          const viewerUrl = `${scheme}://${host}:${port}/#/viewer?src=${encodeURIComponent(projectUrl)}`;
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok: true, viewerUrl, projectUrl: `${scheme}://${host}:${port}/projects/${id}/project.json` }));
+          res.end(JSON.stringify({ ok: true, provider: 'localFs', viewerUrl, projectUrl, releaseId: `local-${id}` }));
         } catch (e) {
           if (e && e.status === 413) {
             res.writeHead(413, { 'Content-Type': 'application/json' });

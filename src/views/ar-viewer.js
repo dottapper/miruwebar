@@ -1389,17 +1389,82 @@ export default function showARViewer(container) {
     return true; // バインド成功
   };
 
-  // ARビューア初期化（機能フラグを渡す）
-  // ★ bootFromQR 完了を待ってから実行
-  const initARViewerWhenReady = () => {
-    if (window.__bootFromQR_completed && window.__project) {
-      initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceNormalMaterial, engineOverride });
-    } else {
-      // bootFromQR がまだ完了していない場合、イベントを待つ
-      window.addEventListener('bootFromQRCompleted', initARViewerWhenReady, { once: true });
+  const showBootError = (message, detail = {}) => {
+    const status = container.querySelector('#ar-status-text');
+    if (status) {
+      status.textContent = `エラー: ${message}`;
+      status.className = 'error';
+    }
+
+    const instruction = container.querySelector('#ar-instruction');
+    if (instruction) {
+      instruction.textContent = 'project.json を読み込めませんでした。公開URL、Blob公開、またはモデル容量を確認してください。';
+    }
+
+    const controls = container.querySelector('.controls-content');
+    if (controls && !container.querySelector('#viewer-boot-error-details')) {
+      const details = document.createElement('details');
+      details.id = 'viewer-boot-error-details';
+      details.style.cssText = 'margin-top:8px;text-align:left;font-size:11px;color:#ddd;';
+
+      const summary = document.createElement('summary');
+      summary.textContent = '診断情報';
+      summary.style.cursor = 'pointer';
+
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;background:rgba(255,255,255,.08);padding:8px;border-radius:6px;';
+      pre.textContent = JSON.stringify({
+        projectSrc,
+        href: window.location.href,
+        message,
+        ...detail
+      }, null, 2);
+
+      details.appendChild(summary);
+      details.appendChild(pre);
+      controls.appendChild(details);
     }
   };
-  
+
+  let viewerInitStarted = false;
+
+  // ARビューア初期化（機能フラグを渡す）
+  // bootFromQR が失敗しても黒画面で止めず、このビュー側で再取得して診断を出す。
+  const initARViewerWhenReady = async (event) => {
+    if (viewerInitStarted) return;
+
+    if (event?.detail?.project && typeof window !== 'undefined') {
+      window.__project = event.detail.project;
+      window.__projectSrc = getProjectSrc();
+      window.__bootFromQR_completed = true;
+    }
+
+    if (!window.__project) {
+      try {
+        const project = await loadProjectFromQR();
+        if (project && typeof window !== 'undefined') {
+          window.__project = project;
+          window.__projectSrc = getProjectSrc();
+          window.__bootFromQR_completed = true;
+        }
+      } catch (error) {
+        arViewerLogger.error('[FLOW] viewer self boot failed', error);
+        showBootError(error.message || 'project.json の取得に失敗しました', { stack: error.stack });
+        return;
+      }
+    }
+
+    if (!window.__project) {
+      showBootError('project.json を読み込めませんでした');
+      return;
+    }
+
+    container.querySelector('#viewer-boot-error-details')?.remove();
+    viewerInitStarted = true;
+    initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceNormalMaterial, engineOverride });
+  };
+
+  window.addEventListener('bootFromQRCompleted', initARViewerWhenReady, { once: true });
   initARViewerWhenReady();
   
   // HTML生成直後にボタンのバインドを試行（1回目）
@@ -1872,8 +1937,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   }
 
   function updateInstruction(text) {
-    // ★★★ セキュリティ強化: innerHTML → textContent で XSS 防止 ★★★
-    instruction.textContent = text;
+    // HTMLは描画せず、既存呼び出しの <strong>/<br> だけ読みやすいテキストに落とす。
+    instruction.style.whiteSpace = 'pre-line';
+    instruction.textContent = String(text || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?strong>/gi, '')
+      .replace(/<[^>]*>/g, '');
   }
 
   // 戻るボタンイベント

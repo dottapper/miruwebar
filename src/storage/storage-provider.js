@@ -4,8 +4,7 @@
 // publishRelease() を唯一の公開エントリポイントとし、内部でプロバイダを切り替える。
 // - vercelBlob: 既定プロバイダ。/api/publish-project に POST して公開する。
 //   （開発時は Vite プラグインが public/projects/ に書き出す。本番では
-//    api/publish-project.js が動作する。永続化を Vercel Blob に切り替える場合は
-//    サーバ側 api/publish-project.js を @vercel/blob 対応に更新する。）
+//    api/publish-project.js が Vercel Blob に保存する。）
 // - firebase: 後方互換プロバイダ。既存の publishProjectToFirebase() を利用する。
 //
 // プロバイダは環境変数 VITE_STORAGE_PROVIDER で切り替え可能（既定は vercelBlob）。

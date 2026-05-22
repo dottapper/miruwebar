@@ -523,7 +523,7 @@ export async function showQRCodeModal(options = {}) {
     });
     
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'modal-overlay';
+    modalOverlay.className = 'modal-overlay qr-modal-overlay';
     
     // プロジェクトIDを正確に使用（modelNameにIDが来ている想定）
     const projectId = options.modelName ? decodeURIComponent(options.modelName) : 'sample';
@@ -556,9 +556,8 @@ export async function showQRCodeModal(options = {}) {
     const stabilizer = createURLStabilizer();
     const localUrlInfo = await stabilizer.generateARViewerURL(projectId, URLType.LOCAL, { validateProject: false, skipValidation: true });
     let localUrl = localUrlInfo.viewerUrl;
-    const appOrigin = window.location.origin;
-    // 初期表示用の公開URL（プレースホルダー）。実際の公開先は公開リリース作成後に更新
-    const webUrl = storedReleaseUrl || `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+    // 公開リリースURLは実際に公開済みのものだけ表示する。未公開時に仮URLのQRを出さない。
+    const webUrl = storedReleaseUrl;
     
     uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
@@ -569,7 +568,7 @@ export async function showQRCodeModal(options = {}) {
     });
     
     modalOverlay.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content qr-code-modal">
             <h2>ARをスマホで見る</h2>
             ${!isHttps ? `<div style="margin: 0.5rem 0 1rem 0; padding: 0.6rem; border-radius: 6px; background: #FFF3CD; color: #664D03; border: 1px solid #FFECB5; font-size: 0.9rem;">
               ⚠️ 開発環境がHTTPのため、スマホではカメラが使えない場合があります。<br>
@@ -664,8 +663,8 @@ export async function showQRCodeModal(options = {}) {
             </div>
             
             <!-- 使用方法の説明 -->
-            <div class="usage-instructions" style="margin-bottom: 1.5rem; padding: 1rem; background-color: rgba(0,0,0,0.05); border-radius: var(--border-radius-medium); border-left: 4px solid var(--color-primary);">
-                <h4 style="margin: 0 0 0.5rem 0; color: var(--color-text-primary);">📱 スマホでの確認方法</h4>
+            <details class="usage-instructions" style="margin-bottom: 1.5rem; padding: 1rem; background-color: rgba(0,0,0,0.05); border-radius: var(--border-radius-medium); border-left: 4px solid var(--color-primary);">
+                <summary style="color: var(--color-text-primary);">📱 スマホでの確認方法</summary>
                 <div style="font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.4;">
                     <p style="margin: 0 0 0.5rem 0;"><strong>📶 同一Wi-Fi:</strong></p>
                     <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
@@ -685,7 +684,7 @@ export async function showQRCodeModal(options = {}) {
                         <li>世界中の誰でもアクセス可能になります</li>
                     </ul>
                 </div>
-            </div>
+            </details>
             
             <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button id="close-qrcode-modal" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
@@ -748,12 +747,15 @@ export async function showQRCodeModal(options = {}) {
         modalOverlay.querySelector('#tunnel-url-display').textContent =
           tunnelViewerUrl || 'トンネルURLを保存してください';
       } else {
+        const releaseCopyButton = modalOverlay.querySelector('#copy-release-url');
         // 公開リリース済みURLがあればそれを使用
         if (releasePublishedUrl) {
           currentUrl = releasePublishedUrl;
           modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
+          if (releaseCopyButton) releaseCopyButton.disabled = false;
         } else {
           modalOverlay.querySelector('#release-url').textContent = '「公開リリースを作成」ボタンを押してください';
+          if (releaseCopyButton) releaseCopyButton.disabled = true;
           currentUrl = '';
         }
       }
@@ -762,9 +764,9 @@ export async function showQRCodeModal(options = {}) {
       setTimeout(() => {
         // Canvas要素の存在を確認してから生成
         const canvas = document.querySelector('#qrcode-canvas');
-        if (currentUrl && canvas) {
+        if (canvas) {
           generateQRCode();
-        } else if (!canvas) {
+        } else {
           uiLogger.warn('⚠️ タブ切り替え後、Canvas要素が見つかりません');
         }
       }, 150);
@@ -797,6 +799,10 @@ export async function showQRCodeModal(options = {}) {
 
     modalOverlay.querySelector('#copy-release-url').addEventListener('click', () => {
       const releaseUrl = modalOverlay.querySelector('#release-url').textContent;
+      if (!releasePublishedUrl) {
+        alert('先に公開リリースを作成してください');
+        return;
+      }
       navigator.clipboard.writeText(releaseUrl).then(() => {
         alert('公開URLをクリップボードにコピーしました');
       }).catch(() => {
@@ -919,6 +925,7 @@ export async function showQRCodeModal(options = {}) {
         statusEl.style.color = '#2E7D32';
 
         modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
+        modalOverlay.querySelector('#copy-release-url').disabled = false;
 
         publishBtn.textContent = '✅ 公開済み（再公開）';
         publishBtn.style.background = '#4CAF50';
@@ -1220,23 +1227,13 @@ export async function showQRCodeModal(options = {}) {
         }
       } catch (e) {
         console.warn('ローカル公開に失敗（フォールバックでURLのみ表示）:', e);
-        
-        // ユーザーに分かりやすいエラーメッセージを表示
-        const container = document.getElementById('qrcode-container');
-        if (container) {
-          container.innerHTML = `
-            <div style="text-align: center; padding: 1rem; color: #666;">
-              <p>⚠️ プロジェクトの公開準備中...</p>
-              <p style="font-size: 0.9em;">QRコードを生成しています</p>
-            </div>
-          `;
-        }
+        // QRキャンバスは残す。ローカル公開に失敗しても、生成済みのURLでQR表示を継続する。
       } finally {
         // 初期QR生成（公開に成功していれば更新されたURLになる）
         // DOM要素の準備を確実に待つ
         setTimeout(() => {
           const canvas = document.querySelector('#qrcode-canvas');
-          if (canvas && currentUrl) {
+          if (canvas) {
             generateQRCode();
           } else {
             uiLogger.warn('⚠️ 初期QR生成: Canvas要素またはURLが見つかりません', {
