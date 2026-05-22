@@ -432,7 +432,7 @@ async function bootFromQR() {
         const here = new URLSearchParams(location.search||'');
         let topHas = false; try { topHas = (window.top && window.top!==window) ? new URLSearchParams(window.top.location.search||'').has('__takeoverStartUI') : false; } catch {}
         const active = here.has('__takeoverStartUI') || topHas;
-        if (!active && typeof __takeoverStartUI === 'function') {
+        if (active && typeof __takeoverStartUI === 'function') {
           __takeoverStartUI(project);
         }
       } else {

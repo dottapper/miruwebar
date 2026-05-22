@@ -3,6 +3,7 @@
 import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById } from '../../api/projects.js';
 import { loadLoadingSettingsToUI, resetAllUI } from './ui-handlers.js';
 import { settingsAPI } from '../../components/loading-screen/settings.js';
+import { generateMarkerPatternFromImage } from '../../utils/marker-utils.js';
 
 // DEBUG ログ制御
 
@@ -92,10 +93,46 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
  */
 export async function saveCurrentProject(projectId, arViewer, savedSelectedScreenId) {
   try {
+    // 既存のプロジェクトデータを取得
+    const existingProject = await getProject(projectId);
+    const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || window.location.search || '');
+    const arType = existingProject?.type || urlParams.get('type') || 'markerless';
+    const isMarkerMode = arType === 'marker';
+
     // プロジェクト保存前に最新のUI状態を同期
     const transformData = getCurrentTransformData();
     const modelsData = getCurrentModelsData();
     const loadingScreenData = getCurrentLoadingScreenData(savedSelectedScreenId);
+
+    let markerImageData = null;
+    let markerPattern = null;
+
+    if (isMarkerMode) {
+      markerImageData = localStorage.getItem('markerImageUrl');
+      
+      // 古いデフォルトマーカーパスの置き換え
+      if (markerImageData && (markerImageData.includes('/assets/marker/default-marker.png') || markerImageData.includes('default-marker.png'))) {
+        markerImageData = '/assets/sample.png';
+        localStorage.setItem('markerImageUrl', markerImageData);
+      }
+      
+      if (!markerImageData && existingProject?.markerImage) {
+        markerImageData = existingProject.markerImage;
+      }
+      
+      if (markerImageData) {
+        if (existingProject?.markerImage === markerImageData && existingProject?.markerPattern) {
+          markerPattern = existingProject.markerPattern;
+        } else {
+          try {
+            markerPattern = await generateMarkerPatternFromImage(markerImageData);
+          } catch (patternError) {
+            console.warn('⚠️ 保存用マーカーパターン生成に失敗:', patternError);
+            markerPattern = existingProject?.markerPattern || null;
+          }
+        }
+      }
+    }
 
     const selectedTemplateId = loadingScreenData?.selectedScreenId || savedSelectedScreenId || '';
 
@@ -145,9 +182,17 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
     // → viewer側で既存project.jsonのstartScreen/guideScreenまたはテンプレ由来を優先適用
 
     const projectData = {
+      ...existingProject, // 既存の name, description, その他設定を引き継ぐ
       id: projectId,
+      type: arType,
       models: modelsData,
       transform: transformData,
+      markerImage: markerImageData,
+      markerPattern: markerPattern,
+      marker: isMarkerMode ? {
+        type: 'pattern',
+        sourceImage: markerImageData || null
+      } : null,
       // ローディング画面: 選択状態に加え、必要最小限の見栄え設定を併記
       loadingScreen: {
         ...loadingScreenData,
