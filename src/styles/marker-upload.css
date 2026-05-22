@@ -31,6 +31,36 @@
   justify-content: center;
   align-items: center;
   position: relative;
+  overflow: hidden;
+}
+
+/* プレビュー画像とクロップ範囲オーバーレイのラッパー */
+.marker-preview-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+/* 実際に .patt 化される正方形クロップ範囲を示す枠 */
+.marker-crop-overlay {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--color-primary, #7c4dff);
+  /* 巨大な box-shadow で正方形の外側を暗くする（upload-preview の overflow:hidden で切り取られる） */
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.marker-crop-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  padding: 2px 6px;
+  background: var(--color-primary, #7c4dff);
+  color: #fff;
+  white-space: nowrap;
 }
 
 .upload-placeholder {
@@ -76,4 +106,69 @@
 #upload-marker:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 長方形画像の注意表示（中央正方形のみが認識対象） */
+.marker-rect-notice {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius-medium);
+  background-color: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.5);
+  color: var(--color-text-primary, #333);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* マーカー画像の品質チェック結果 */
+.marker-quality {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius-medium);
+  border: 1px solid var(--color-border);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.marker-quality--loading {
+  color: var(--color-text-secondary);
+}
+
+.marker-quality--good {
+  background-color: rgba(76, 175, 80, 0.12);
+  border-color: rgba(76, 175, 80, 0.5);
+}
+
+.marker-quality--warning {
+  background-color: rgba(255, 193, 7, 0.12);
+  border-color: rgba(255, 193, 7, 0.5);
+}
+
+.marker-quality--poor {
+  background-color: rgba(244, 67, 54, 0.12);
+  border-color: rgba(244, 67, 54, 0.5);
+}
+
+.marker-quality__title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+}
+
+.marker-quality__metrics {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary);
+}
+
+.marker-quality__issues {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.marker-quality__issues li {
+  margin: 0.2rem 0;
+}
+
+.marker-quality__ok {
+  margin: 0;
 }

@@ -204,6 +204,8 @@ async function createProjectDataWithIDB(data, viewerInstance) {
       // マーカー画像とパターン
       markerImage: data.markerImage && data.markerImage.length < 1500000 ? data.markerImage : null,
       markerPattern: data.markerPattern || null,
+      // マーカー種別情報（将来の pattern / imageTarget 分岐に備える）
+      marker: data.marker || (data.markerImage ? { type: 'pattern' } : null),
       
       // ローディング画面設定
       loadingScreen: data.loadingScreen || null,

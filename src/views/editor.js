@@ -2619,6 +2619,11 @@ export function showEditor(container) {
           type: arType,
           markerImage: markerImageData,
           markerPattern,
+          // 将来の pattern / imageTarget 分岐に備えたマーカー種別情報
+          marker: isMarkerMode ? {
+            type: 'pattern',
+            sourceImage: markerImageData || null
+          } : null,
           // ローディング設定を保存（現在のUI設定を反映）
           loadingScreen: {
             ...loadingSettings,
@@ -2655,7 +2660,12 @@ export function showEditor(container) {
               theme: savedProject.theme || null,
               arSettings: savedProject.arSettings || {},
               markerImage: savedProject.markerImage || markerImageData || null,
-              markerPattern: savedProject.markerPattern || markerPattern || null
+              markerPattern: savedProject.markerPattern || markerPattern || null,
+              // 将来の pattern / imageTarget 分岐に備えたマーカー種別情報
+              marker: savedProject.marker || (isMarkerMode ? {
+                type: 'pattern',
+                sourceImage: markerImageData || null
+              } : null)
             };
 
             const publishToLocalServer = async () => {
