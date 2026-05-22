@@ -2762,12 +2762,6 @@ export function showEditor(container) {
         notification.textContent = `プロジェクト「${savedProject.name}」を保存しました`;
         document.body.appendChild(notification);
 
-        // URLを更新してプロジェクトIDを含める（新規保存の場合のみ）
-        const currentUrlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-        if (!currentUrlParams.get('id') && savedProject.id) {
-          window.location.hash = `#/editor?id=${savedProject.id}`;
-        }
-
         // 3秒後に通知を削除
         setTimeout(() => {
           if (document.body.contains(notification)) {

@@ -2,6 +2,16 @@
 
 あなただけの 3D 世界を現実に。エディタで制作 → 保存 → QR 配布 → 実機 AR 表示までを、ブラウザだけで一気通貫に体験できます。
 
+## プロダクト方針
+
+miru-WebAR は、当面 **制作側が使うAR制作・管理アプリ** として開発します。
+
+- **Miru Studio**: 制作者/運用者がプロジェクトを作成・管理・公開する画面
+- **Miru Viewer**: QRから開く、クライアント/来場者向けの閲覧専用ARビューア
+
+第三者がWeb上で自由にARを作るSaaSではなく、まずは「制作者が品質管理し、クライアントには安定したAR体験を見せる」構成に絞ります。
+詳細は [プロダクト仕様](docs/product-spec.md) を参照してください。
+
 **特徴:**
 - ログイン不要（オプションでパスワード認証可能）
 - PC専用エディタ
@@ -67,6 +77,8 @@ npm run preview
 2. マーカーをカメラでスキャン
 3. マーカー上に3Dオブジェクトが表示
 
+現在のマーカー方式は AR.js のパターンマーカーです。アップロード画像は中央の正方形領域をもとに `.patt` 化されるため、長方形の本の表紙やポスター全体をそのまま追跡する方式ではありません。表紙・ポスター対応は将来の自然画像トラッキングとして扱います。詳細は [マーカーポリシー](docs/MARKER_POLICY.md) を参照してください。
+
 ### WebXR（Android/PC）
 1. 空間をスキャンして平面を検出
 2. 画面をタップして3Dオブジェクトを配置
@@ -99,7 +111,8 @@ Vercel の環境変数に `AUTH_ENABLED` と `AUTH_PASSWORD` を設定してく�
 ### ローカル保存（デフォルト）
 
 - **編集中**: IndexedDB（ブラウザ内）
-- **公開時**: `public/projects/<id>/` に物理ファイル出力
+- **開発時公開**: `public/projects/<id>/` に物理ファイル出力
+- **本番公開**: 永続的な object storage / CDN（Vercel Blob, Cloudflare R2, S3等）を使用する方針
 
 ### 公開方法
 
@@ -107,6 +120,8 @@ Vercel の環境変数に `AUTH_ENABLED` と `AUTH_PASSWORD` を設定してく�
 - Vercel / Cloudflare Pages / Netlify（ドラッグ＆ドロップ）
 - GitHub Pages
 - S3 + CloudFront
+
+本番運用では、公開済みARは `project.json` と assets を immutable release として保存します。QRコードは編集途中の下書きではなく、特定の公開リリースURLを参照します。
 
 公開後の URL 例：
 ```
@@ -205,6 +220,7 @@ npm run dev:fresh
 ## ドキュメント
 
 - [ルート定義](docs/routes.md)
+- [プロダクト仕様](docs/product-spec.md)
 - [Vercel デプロイ](docs/vercel-deployment.md)
 - [Firebase Storage 設定](docs/firebase-storage-rules.md)
 - [CORS 設定](docs/firebase-cors-setup.md)
