@@ -503,6 +503,10 @@ export class UserExperienceManager {
    */
   checkWebGLSupport() {
     try {
+      if (typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent || '')) {
+        return false;
+      }
+
       const canvas = document.createElement('canvas');
       return !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
     } catch (e) {

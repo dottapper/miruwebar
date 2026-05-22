@@ -3,8 +3,11 @@
 
 import { saveModelToIDB, loadModelBlob, loadModelMeta, removeModel } from '../storage/indexeddb-storage.js';
 import { saveProject as saveProjectToLocalList, getProjects, getProject, deleteProject as deleteProjectSettings } from '../storage/project-store.js';
-import { loadGLBFromIDB, createTemporaryObjectURL, revokeModelObjectURL } from '../loader/loadGLBFromIDB.js';
+import { loadGLBFromIDB } from '../loader/loadGLBFromIDB.js';
 import { exportProjectBundle } from '../utils/publish.js';
+import { createLogger, testLogger } from '../utils/logger.js';
+
+const projectLogger = createLogger('ProjectsAPI');
 
 /**
  * モデルデータを IndexedDB に保存し、軽量化されたプロジェクトデータを作成
@@ -235,11 +238,14 @@ async function createProjectDataWithIDB(data, viewerInstance) {
  */
 export async function saveProject(data, viewerInstance) {
   try {
-    console.log('🔄 saveProject開始 [IndexedDB版]:', {
+    projectLogger.info('プロジェクト保存開始', {
+      id: data?.id,
+      name: data?.name,
       dataKeys: Object.keys(data || {}),
       hasViewerInstance: !!viewerInstance,
       viewerHasControls: !!viewerInstance?.controls
     });
+    testLogger.info('プロジェクト保存開始', { id: data?.id, name: data?.name });
     
     // プロジェクトデータを作成（モデルを IndexedDB に保存）
     const projectData = await createProjectDataWithIDB(data, viewerInstance);
@@ -258,16 +264,17 @@ export async function saveProject(data, viewerInstance) {
     // 軽量化されたプロジェクトデータを localStorage に保存（一覧に反映）
     const savedProject = saveProjectToLocalList(projectData);
     
-    console.log('✅ プロジェクト保存完了 [IndexedDB版]:', {
+    projectLogger.success('プロジェクト保存完了', {
       id: savedProject.id,
       name: savedProject.name,
       modelCount: savedProject.modelCount
     });
+    testLogger.success('プロジェクト保存完了', { id: savedProject.id, modelCount: savedProject.modelCount || 0 });
     
     return savedProject;
   } catch (error) {
-    console.error('❌ プロジェクト保存処理でエラー [IndexedDB版]:', error);
-    throw error;
+    projectLogger.error('プロジェクト保存エラー', { message: error.message });
+    throw new Error(`プロジェクト設定の保存に失敗しました: ${error.message}`);
   }
 }
 
@@ -276,8 +283,14 @@ export async function saveProject(data, viewerInstance) {
  * @param {Object} project - プロジェクトデータ
  * @returns {Promise<Object>} - モデルデータが復元されたプロジェクト
  */
-export async function loadProjectWithModels(project) {
+export async function loadProjectWithModels(projectOrId) {
   try {
+    const project = typeof projectOrId === 'string' ? getProject(projectOrId) : projectOrId;
+
+    if (!project) {
+      throw new Error('プロジェクトが見つかりません');
+    }
+
     console.log('🔄 プロジェクトモデル復元開始:', {
       projectId: project.id,
       projectName: project.name,
@@ -288,7 +301,8 @@ export async function loadProjectWithModels(project) {
       console.log('ℹ️ 復元対象のモデルがありません');
       return {
         ...project,
-        modelData: []
+        modelData: [],
+        models: []
       };
     }
     
@@ -344,12 +358,52 @@ export async function loadProjectWithModels(project) {
     
     return {
       ...project,
-      modelData: restoredModels
+      modelData: restoredModels,
+      models: restoredModels
     };
   } catch (error) {
     console.error('❌ プロジェクトモデル復元エラー:', error);
     throw new Error(`プロジェクトモデルの復元に失敗しました: ${error.message}`);
   }
+}
+
+/**
+ * 従来 API 互換: プロジェクト ID からモデル配列だけを復元する
+ * @param {string} projectId - プロジェクトID
+ * @returns {Promise<Array>} - モデルデータの配列
+ */
+export async function loadProjectModels(projectId) {
+  const project = getProject(projectId);
+
+  if (!project) {
+    return [];
+  }
+
+  const models = [];
+
+  for (const modelSettings of project.modelSettings || []) {
+    if (!modelSettings.modelId) {
+      continue;
+    }
+
+    try {
+      const modelBlob = await loadModelBlob(modelSettings.modelId);
+      const modelMeta = await loadModelMeta(modelSettings.modelId);
+
+      if (modelBlob) {
+        models.push({
+          ...modelSettings,
+          modelBlob,
+          objectUrl: URL.createObjectURL(modelBlob),
+          meta: modelMeta
+        });
+      }
+    } catch (error) {
+      console.error('❌ モデル読み込みエラー:', modelSettings.modelId, error);
+    }
+  }
+
+  return models;
 }
 
 /**

@@ -92,13 +92,10 @@ miruwebar/
 │   │   ├── debug-overlay.js
 │   │   ├── debug-tools.js
 │   │   ├── design-extractor.js
-│   │   ├── error-boundary.js
-│   │   ├── error-handler.js
 │   │   ├── hmr-client.js
 │   │   ├── hot-reload-manager.js
 │   │   ├── loading-screen-state.js
 │   │   ├── loading-state-manager.js
-│   │   ├── loadingManager.js
 │   │   ├── logger.js
 │   │   ├── marker-utils.js
 │   │   ├── monitored-fetch.js
@@ -129,7 +126,6 @@ miruwebar/
 │   ├── api/ （外部API通信）
 │   │   ├── auth.js
 │   │   ├── projects.js
-│   │   ├── projects-new.js
 │   │   └── qr-code.js
 │   │
 │   ├── architecture/ （アーキテクチャ関連）
@@ -282,21 +278,17 @@ miruwebar/
 │   ├── adr/
 │   │   └── TEMPLATE.md
 │   ├── device-debug.md
+│   ├── firebase-api-key-find-guide.md
+│   ├── firebase-api-key-restrict-step-by-step.md
+│   ├── firebase-api-key-security.md
+│   ├── firebase-cors-setup.md
+│   ├── firebase-storage-rules.md
 │   ├── routes.md
+│   ├── vercel-blob-implementation.md
+│   ├── vercel-deployment.md
 │   ├── webar-audit.md
-│   ├── webar-fix-plan.md
-│   ├── webar-master-fix-plan.md
+│   ├── webar-fix-plan-2025-12.md
 │   └── webar-rootcause.md
-│
-├── legacy/ （レガシーコード）
-│   ├── README.md
-│   ├── loading-screen.css
-│   ├── loadingManager.js
-│   ├── webxr-ar.js
-│   └── _tests_2025-10-05/
-│
-├── data/ （データファイル）
-│   └── projects.json
 │
 ├── uploads/ （アップロードファイル）
 │   └── projects/
@@ -398,13 +390,10 @@ miruwebar/
 ./src/utils/debug-overlay.js
 ./src/utils/debug-tools.js
 ./src/utils/design-extractor.js
-./src/utils/error-boundary.js
-./src/utils/error-handler.js
 ./src/utils/hmr-client.js
 ./src/utils/hot-reload-manager.js
 ./src/utils/loading-screen-state.js
 ./src/utils/loading-state-manager.js
-./src/utils/loadingManager.js
 ./src/utils/logger.js
 ./src/utils/marker-utils.js
 ./src/utils/monitored-fetch.js
@@ -439,7 +428,6 @@ miruwebar/
 ```
 ./src/api/auth.js
 ./src/api/projects.js
-./src/api/projects-new.js
 ./src/api/qr-code.js
 ```
 
@@ -560,33 +548,21 @@ miruwebar/
 ```
 ./docs/adr/TEMPLATE.md
 ./docs/device-debug.md
+./docs/firebase-api-key-find-guide.md
+./docs/firebase-api-key-restrict-step-by-step.md
+./docs/firebase-api-key-security.md
+./docs/firebase-cors-setup.md
+./docs/firebase-storage-rules.md
 ./docs/routes.md
+./docs/vercel-blob-implementation.md
+./docs/vercel-deployment.md
 ./docs/webar-audit.md
-./docs/webar-fix-plan.md
-./docs/webar-master-fix-plan.md
+./docs/webar-fix-plan-2025-12.md
 ./docs/webar-rootcause.md
-```
-
-### legacy/
-```
-./legacy/README.md
-./legacy/loading-screen.css
-./legacy/loadingManager.js
-./legacy/webxr-ar.js
-./legacy/_tests_2025-10-05/marker-test-fixed.html
-./legacy/_tests_2025-10-05/marker-test-improved.html
-./legacy/_tests_2025-10-05/marker-test-simple.html
-./legacy/_tests_2025-10-05/network-test.html
-./legacy/_tests_2025-10-05/qr-test.html
-./legacy/_tests_2025-10-05/simple-ar-test.html
-./legacy/_tests_2025-10-05/test-ar-adapter.html
-./legacy/_tests_2025-10-05/test-ar-engine-adapter.js
-./legacy/_tests_2025-10-05/test-save.html
 ```
 
 ### その他
 ```
-./data/projects.json
 ./src/main.js
 ./src/counter.js
 ./src/javascript.svg
@@ -610,5 +586,3 @@ miruwebar/
 ./src/test-auto-restart.js
 ./ssl/README.md
 ```
-
-

@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const PORT = process.env.PREVIEW_PORT || 4173; // vite.config.jsのpreview portに合わせる
-const PROJECT_ID = process.env.PROJECT_ID || '1756795802459';
+const PROJECT_ID = process.env.PROJECT_ID || 'sample-keep-me';
 const URL = `http://localhost:${PORT}/#/viewer?src=/projects/${PROJECT_ID}/project.json`;
 
 function run(cmd, args, opts={}) {
@@ -113,4 +113,3 @@ main().catch((err) => {
   console.error('❌ Verification failed:', err);
   process.exit(1);
 });
-

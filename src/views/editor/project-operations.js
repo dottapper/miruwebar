@@ -166,7 +166,7 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
     
     const result = await saveProject(projectData, arViewerInstance);
     
-    if (result.success) {
+    if (result && !result.error) {
       
       // 保存完了メッセージを表示
       const saveButton = document.getElementById('save-button');

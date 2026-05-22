@@ -7,7 +7,8 @@ import fs from 'fs';
 import path from 'path';
 import { normalizeProjectData, reportSizeReduction, checkDuplicateEditorSettings } from '../src/utils/project-data-normalizer.js';
 
-const TARGET_FILE = '/Users/harasawamakiko/miruwebar/public/projects/1756795802459/project.json';
+const PROJECT_ID = process.env.PROJECT_ID || 'sample-keep-me';
+const TARGET_FILE = path.resolve(process.cwd(), 'public', 'projects', PROJECT_ID, 'project.json');
 
 async function cleanupProjectFile() {
   console.log('🔍 プロジェクトデータクリーンアップ開始');
@@ -83,71 +84,6 @@ async function cleanupProjectFile() {
     console.error('❌ エラーが発生しました:', error.message);
     process.exit(1);
   }
-}
-
-// 追加: 既存の正規化ユーティリティを改良
-function enhancedNormalizeProjectData(projectData) {
-  // 既存の正規化処理を実行
-  let normalized = normalizeProjectData(projectData);
-  
-  // 追加の最適化処理
-  
-  // 1. templateSettings が重複している場合の処理
-  if (normalized.loadingScreen?.templateSettings) {
-    console.log('🔄 templateSettings 重複チェック中...');
-    
-    // loadingScreen直下とeditorSettings内で重複する可能性のあるフィールドをクリーンアップ
-    const templateSettings = normalized.loadingScreen.templateSettings;
-    const editorSettings = normalized.loadingScreen.editorSettings;
-    
-    if (editorSettings && templateSettings) {
-      // 重複するフィールドを検出・削除
-      const duplicateFields = [];
-      for (const key in templateSettings) {
-        if (editorSettings[key] && JSON.stringify(templateSettings[key]) === JSON.stringify(editorSettings[key])) {
-          duplicateFields.push(key);
-        }
-      }
-      
-      if (duplicateFields.length > 0) {
-        console.log(`🧹 重複フィールド削除: ${duplicateFields.join(', ')}`);
-        duplicateFields.forEach(field => delete templateSettings[field]);
-      }
-    }
-  }
-  
-  // 2. 空のオブジェクト・不要なフィールドを削除
-  normalized = removeEmptyObjects(normalized);
-  
-  return normalized;
-}
-
-function removeEmptyObjects(obj) {
-  if (typeof obj !== 'object' || obj === null) return obj;
-  
-  if (Array.isArray(obj)) {
-    return obj.map(removeEmptyObjects).filter(item => item !== null && item !== undefined);
-  }
-  
-  const cleaned = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const cleanedValue = removeEmptyObjects(value);
-    
-    // 空のオブジェクトや配列は除外
-    if (cleanedValue !== null && cleanedValue !== undefined) {
-      if (typeof cleanedValue === 'object') {
-        if (Array.isArray(cleanedValue)) {
-          if (cleanedValue.length > 0) cleaned[key] = cleanedValue;
-        } else {
-          if (Object.keys(cleanedValue).length > 0) cleaned[key] = cleanedValue;
-        }
-      } else {
-        cleaned[key] = cleanedValue;
-      }
-    }
-  }
-  
-  return cleaned;
 }
 
 // 実行
