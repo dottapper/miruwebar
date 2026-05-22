@@ -328,6 +328,85 @@ export function getProject(id) {
  * @param {Object} publishInfo - 公開情報
  * @returns {boolean} 更新成功の場合 true
  */
+/**
+ * 公開リリース履歴に1件追加（localStorage・最新50件）
+ */
+export function appendProjectReleaseRecord(id, record) {
+  if (!id || !record?.releaseId) return false;
+  try {
+    const projects = getProjects();
+    const index = projects.findIndex((p) => p.id === id);
+    if (index < 0) return false;
+
+    const current = projects[index];
+    const publishInfo = { ...(current.publishInfo || {}) };
+    const history = Array.isArray(publishInfo.releaseHistory)
+      ? [...publishInfo.releaseHistory]
+      : [];
+    const filtered = history.filter((h) => h.releaseId !== record.releaseId);
+    filtered.unshift({
+      releaseId: record.releaseId,
+      viewerUrl: record.viewerUrl || '',
+      projectUrl: record.projectUrl || '',
+      publishedAt: record.publishedAt || new Date().toISOString(),
+      provider: record.provider || '',
+      totalBytes: record.totalBytes || 0
+    });
+    publishInfo.releaseHistory = filtered.slice(0, 50);
+    if (record.release) {
+      publishInfo.release = record.release;
+    }
+
+    projects[index] = { ...current, publishInfo, updated: Date.now() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    return true;
+  } catch (error) {
+    console.error('❌ 公開履歴の追加エラー:', error);
+    return false;
+  }
+}
+
+/**
+ * 公開リリース履歴から1件削除
+ */
+export function removeProjectReleaseRecord(id, releaseId) {
+  if (!id || !releaseId) return false;
+  try {
+    const projects = getProjects();
+    const index = projects.findIndex((p) => p.id === id);
+    if (index < 0) return false;
+
+    const current = projects[index];
+    const publishInfo = { ...(current.publishInfo || {}) };
+    const history = Array.isArray(publishInfo.releaseHistory)
+      ? publishInfo.releaseHistory.filter((h) => h.releaseId !== releaseId)
+      : [];
+
+    publishInfo.releaseHistory = history;
+    if (publishInfo.release?.releaseId === releaseId) {
+      const next = history[0];
+      if (next) {
+        publishInfo.release = {
+          provider: next.provider,
+          viewerUrl: next.viewerUrl,
+          projectUrl: next.projectUrl,
+          publishedAt: next.publishedAt,
+          releaseId: next.releaseId
+        };
+      } else {
+        delete publishInfo.release;
+      }
+    }
+
+    projects[index] = { ...current, publishInfo, updated: Date.now() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    return true;
+  } catch (error) {
+    console.error('❌ 公開履歴の削除エラー:', error);
+    return false;
+  }
+}
+
 export function updateProjectPublishInfo(id, publishInfo) {
   try {
     const projects = getProjects();

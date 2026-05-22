@@ -1,6 +1,13 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { getServerNetworkIP } from '../utils/network.js';
+import {
+  listProjectReleasesFromLocalFs,
+  deleteReleaseFromLocalFs,
+  getLocalProjectsTotalBytes,
+  formatBytes,
+  getQuotaInfo
+} from '../../api/blob-release-utils.js';
 
 const ROOT = process.cwd();
 
@@ -201,6 +208,82 @@ export function projectsApiPlugin() {
           console.error('❌ /api/publish-project 失敗:', e);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'publish failed', message: e.message }));
+        }
+      });
+
+      // GET/DELETE /api/blob-releases（開発時の公開一覧・削除）
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split('?')[0];
+        if (url !== '/api/blob-releases') return next();
+
+        const sendJson = (status, data) => {
+          res.writeHead(status, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(data));
+        };
+
+        try {
+          if (req.method === 'GET') {
+            const qs = new URL(req.url, 'http://localhost').searchParams;
+            if (qs.get('scope') === 'account') {
+              const localTotal = await getLocalProjectsTotalBytes(ROOT);
+              const quota = getQuotaInfo();
+              return sendJson(200, {
+                ok: true,
+                account: {
+                  provider: 'localFs',
+                  totalBytes: localTotal,
+                  totalFormatted: formatBytes(localTotal),
+                  tier: 'local',
+                  quotaBytes: quota.quotaBytes,
+                  quotaLabel: 'ローカル public/projects/（Vercel Blob とは別）',
+                  usagePercent: quota.quotaBytes
+                    ? Math.min(100, (localTotal / quota.quotaBytes) * 100)
+                    : 0
+                }
+              });
+            }
+
+            const projectId = sanitizeId(qs.get('projectId') || '');
+            if (!projectId) {
+              return sendJson(400, { error: 'projectId is required' });
+            }
+            const project = await listProjectReleasesFromLocalFs(projectId, ROOT);
+            const localTotal = await getLocalProjectsTotalBytes(ROOT);
+            const quota = getQuotaInfo();
+            return sendJson(200, {
+              ok: true,
+              provider: 'localFs',
+              projectId,
+              ...project,
+              account: {
+                provider: 'localFs',
+                totalBytes: localTotal,
+                totalFormatted: formatBytes(localTotal),
+                quotaBytes: quota.quotaBytes,
+                quotaLabel: quota.quotaLabel,
+                usagePercent: quota.quotaBytes
+                  ? Math.min(100, (localTotal / quota.quotaBytes) * 100)
+                  : 0
+              }
+            });
+          }
+
+          if (req.method === 'DELETE') {
+            const body = await readRequestBody(req);
+            const parsed = JSON.parse(body || '{}');
+            const projectId = sanitizeId(parsed.projectId);
+            const releaseId = parsed.releaseId;
+            if (!projectId || !releaseId) {
+              return sendJson(400, { error: 'projectId and releaseId are required' });
+            }
+            const result = await deleteReleaseFromLocalFs(projectId, releaseId, ROOT);
+            return sendJson(200, { ok: true, provider: 'localFs', ...result });
+          }
+
+          return next();
+        } catch (e) {
+          console.error('❌ /api/blob-releases 失敗:', e);
+          return sendJson(500, { error: 'blob-releases failed', message: e.message });
         }
       });
     }

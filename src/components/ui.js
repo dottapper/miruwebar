@@ -9,7 +9,17 @@ import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
 import { publishRelease } from '../storage/storage-provider.js';
 import { getTunnelBaseUrl, getStoredTunnelUrl, setStoredTunnelUrl, buildTunnelViewerUrl } from '../utils/tunnel-url.js';
-import { updateProjectPublishInfo } from '../storage/project-store.js';
+import {
+  updateProjectPublishInfo,
+  appendProjectReleaseRecord,
+  removeProjectReleaseRecord
+} from '../storage/project-store.js';
+import {
+  fetchProjectBlobReleases,
+  deleteProjectBlobRelease,
+  estimatePublishPayloadBytes,
+  formatStorageBytes
+} from '../storage/blob-releases-api.js';
 import { security } from '../utils/security-manager.js';
 
 // UI専用ロガーを作成
@@ -611,6 +621,24 @@ export async function showQRCodeModal(options = {}) {
               .qrm-usage { font-size:0.83rem; color:var(--color-text-secondary); line-height:1.5; }
               .qrm-usage p { margin:0.55rem 0 0.15rem; }
               .qrm-usage ul { margin:0; padding-left:1.3rem; }
+              .qrm-blob-usage { margin:0.6rem 0; padding:0.65rem 0.75rem; background:rgba(127,127,127,0.1); border-radius:8px; font-size:0.8rem; line-height:1.45; }
+              .qrm-blob-usage strong { display:block; margin-bottom:0.25rem; }
+              .qrm-blob-bar { height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden; margin:0.35rem 0; }
+              .qrm-blob-bar-fill { height:100%; background:var(--color-primary,#7C4DFF); border-radius:3px; transition:width 0.3s; max-width:100%; }
+              .qrm-blob-bar-fill.warn { background:#FF9800; }
+              .qrm-blob-bar-fill.danger { background:#f44336; }
+              .qrm-estimate { font-size:0.78rem; color:var(--color-text-secondary); margin:0.35rem 0 0.6rem; }
+              .qrm-release-history { margin-top:0.75rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.65rem; }
+              .qrm-release-history h4 { margin:0 0 0.4rem; font-size:0.88rem; font-weight:600; }
+              .qrm-release-list { list-style:none; margin:0; padding:0; max-height:160px; overflow-y:auto; }
+              .qrm-release-item { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.78rem; }
+              .qrm-release-item:last-child { border-bottom:none; }
+              .qrm-release-meta { flex:1; min-width:0; }
+              .qrm-release-id { font-family:monospace; font-size:0.72rem; color:var(--color-text-secondary); word-break:break-all; }
+              .qrm-release-delete { flex-shrink:0; padding:0.25rem 0.5rem; font-size:0.72rem; border-radius:6px; border:1px solid rgba(244,67,54,0.5); background:transparent; color:#f44336; cursor:pointer; }
+              .qrm-release-delete:hover { background:rgba(244,67,54,0.15); }
+              .qrm-release-empty { font-size:0.78rem; color:var(--color-text-secondary); margin:0.25rem 0; }
+              .qrm-refresh-releases { margin-top:0.4rem; width:100%; font-size:0.78rem; }
             </style>
 
             <div class="qrm-tabs">
@@ -632,9 +660,22 @@ export async function showQRCodeModal(options = {}) {
             </div>
 
             <div id="release-settings" class="method-settings" style="display: none;">
-                <p class="qrm-desc">アップロードして、誰でもアクセスできる公開URLを発行します。</p>
+                <p class="qrm-desc">アップロードして、誰でもアクセスできる公開URLを発行します。再公開のたびに新しいリリースが追加されます。</p>
+                <div id="blob-usage-panel" class="qrm-blob-usage" style="display:none;">
+                  <strong id="blob-account-title">Blob 使用量</strong>
+                  <div class="qrm-blob-bar"><div id="blob-account-bar" class="qrm-blob-bar-fill" style="width:0%"></div></div>
+                  <span id="blob-account-text">読み込み中...</span>
+                </div>
+                <p id="publish-size-estimate" class="qrm-estimate"></p>
                 <button id="publish-release" class="primary-button qrm-copy">🚀 公開リリースを作成</button>
                 <div id="release-status" class="qrm-status" style="display: none;"></div>
+                <div class="qrm-release-history">
+                  <h4>公開履歴（テスト後に削除可）</h4>
+                  <p class="qrm-desc" style="margin-bottom:0.4rem;font-size:0.76rem;">削除するとその QR の URL は使えなくなります。最新以外を消して容量を空けてください。</p>
+                  <ul id="release-list" class="qrm-release-list"></ul>
+                  <p id="release-list-empty" class="qrm-release-empty" style="display:none;">まだ公開リリースがありません</p>
+                  <button type="button" id="refresh-releases" class="secondary-button qrm-refresh-releases">🔄 一覧を更新</button>
+                </div>
             </div>
             
             <div class="qrm-stage">
@@ -702,6 +743,126 @@ export async function showQRCodeModal(options = {}) {
 
     // 公開リリースのURL（公開後に設定される）
     let releasePublishedUrl = storedReleaseUrl;
+    let cachedProjectDataForPublish = null;
+
+    const blobUsagePanel = modalOverlay.querySelector('#blob-usage-panel');
+    const blobAccountBar = modalOverlay.querySelector('#blob-account-bar');
+    const blobAccountText = modalOverlay.querySelector('#blob-account-text');
+    const publishSizeEstimate = modalOverlay.querySelector('#publish-size-estimate');
+    const releaseListEl = modalOverlay.querySelector('#release-list');
+    const releaseListEmpty = modalOverlay.querySelector('#release-list-empty');
+
+    async function ensureProjectDataForPublish() {
+      if (cachedProjectDataForPublish) return cachedProjectDataForPublish;
+      const project = await getProject(projectId);
+      if (!project) return null;
+      cachedProjectDataForPublish = await loadProjectWithModels(project);
+      return cachedProjectDataForPublish;
+    }
+
+    function updatePublishSizeEstimate(projectData) {
+      if (!publishSizeEstimate) return;
+      if (!projectData) {
+        publishSizeEstimate.textContent = '';
+        return;
+      }
+      const bytes = estimatePublishPayloadBytes(projectData);
+      const models = projectData.modelData || [];
+      publishSizeEstimate.textContent = bytes > 0
+        ? `今回の公開見込み（GLB等）: 約 ${formatStorageBytes(bytes)}（${models.length}件・圧縮前の目安）`
+        : 'モデル未登録のため公開データは小さい見込みです';
+    }
+
+    function renderBlobAccountUsage(account) {
+      if (!blobUsagePanel || !account) {
+        if (blobUsagePanel) blobUsagePanel.style.display = 'none';
+        return;
+      }
+      blobUsagePanel.style.display = 'block';
+      const pct = account.quotaBytes
+        ? Math.min(100, (account.totalBytes / account.quotaBytes) * 100)
+        : 0;
+      if (blobAccountBar) {
+        blobAccountBar.style.width = `${pct}%`;
+        blobAccountBar.classList.remove('warn', 'danger');
+        if (pct >= 90) blobAccountBar.classList.add('danger');
+        else if (pct >= 70) blobAccountBar.classList.add('warn');
+      }
+      const quotaStr = account.quotaBytes
+        ? formatStorageBytes(account.quotaBytes)
+        : '—';
+      if (blobAccountText) {
+        blobAccountText.textContent = account.quotaBytes
+          ? `アカウント全体: ${account.totalFormatted || formatStorageBytes(account.totalBytes)} / ${quotaStr}（${account.quotaLabel || ''}）`
+          : `${account.totalFormatted || formatStorageBytes(account.totalBytes)}（${account.quotaLabel || ''}）`;
+      }
+    }
+
+    function renderReleaseList(releases, projectTotalFormatted) {
+      if (!releaseListEl) return;
+      releaseListEl.innerHTML = '';
+      const list = releases || [];
+      if (list.length === 0) {
+        if (releaseListEmpty) releaseListEmpty.style.display = 'block';
+        return;
+      }
+      if (releaseListEmpty) releaseListEmpty.style.display = 'none';
+
+      const latestId = releasePublishedUrl
+        ? (() => {
+          try {
+            const u = new URL(releasePublishedUrl, window.location.origin);
+            const src = u.searchParams.get('src') || '';
+            const m = src.match(/releases\/([^/]+)\//);
+            return m ? m[1] : null;
+          } catch {
+            return null;
+          }
+        })()
+        : null;
+
+      list.forEach((rel) => {
+        const li = document.createElement('li');
+        li.className = 'qrm-release-item';
+        const date = rel.publishedAt
+          ? new Date(rel.publishedAt).toLocaleString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+          : '日時不明';
+        const isLatest = latestId && rel.releaseId === latestId;
+        li.innerHTML = `
+          <div class="qrm-release-meta">
+            <div>${date}${isLatest ? ' · <strong>QR表示中</strong>' : ''} · ${rel.totalFormatted || formatStorageBytes(rel.totalBytes || 0)}</div>
+            <div class="qrm-release-id">${rel.releaseId}</div>
+          </div>
+          <button type="button" class="qrm-release-delete" data-release-id="${rel.releaseId}" title="Blob から削除">削除</button>
+        `;
+        releaseListEl.appendChild(li);
+      });
+
+      if (projectTotalFormatted) {
+        const foot = document.createElement('li');
+        foot.className = 'qrm-release-item';
+        foot.style.borderBottom = 'none';
+        foot.innerHTML = `<div class="qrm-release-meta"><strong>このプロジェクト合計: ${projectTotalFormatted}</strong></div>`;
+        releaseListEl.appendChild(foot);
+      }
+    }
+
+    async function loadReleasePanel() {
+      try {
+        const projectData = await ensureProjectDataForPublish();
+        updatePublishSizeEstimate(projectData);
+
+        const data = await fetchProjectBlobReleases(projectId);
+        renderBlobAccountUsage(data.account);
+        renderReleaseList(data.releases, data.projectTotalFormatted);
+      } catch (error) {
+        uiLogger.warn('公開履歴の取得に失敗:', error);
+        if (releaseListEmpty) {
+          releaseListEmpty.style.display = 'block';
+          releaseListEmpty.textContent = `一覧を取得できません: ${error.message}`;
+        }
+      }
+    }
 
     // トンネルURL入力欄に保存済みの値を反映
     const tunnelInput = modalOverlay.querySelector('#tunnel-url-input');
@@ -757,6 +918,7 @@ export async function showQRCodeModal(options = {}) {
       } else {
         currentUrl = releasePublishedUrl || '';
         emptyHint = '「公開リリースを作成」を押してください';
+        loadReleasePanel();
       }
       refreshOutputUI(emptyHint);
     }
@@ -764,6 +926,52 @@ export async function showQRCodeModal(options = {}) {
     tunnelTab.addEventListener('click', () => switchTab('tunnel'));
     lanTab.addEventListener('click', () => switchTab('lan'));
     releaseTab.addEventListener('click', () => switchTab('release'));
+
+    modalOverlay.querySelector('#refresh-releases')?.addEventListener('click', () => {
+      loadReleasePanel();
+    });
+
+    releaseListEl?.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.qrm-release-delete');
+      if (!btn) return;
+      const releaseId = btn.dataset.releaseId;
+      if (!releaseId) return;
+
+      const warnLatest = releasePublishedUrl && releasePublishedUrl.includes(releaseId);
+      const msg = warnLatest
+        ? `リリース「${releaseId}」を削除しますか？\n\n現在 QR に表示している URL も無効になります。`
+        : `リリース「${releaseId}」を Blob から削除しますか？\n\n既に配布した QR があれば、その URL は開けなくなります。`;
+      if (!confirm(msg)) return;
+
+      btn.disabled = true;
+      btn.textContent = '削除中...';
+      try {
+        const result = await deleteProjectBlobRelease(projectId, releaseId);
+        removeProjectReleaseRecord(projectId, releaseId);
+        if (warnLatest) {
+          releasePublishedUrl = '';
+          const project = await getProject(projectId);
+          const next = project?.publishInfo?.release?.viewerUrl || '';
+          releasePublishedUrl = next;
+        }
+        await loadReleasePanel();
+        if (currentMethod === 'release') {
+          currentUrl = releasePublishedUrl || '';
+          refreshOutputUI(releasePublishedUrl ? '' : '「公開リリースを作成」を押してください');
+        }
+        const statusEl = modalOverlay.querySelector('#release-status');
+        if (statusEl) {
+          statusEl.style.display = 'block';
+          statusEl.textContent = `🗑 削除しました（${result.freedFormatted || ''} 解放）`;
+          statusEl.style.background = '#FFF3E0';
+          statusEl.style.color = '#E65100';
+        }
+      } catch (error) {
+        alert(`削除に失敗しました:\n\n${error.message}`);
+        btn.disabled = false;
+        btn.textContent = '削除';
+      }
+    });
 
     const blobToBase64 = (blob) => new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1019,17 +1227,25 @@ export async function showQRCodeModal(options = {}) {
         uiLogger.log('🔗 更新されたURL:', currentUrl);
 
         try {
-          updateProjectPublishInfo(projectId, {
-            release: {
-              provider: result.provider,
-              viewerUrl: result.viewerUrl,
-              projectUrl: result.projectUrl,
-              publishedAt: new Date().toISOString()
-            }
+          const publishedAt = new Date().toISOString();
+          const releaseRecord = {
+            provider: result.provider,
+            viewerUrl: result.viewerUrl,
+            projectUrl: result.projectUrl,
+            publishedAt,
+            releaseId: result.releaseId || ''
+          };
+          appendProjectReleaseRecord(projectId, {
+            ...releaseRecord,
+            release: releaseRecord,
+            totalBytes: estimatePublishPayloadBytes(projectData)
           });
+          updateProjectPublishInfo(projectId, { release: releaseRecord });
         } catch (updateError) {
           uiLogger.warn('⚠️ 公開情報の保存に失敗:', updateError);
         }
+
+        await loadReleasePanel();
 
         statusEl.textContent = `✅ 公開完了！（${result.provider}）`;
         statusEl.style.background = '#E8F5E9';
