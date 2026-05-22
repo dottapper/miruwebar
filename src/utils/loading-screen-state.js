@@ -1,6 +1,15 @@
 // src/utils/loading-screen-state.js
 // ローディング画面設定の状態管理を分離し、予期しない副作用を防ぐ
 
+import {
+  defaultSettings,
+  settingsAPI,
+  SETTINGS_STORAGE_KEY,
+  EDITOR_SETTINGS_STORAGE_KEY
+} from '../components/loading-screen/settings.js';
+
+const cloneSettings = (settings) => JSON.parse(JSON.stringify(settings));
+
 /**
  * ローディング画面設定の独立した状態管理
  * エディターとビューアで異なるインスタンスを使用して結合度を下げる
@@ -16,18 +25,22 @@ class LoadingScreenStateManager {
    * 設定を取得（キャッシュまたはストレージから）
    */
   getSettings() {
-    if (this.settings) {
-      return { ...this.settings }; // 防御的コピー
+    if (this.settings && this.namespace !== 'editor') {
+      return cloneSettings(this.settings);
     }
 
     try {
-      const stored = localStorage.getItem(`loadingScreenSettings_${this.namespace}`);
-      this.settings = stored ? JSON.parse(stored) : this.getDefaultSettings();
-      return { ...this.settings };
+      const storageKey = `loadingScreenSettings_${this.namespace}`;
+      const stored = this.namespace === 'editor'
+        ? localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(EDITOR_SETTINGS_STORAGE_KEY)
+        : localStorage.getItem(storageKey);
+      const parsed = stored ? JSON.parse(stored) : this.getDefaultSettings();
+      this.settings = settingsAPI.mergeWithDefaults(parsed);
+      return cloneSettings(this.settings);
     } catch (error) {
       console.warn('ローディング画面設定の読み込みに失敗:', error);
       this.settings = this.getDefaultSettings();
-      return { ...this.settings };
+      return cloneSettings(this.settings);
     }
   }
 
@@ -37,14 +50,18 @@ class LoadingScreenStateManager {
   setSettings(newSettings, options = {}) {
     const { skipPersist = false, skipNotify = false } = options;
     
-    this.settings = { ...this.getDefaultSettings(), ...newSettings };
+    this.settings = settingsAPI.mergeWithDefaults(newSettings || {});
 
     if (!skipPersist) {
       try {
-        localStorage.setItem(
-          `loadingScreenSettings_${this.namespace}`,
-          JSON.stringify(this.settings)
-        );
+        const storageKey = `loadingScreenSettings_${this.namespace}`;
+        const settingsJson = JSON.stringify(this.settings);
+        if (this.namespace === 'editor') {
+          localStorage.setItem(SETTINGS_STORAGE_KEY, settingsJson);
+          localStorage.removeItem(EDITOR_SETTINGS_STORAGE_KEY);
+        } else {
+          localStorage.setItem(storageKey, settingsJson);
+        }
       } catch (error) {
         console.warn('ローディング画面設定の保存に失敗:', error);
       }
@@ -54,7 +71,7 @@ class LoadingScreenStateManager {
       this.notifyListeners(this.settings);
     }
 
-    return { ...this.settings };
+    return cloneSettings(this.settings);
   }
 
   /**
@@ -70,32 +87,7 @@ class LoadingScreenStateManager {
    * デフォルト設定
    */
   getDefaultSettings() {
-    return {
-      loadingScreen: {
-        enabled: true,
-        template: 'simple',
-        message: 'ARを読み込み中...',
-        backgroundColor: '#000000',
-        textColor: '#ffffff',
-        progressColor: '#007bff',
-        logo: null,
-        logoSize: 1.0,
-        logoPosition: 20,
-        showProgress: true,
-        fontScale: 1.0
-      },
-      startScreen: {
-        title: 'AR体験を開始',
-        buttonText: '開始',
-        backgroundColor: '#ffffff',
-        textColor: '#000000',
-        buttonColor: '#007bff',
-        buttonTextColor: '#ffffff',
-        logo: null,
-        logoSize: 1.0,
-        logoPosition: 20
-      }
-    };
+    return cloneSettings(defaultSettings);
   }
 
   /**
@@ -128,6 +120,10 @@ class LoadingScreenStateManager {
     this.settings = null;
     try {
       localStorage.removeItem(`loadingScreenSettings_${this.namespace}`);
+      if (this.namespace === 'editor') {
+        localStorage.removeItem(SETTINGS_STORAGE_KEY);
+        localStorage.removeItem(EDITOR_SETTINGS_STORAGE_KEY);
+      }
     } catch (error) {
       console.warn('ローディング画面設定の削除に失敗:', error);
     }

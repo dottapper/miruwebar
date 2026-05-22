@@ -26,9 +26,14 @@ const sanitizeFileName = (name) => {
 };
 const isAllowedExt = (name) => /\.(glb|gltf)$/i.test(name);
 
-const MAX_MODEL_BYTES = 50 * 1024 * 1024; // 50MB/1 file
-const MAX_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB/req
-const MAX_BODY_BYTES = 150 * 1024 * 1024; // 上限（保護用）
+const MAX_LOCAL_MODEL_BYTES = 50 * 1024 * 1024; // 50MB/1 file（ローカル開発用）
+const MAX_LOCAL_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB/req（ローカル開発用）
+// Vercel Functions の server upload はリクエストサイズに制限がある。
+// Base64化で約33%増えるため、Blob本番公開では小さめに制限し、
+// 大容量対応は @vercel/blob/client の直接アップロードへ移行する。
+const MAX_VERCEL_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_BLOB_MODEL_BYTES = 3 * 1024 * 1024;
+const MAX_BLOB_TOTAL_BYTES = 3 * 1024 * 1024;
 
 /** [x,y,z] 配列に正規化 */
 const normalizeVec3 = (value, fallback) => {
@@ -75,12 +80,23 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 公開先の決定
+    const token = process.env.BLOB_READ_WRITE_TOKEN || '';
+    const vercelEnv = process.env.VERCEL_ENV || '';
+    const isProdLike = vercelEnv === 'production' || vercelEnv === 'preview';
+    const requestLimit = token || isProdLike ? MAX_VERCEL_BODY_BYTES : 150 * 1024 * 1024;
+
     const contentLength = parseInt(req.headers['content-length'] || '0', 10);
-    if (contentLength > MAX_BODY_BYTES) {
-      return res.status(413).json({ error: 'payload too large' });
+    if (contentLength > requestLimit) {
+      return res.status(413).json({
+        error: 'payload too large',
+        message: token || isProdLike
+          ? '公開リリースのデータが大きすぎます。現在の本番公開は小容量モデルのみ対応しています。大きいGLBはclient upload対応後に公開してください。'
+          : 'payload too large'
+      });
     }
 
-    const body = await readRequestBody(req);
+    const body = await readRequestBody(req, requestLimit);
     const parsed = JSON.parse(body || '{}');
     const {
       id: rawId,
@@ -100,11 +116,6 @@ export default async function handler(req, res) {
 
     // リリースIDを発行（毎回ユニーク。過去のリリースを上書きしない）
     const releaseId = `rel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-
-    // 公開先の決定
-    const token = process.env.BLOB_READ_WRITE_TOKEN || '';
-    const vercelEnv = process.env.VERCEL_ENV || '';
-    const isProdLike = vercelEnv === 'production' || vercelEnv === 'preview';
 
     if (!token && isProdLike) {
       // 本番/Preview でトークンが無い場合は「成功」と偽らずエラーにする
@@ -139,7 +150,7 @@ export default async function handler(req, res) {
       id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, models
     });
     const projectUrl = `${appOrigin}/projects/${id}/project.json`;
-    const viewerUrl = `${appOrigin}/#/viewer?src=${projectUrl}`;
+    const viewerUrl = `${appOrigin}/#/viewer?src=${encodeURIComponent(projectUrl)}`;
     return res.status(200).json({
       ok: true,
       provider: 'localFs',
@@ -180,11 +191,11 @@ async function publishToBlob(input) {
     const base64 = String(m.dataBase64 || '').split(',').pop();
     if (!base64) continue;
     const buf = Buffer.from(base64, 'base64');
-    if (buf.length > MAX_MODEL_BYTES) {
+    if (buf.length > MAX_BLOB_MODEL_BYTES) {
       throw new Error(`file too large: ${fileName} (${buf.length} bytes)`);
     }
     totalBytes += buf.length;
-    if (totalBytes > MAX_TOTAL_BYTES) {
+    if (totalBytes > MAX_BLOB_TOTAL_BYTES) {
       throw new Error(`total size exceeded (${totalBytes} bytes)`);
     }
     const blob = await put(`${base}/assets/${fileName}`, buf, {
@@ -246,6 +257,7 @@ async function publishToBlob(input) {
   };
   const projectBlob = await put(`${base}/project.json`, JSON.stringify(projectJson, null, 2), {
     ...putOpts,
+    addRandomSuffix: false,
     contentType: 'application/json'
   });
 
@@ -269,11 +281,11 @@ async function publishToLocalFs(input) {
     const base64 = String(m.dataBase64 || '').split(',').pop();
     if (!base64) continue;
     const buf = Buffer.from(base64, 'base64');
-    if (buf.length > MAX_MODEL_BYTES) {
+    if (buf.length > MAX_LOCAL_MODEL_BYTES) {
       throw new Error(`file too large: ${fileName} (${buf.length} bytes)`);
     }
     totalBytes += buf.length;
-    if (totalBytes > MAX_TOTAL_BYTES) {
+    if (totalBytes > MAX_LOCAL_TOTAL_BYTES) {
       throw new Error(`total size exceeded (${totalBytes} bytes)`);
     }
     await fs.writeFile(path.join(dir, fileName), buf);
@@ -324,13 +336,13 @@ async function publishToLocalFs(input) {
 }
 
 // リクエストボディを読み取る関数
-function readRequestBody(req) {
+function readRequestBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     let size = 0;
     let body = '';
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         reject(Object.assign(new Error('Payload Too Large'), { status: 413 }));
         return;
       }

@@ -523,7 +523,7 @@ export async function showQRCodeModal(options = {}) {
     });
     
     const modalOverlay = document.createElement('div');
-    modalOverlay.className = 'modal-overlay';
+    modalOverlay.className = 'modal-overlay qr-modal-overlay';
     
     // プロジェクトIDを正確に使用（modelNameにIDが来ている想定）
     const projectId = options.modelName ? decodeURIComponent(options.modelName) : 'sample';
@@ -536,7 +536,21 @@ export async function showQRCodeModal(options = {}) {
     } catch (error) {
       uiLogger.warn('⚠️ 公開情報の取得に失敗:', error);
     }
-    
+
+    // 表示用にデフォルトポート（https:443 / http:80）を URL から取り除く
+    const stripDefaultPort = (url) => {
+      try {
+        const u = new URL(url);
+        if ((u.protocol === 'https:' && u.port === '443') ||
+            (u.protocol === 'http:' && u.port === '80')) {
+          u.port = '';
+        }
+        return u.toString();
+      } catch (_) {
+        return url;
+      }
+    };
+
     // ローカルネットワークIPを取得
     const localIP = await getLocalNetworkIP();
     const currentPort = window.location.port || '3000';
@@ -555,10 +569,9 @@ export async function showQRCodeModal(options = {}) {
     // URL生成（URLStabilizerを使用して ?src=...#/viewer 形式に統一）
     const stabilizer = createURLStabilizer();
     const localUrlInfo = await stabilizer.generateARViewerURL(projectId, URLType.LOCAL, { validateProject: false, skipValidation: true });
-    let localUrl = localUrlInfo.viewerUrl;
-    const appOrigin = window.location.origin;
-    // 初期表示用の公開URL（プレースホルダー）。実際の公開先は公開リリース作成後に更新
-    const webUrl = storedReleaseUrl || `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+    let localUrl = stripDefaultPort(localUrlInfo.viewerUrl);
+    // 公開リリースURLは実際に公開済みのものだけ表示する。未公開時に仮URLのQRを出さない。
+    const webUrl = storedReleaseUrl;
     
     uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
@@ -569,123 +582,92 @@ export async function showQRCodeModal(options = {}) {
     });
     
     modalOverlay.innerHTML = `
-        <div class="modal-content">
+        <div class="modal-content qr-code-modal">
             <h2>ARをスマホで見る</h2>
             ${!isHttps ? `<div style="margin: 0.5rem 0 1rem 0; padding: 0.6rem; border-radius: 6px; background: #FFF3CD; color: #664D03; border: 1px solid #FFECB5; font-size: 0.9rem;">
               ⚠️ 開発環境がHTTPのため、スマホではカメラが使えない場合があります。<br>
               HTTPSでの起動を推奨します（自己署名証明書でも可）。
             </div>` : ''}
-            <p style="margin: 0 0 1.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.4;">
-                QRコードをスマホでスキャンしてAR体験を開始できます。「📶 同一Wi-Fi」は同じネットワーク内での確認用、
-                「📡 トンネルURL」は ngrok 等の公開URL経由での確認用、「🚀 公開リリース作成」は本番公開用です。
-            </p>
+            <style>
+              .qr-code-modal { max-width: 420px; }
+              .qr-code-modal h2 { margin: 0 0 1rem; }
+              .qrm-tabs { display:flex; gap:4px; background:rgba(127,127,127,0.14); padding:4px; border-radius:10px; margin-bottom:1rem; }
+              .qrm-tab { flex:1; padding:0.55rem 0.3rem; border:none; background:transparent; color:var(--color-text-secondary); border-radius:7px; cursor:pointer; font-size:0.82rem; font-weight:600; transition:background .15s,color .15s; }
+              .qrm-tab.active { background:var(--color-primary); color:#fff; }
+              .qrm-desc { margin:0 0 0.8rem; color:var(--color-text-secondary); font-size:0.85rem; line-height:1.5; text-align:center; }
+              .qrm-input { width:100%; padding:0.65rem 0.75rem; border:1px solid var(--color-border); border-radius:8px; box-sizing:border-box; margin-bottom:0.5rem; font-size:0.9rem; }
+              .qrm-status { margin-bottom:0.6rem; padding:0.5rem; border-radius:8px; text-align:center; font-size:0.83rem; }
+              .qrm-stage { display:flex; flex-direction:column; align-items:center; margin-bottom:1rem; }
+              .qrm-canvas-box { background:#fff; padding:14px; border-radius:14px; box-shadow:0 2px 14px rgba(0,0,0,0.15); line-height:0; }
+              .qrm-hint { margin:0.7rem 0 0; font-size:0.82rem; color:var(--color-text-secondary); text-align:center; }
+              .qrm-actions { display:flex; flex-direction:column; gap:0.45rem; margin-bottom:0.8rem; }
+              .qrm-copy { width:100%; }
+              .qrm-actions-row { display:flex; gap:0.4rem; }
+              .qrm-actions-row button { flex:1; font-size:0.78rem; padding:0.55rem 0.25rem; }
+              .qr-code-modal button:disabled { opacity:0.45; cursor:not-allowed; }
+              .qr-code-modal details { margin-bottom:0.6rem; }
+              .qr-code-modal summary { cursor:pointer; font-size:0.84rem; color:var(--color-text-secondary); padding:0.35rem 0; }
+              .qrm-url-text { margin-top:0.4rem; font-size:0.76rem; color:var(--color-text-secondary); word-break:break-all; background:rgba(127,127,127,0.12); padding:0.6rem; border-radius:8px; }
+              .qrm-usage { font-size:0.83rem; color:var(--color-text-secondary); line-height:1.5; }
+              .qrm-usage p { margin:0.55rem 0 0.15rem; }
+              .qrm-usage ul { margin:0; padding-left:1.3rem; }
+            </style>
 
-            <!-- 公開方法選択 -->
-            <div class="publish-method" style="margin-bottom: 1.5rem;">
-                <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">公開方法を選択</h3>
-                <div class="method-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                    <button id="tunnel-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                        📡 トンネルURL
-                    </button>
-                    <button id="lan-tab" class="method-tab active" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-primary); color: white; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                        📶 同一Wi-Fi
-                    </button>
-                    <button id="release-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-                        🚀 公開リリース作成
-                    </button>
-                </div>
+            <div class="qrm-tabs">
+                <button id="lan-tab" class="qrm-tab active">📶 同一Wi-Fi</button>
+                <button id="tunnel-tab" class="qrm-tab">📡 トンネル</button>
+                <button id="release-tab" class="qrm-tab">🚀 公開リリース</button>
+            </div>
 
-                <!-- トンネルURL設定 -->
-                <div id="tunnel-settings" class="method-settings" style="display: none;">
-                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        📡 ngrok / Cloudflare Tunnel の公開URLを貼ってください。同じWi-Fiでなくてもスマホで確認できます。
-                    </p>
-                    <input id="tunnel-url-input" type="url" placeholder="https://xxxx.ngrok-free.app"
-                        style="width: 100%; padding: 0.7rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); margin-bottom: 0.5rem; box-sizing: border-box;" />
-                    <button id="save-tunnel-url" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); border: none; color: white; font-weight: bold; cursor: pointer;">
-                        URLを保存してQR生成
-                    </button>
-                    <div id="tunnel-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); text-align: center;"></div>
-                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
-                        <span id="tunnel-url-display">トンネルURLを保存してください</span>
-                    </div>
-                    <button id="copy-tunnel-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                        URLをコピー
-                    </button>
-                </div>
+            <div id="lan-settings" class="method-settings">
+                <p class="qrm-desc">同じWi-Fiのスマホで、下のQRコードをカメラから読み取ってください。</p>
+            </div>
 
-                <!-- 同一Wi-Fi設定 -->
-                <div id="lan-settings" class="method-settings">
-                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        📶 同じWi-Fi内のスマホで即座にテスト可能（開発・確認用）
-                    </p>
-                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
-                        <span id="local-url">${localUrl}</span>
-                    </div>
-                    <button id="copy-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
-                        URLをコピー
-                    </button>
-                    <button id="test-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
-                        📱 プレビュー
-                    </button>
-                    <button id="open-local-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                        🖥️ PC で開く
-                    </button>
-                </div>
+            <div id="tunnel-settings" class="method-settings" style="display: none;">
+                <p class="qrm-desc">ngrok / Cloudflare Tunnel の公開URLを貼ると、別のネットワークのスマホでも確認できます。</p>
+                <input id="tunnel-url-input" class="qrm-input" type="url" placeholder="https://xxxx.ngrok-free.app" />
+                <button id="save-tunnel-url" class="primary-button qrm-copy">URLを保存してQRに反映</button>
+                <div id="tunnel-status" class="qrm-status" style="display: none;"></div>
+            </div>
 
-                <!-- 公開リリース作成 -->
-                <div id="release-settings" class="method-settings" style="display: none;">
-                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        🚀 公開リリースを作成して、インターネット経由で誰でもアクセスできるURLを発行します。
-                    </p>
-                    <button id="publish-release" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); border: none; color: white; font-weight: bold; cursor: pointer;">
-                        🚀 公開リリースを作成
-                    </button>
-                    <div id="release-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); text-align: center;"></div>
-                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
-                        <span id="release-url">${webUrl}</span>
-                    </div>
-                    <button id="copy-release-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
-                        公開URLをコピー
-                    </button>
-                </div>
+            <div id="release-settings" class="method-settings" style="display: none;">
+                <p class="qrm-desc">アップロードして、誰でもアクセスできる公開URLを発行します。</p>
+                <button id="publish-release" class="primary-button qrm-copy">🚀 公開リリースを作成</button>
+                <div id="release-status" class="qrm-status" style="display: none;"></div>
             </div>
             
-            <div class="form-group" style="margin-bottom: 1.5rem; display: flex; flex-direction: column; align-items: center;">
-                <label style="display: block; margin-bottom: 0.5rem;">QRコード</label>
-                <div id="qrcode-container" style="background: white; padding: 1rem; margin-bottom: 1rem;">
-                    <canvas id="qrcode-canvas" width="200" height="200"></canvas>
+            <div class="qrm-stage">
+                <div id="qrcode-container" class="qrm-canvas-box">
+                    <canvas id="qrcode-canvas" width="240" height="240"></canvas>
                 </div>
-                <div class="qr-actions" style="display: flex; gap: 0.5rem;">
-                    <button id="download-qrcode" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
-                        QRコードをダウンロード
-                    </button>
+                <p id="qr-hint" class="qrm-hint">スマホのカメラでスキャン</p>
+            </div>
+
+            <div class="qrm-actions">
+                <button id="copy-url" class="primary-button qrm-copy">🔗 URLをコピー</button>
+                <div class="qrm-actions-row">
+                    <button id="preview-url" class="secondary-button">📱 プレビュー</button>
+                    <button id="open-url" class="secondary-button">🖥 PCで開く</button>
+                    <button id="download-qrcode" class="secondary-button">💾 QRを保存</button>
                 </div>
             </div>
+
+            <details>
+                <summary>🔗 リンクを表示</summary>
+                <div id="current-url-text" class="qrm-url-text"></div>
+            </details>
             
-            <!-- 使用方法の説明 -->
-            <div class="usage-instructions" style="margin-bottom: 1.5rem; padding: 1rem; background-color: rgba(0,0,0,0.05); border-radius: var(--border-radius-medium); border-left: 4px solid var(--color-primary);">
-                <h4 style="margin: 0 0 0.5rem 0; color: var(--color-text-primary);">📱 スマホでの確認方法</h4>
-                <div style="font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.4;">
-                    <p style="margin: 0 0 0.5rem 0;"><strong>📶 同一Wi-Fi:</strong></p>
-                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
-                        <li>PCとスマホが同じWi-Fiに接続されていることを確認</li>
-                        <li>スマホのカメラアプリでQRコードをスキャン</li>
-                    </ul>
-                    <p style="margin: 0 0 0.5rem 0;"><strong>📡 トンネルURL:</strong></p>
-                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
-                        <li>ngrok / Cloudflare Tunnel で発行した公開URLを入力欄に貼る</li>
-                        <li>「URLを保存してQR生成」を押す</li>
-                        <li>別のネットワークのスマホからもアクセス可能</li>
-                    </ul>
-                    <p style="margin: 0 0 0.5rem 0;"><strong>🚀 公開リリース作成:</strong></p>
-                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
-                        <li>「公開リリースを作成」ボタンをクリック</li>
-                        <li>ストレージにアップロードして公開URLを発行</li>
-                        <li>世界中の誰でもアクセス可能になります</li>
-                    </ul>
+            <details>
+                <summary>📱 使い方ガイド</summary>
+                <div class="qrm-usage">
+                    <p><strong>📶 同一Wi-Fi</strong></p>
+                    <ul><li>PCとスマホを同じWi-Fiに接続し、QRをカメラで読み取る</li></ul>
+                    <p><strong>📡 トンネル</strong></p>
+                    <ul><li>ngrok等の公開URLを貼って保存 → 別ネットワークのスマホでも確認可</li></ul>
+                    <p><strong>🚀 公開リリース</strong></p>
+                    <ul><li>「公開リリースを作成」で本番公開。世界中からアクセス可能に</li></ul>
                 </div>
-            </div>
+            </details>
             
             <div class="button-group" style="display: flex; gap: 1rem; justify-content: flex-end;">
                 <button id="close-qrcode-modal" class="cancel-button" style="padding: 0.8rem 1.5rem; border-radius: var(--border-radius-medium);">
@@ -722,15 +704,34 @@ export async function showQRCodeModal(options = {}) {
     const tunnelInput = modalOverlay.querySelector('#tunnel-url-input');
     if (tunnelInput) tunnelInput.value = getStoredTunnelUrl();
 
+    // 出力エリア（QR・URLテキスト・ボタン状態・ヒント）をまとめて更新する
+    function refreshOutputUI(emptyHint) {
+      const hasUrl = !!currentUrl;
+      ['#copy-url', '#preview-url', '#open-url'].forEach((sel) => {
+        const btn = modalOverlay.querySelector(sel);
+        if (btn) btn.disabled = !hasUrl;
+      });
+      const urlText = modalOverlay.querySelector('#current-url-text');
+      if (urlText) urlText.textContent = currentUrl || '（まだURLがありません）';
+      const hint = modalOverlay.querySelector('#qr-hint');
+      if (hint) hint.textContent = hasUrl ? 'スマホのカメラでスキャン' : (emptyHint || '');
+      // QRコードを再生成（DOM更新を確実に待つ）
+      setTimeout(() => {
+        const canvas = document.querySelector('#qrcode-canvas');
+        if (canvas) {
+          generateQRCode();
+        } else {
+          uiLogger.warn('⚠️ QR再生成: Canvas要素が見つかりません');
+        }
+      }, 120);
+    }
+
     function switchTab(method) {
       currentMethod = method;
 
-      // タブの見た目を切り替え
+      // タブの見た目を切り替え（active クラスのみ。配色はCSSで制御）
       [[tunnelTab, 'tunnel'], [lanTab, 'lan'], [releaseTab, 'release']].forEach(([tab, m]) => {
-        const on = m === method;
-        tab.classList.toggle('active', on);
-        tab.style.background = on ? 'var(--color-primary)' : 'transparent';
-        tab.style.color = on ? 'white' : 'var(--color-text-primary)';
+        tab.classList.toggle('active', m === method);
       });
 
       // 設定の表示を切り替え
@@ -738,36 +739,18 @@ export async function showQRCodeModal(options = {}) {
       lanSettings.style.display = method === 'lan' ? 'block' : 'none';
       releaseSettings.style.display = method === 'release' ? 'block' : 'none';
 
-      // URLを更新
+      // 現在のURLを決定
+      let emptyHint = '';
       if (method === 'lan') {
         currentUrl = localUrl;
-        modalOverlay.querySelector('#local-url').textContent = localUrl;
       } else if (method === 'tunnel') {
-        const tunnelViewerUrl = buildTunnelViewerUrl(projectId);
-        currentUrl = tunnelViewerUrl || '';
-        modalOverlay.querySelector('#tunnel-url-display').textContent =
-          tunnelViewerUrl || 'トンネルURLを保存してください';
+        currentUrl = buildTunnelViewerUrl(projectId) || '';
+        emptyHint = '上の入力欄にトンネルURLを保存してください';
       } else {
-        // 公開リリース済みURLがあればそれを使用
-        if (releasePublishedUrl) {
-          currentUrl = releasePublishedUrl;
-          modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
-        } else {
-          modalOverlay.querySelector('#release-url').textContent = '「公開リリースを作成」ボタンを押してください';
-          currentUrl = '';
-        }
+        currentUrl = releasePublishedUrl || '';
+        emptyHint = '「公開リリースを作成」を押してください';
       }
-
-      // QRコードを再生成（DOM更新を確実に待つ）
-      setTimeout(() => {
-        // Canvas要素の存在を確認してから生成
-        const canvas = document.querySelector('#qrcode-canvas');
-        if (currentUrl && canvas) {
-          generateQRCode();
-        } else if (!canvas) {
-          uiLogger.warn('⚠️ タブ切り替え後、Canvas要素が見つかりません');
-        }
-      }, 150);
+      refreshOutputUI(emptyHint);
     }
 
     tunnelTab.addEventListener('click', () => switchTab('tunnel'));
@@ -786,35 +769,29 @@ export async function showQRCodeModal(options = {}) {
       switchTab(currentMethod);
     }, 200);
 
-    // URLコピー機能
-    modalOverlay.querySelector('#copy-local-url').addEventListener('click', () => {
-      navigator.clipboard.writeText(localUrl).then(() => {
-        alert('ローカルURLをクリップボードにコピーしました');
+    // URLをコピー（現在表示中のタブのURL）
+    modalOverlay.querySelector('#copy-url').addEventListener('click', () => {
+      if (!currentUrl) return;
+      navigator.clipboard.writeText(currentUrl).then(() => {
+        alert('URLをクリップボードにコピーしました');
       }).catch(() => {
         alert('URLのコピーに失敗しました');
       });
     });
 
-    modalOverlay.querySelector('#copy-release-url').addEventListener('click', () => {
-      const releaseUrl = modalOverlay.querySelector('#release-url').textContent;
-      navigator.clipboard.writeText(releaseUrl).then(() => {
-        alert('公開URLをクリップボードにコピーしました');
-      }).catch(() => {
-        alert('URLのコピーに失敗しました');
-      });
+    // プレビュー（スマホ向けレスポンシブ表示）
+    modalOverlay.querySelector('#preview-url').addEventListener('click', () => {
+      if (!currentUrl) return;
+      showARPreview(currentUrl, projectId);
     });
 
-    // トンネルURLをコピー
-    modalOverlay.querySelector('#copy-tunnel-url').addEventListener('click', () => {
-      const tunnelUrl = modalOverlay.querySelector('#tunnel-url-display').textContent;
-      navigator.clipboard.writeText(tunnelUrl).then(() => {
-        alert('トンネルURLをクリップボードにコピーしました');
-      }).catch(() => {
-        alert('URLのコピーに失敗しました');
-      });
+    // PCブラウザで開く
+    modalOverlay.querySelector('#open-url').addEventListener('click', () => {
+      if (!currentUrl) return;
+      window.open(currentUrl, '_blank', 'noopener,noreferrer');
     });
 
-    // トンネルURLを保存してQRコードを生成
+    // トンネルURLを保存してQRに反映
     modalOverlay.querySelector('#save-tunnel-url').addEventListener('click', () => {
       const input = modalOverlay.querySelector('#tunnel-url-input');
       const status = modalOverlay.querySelector('#tunnel-status');
@@ -831,25 +808,10 @@ export async function showQRCodeModal(options = {}) {
       status.style.background = '#E8F5E9';
       status.style.color = '#2E7D32';
 
-      const tunnelViewerUrl = buildTunnelViewerUrl(projectId);
-      modalOverlay.querySelector('#tunnel-url-display').textContent = tunnelViewerUrl;
       if (currentMethod === 'tunnel') {
-        currentUrl = tunnelViewerUrl;
-        setTimeout(() => {
-          const canvas = document.querySelector('#qrcode-canvas');
-          if (canvas) generateQRCode();
-        }, 100);
+        currentUrl = buildTunnelViewerUrl(projectId) || '';
+        refreshOutputUI('上の入力欄にトンネルURLを保存してください');
       }
-    });
-
-    // プレビュー機能（スマホ向けレスポンシブ表示）
-    modalOverlay.querySelector('#test-local-url').addEventListener('click', () => {
-      showARPreview(localUrl, projectId);
-    });
-
-    // PCブラウザで開く
-    modalOverlay.querySelector('#open-local-url').addEventListener('click', () => {
-      window.open(localUrl, '_blank', 'noopener,noreferrer');
     });
 
     // 公開リリース作成ボタン
@@ -918,21 +880,12 @@ export async function showQRCodeModal(options = {}) {
         statusEl.style.background = '#E8F5E9';
         statusEl.style.color = '#2E7D32';
 
-        modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
-
         publishBtn.textContent = '✅ 公開済み（再公開）';
         publishBtn.style.background = '#4CAF50';
         publishBtn.disabled = false; // 再公開可能にする
 
-        // QRコードを更新（DOM更新を確実にするため少し待つ）
-        setTimeout(() => {
-          const canvas = document.querySelector('#qrcode-canvas');
-          if (canvas && currentUrl) {
-            generateQRCode();
-          } else {
-            uiLogger.warn('⚠️ 公開リリース作成後: Canvas要素が見つかりません');
-          }
-        }, 100);
+        // QR・URL表示・ボタン状態を更新
+        refreshOutputUI();
 
       } catch (error) {
         console.error('公開リリース作成エラー:', error);
@@ -976,7 +929,7 @@ export async function showQRCodeModal(options = {}) {
                 ctx.font = '14px Arial';
                 ctx.fillStyle = '#666';
                 ctx.textAlign = 'center';
-                ctx.fillText('URLが設定されていません', canvas.width/2, canvas.height/2);
+                ctx.fillText('ここにQRコードが表示されます', canvas.width/2, canvas.height/2);
                 return;
             }
 
@@ -1008,7 +961,7 @@ export async function showQRCodeModal(options = {}) {
             uiLogger.log('🎯 QRCode描画実行:', { currentUrl });
             
             await QRCodeLib.toCanvas(canvas, currentUrl, {
-                width: 200,
+                width: 240,
                 margin: 1,
                 color: {
                     dark: '#000000',
@@ -1158,9 +1111,14 @@ export async function showQRCodeModal(options = {}) {
           delete lsPayload.editorSettings;
         }
         
-        if (editorSettings) {
+        const linkedEditorSettings = project.loadingScreen?.editorSettings ||
+          project.loadingScreen?.templateSettings ||
+          editorSettings ||
+          null;
+
+        if (linkedEditorSettings) {
           // ★★★ editorSettings内の入れ子になったeditorSettingsも削除 ★★★
-          const cleanEditorSettings = { ...editorSettings };
+          const cleanEditorSettings = { ...linkedEditorSettings };
           if (cleanEditorSettings.editorSettings) {
             console.warn('🔍 editorSettings内の重複editorSettingsを削除');
             delete cleanEditorSettings.editorSettings;
@@ -1168,14 +1126,14 @@ export async function showQRCodeModal(options = {}) {
           
           lsPayload.editorSettings = cleanEditorSettings;
           // ロゴがBase64で保持されている場合、API側でアセットとして書き出せるようにlogoImageに入れる
-          const le = editorSettings.loadingScreen || {};
+          const le = linkedEditorSettings.loadingScreen || {};
           if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
             lsPayload.logoImage = le.logo;
           }
         }
 
         // Start Screen をトップレベルに含める（Viewerが直接参照）
-        const startScreenPayload = editorSettings?.startScreen || null;
+        const startScreenPayload = project.startScreen || linkedEditorSettings?.startScreen || null;
 
         // ★★★ 最終正規化: 送信前にプロジェクトデータ全体を正規化 ★★★
         const originalProjectData = {
@@ -1183,7 +1141,7 @@ export async function showQRCodeModal(options = {}) {
           type: project.type || 'markerless',
           loadingScreen: lsPayload,
           startScreen: startScreenPayload,
-          guideScreen: editorSettings?.guideScreen || project.guideScreen || null,
+          guideScreen: project.guideScreen || linkedEditorSettings?.guideScreen || null,
           markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
           markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
           models: modelPayload
@@ -1205,38 +1163,25 @@ export async function showQRCodeModal(options = {}) {
               const u = new URL(data.viewerUrl);
               const isLocalHost = (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
               if (!isLocalHost) {
-                localUrl = data.viewerUrl;
+                localUrl = stripDefaultPort(data.viewerUrl);
               }
             } catch (_) {}
-            // 表示を更新
-            const localUrlEl = modalOverlay.querySelector('#local-url');
-            if (localUrlEl) localUrlEl.textContent = localUrl;
-            // タブ状態が同一Wi-FiならQR再生成
+            // 同一Wi-Fiタブを表示中なら出力エリアを更新
             if (currentMethod === 'lan') {
               currentUrl = localUrl;
-              generateQRCode();
+              refreshOutputUI();
             }
           }
         }
       } catch (e) {
         console.warn('ローカル公開に失敗（フォールバックでURLのみ表示）:', e);
-        
-        // ユーザーに分かりやすいエラーメッセージを表示
-        const container = document.getElementById('qrcode-container');
-        if (container) {
-          container.innerHTML = `
-            <div style="text-align: center; padding: 1rem; color: #666;">
-              <p>⚠️ プロジェクトの公開準備中...</p>
-              <p style="font-size: 0.9em;">QRコードを生成しています</p>
-            </div>
-          `;
-        }
+        // QRキャンバスは残す。ローカル公開に失敗しても、生成済みのURLでQR表示を継続する。
       } finally {
         // 初期QR生成（公開に成功していれば更新されたURLになる）
         // DOM要素の準備を確実に待つ
         setTimeout(() => {
           const canvas = document.querySelector('#qrcode-canvas');
-          if (canvas && currentUrl) {
+          if (canvas) {
             generateQRCode();
           } else {
             uiLogger.warn('⚠️ 初期QR生成: Canvas要素またはURLが見つかりません', {
