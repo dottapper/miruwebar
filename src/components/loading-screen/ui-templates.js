@@ -504,9 +504,19 @@ export function createMainEditorTemplate(currentSettings = defaultSettings) {
         <div class="content-header">
           <div class="content-header-title">
             <h1 id="editor-title">ローディング画面エディタ</h1>
-            <span class="template-name-badge" id="template-name-badge" style="display: none;"></span>
           </div>
           <div class="content-header-actions">
+            <div class="template-name-editor" id="template-name-editor" hidden>
+              <label class="template-name-editor__label" for="template-name-input">保存名</label>
+              <input
+                type="text"
+                class="template-name-editor__input"
+                id="template-name-input"
+                maxlength="80"
+                placeholder="ローディング画面名"
+                autocomplete="off"
+              />
+            </div>
             <div class="loading-screen-editor__import-export-actions">
               <input type="file" id="import-settings-input" accept=".json" style="display: none;">
               <button class="loading-screen-editor__button loading-screen-editor__button--outline loading-screen-editor__button--small" id="import-settings-button" title="JSONファイルから設定を読み込み">

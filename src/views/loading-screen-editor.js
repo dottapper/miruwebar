@@ -16,7 +16,8 @@ import {
   setupLogoTypeHandlers,
   setupSidebarMenuHandlers,
   setupStorageUsageDisplay,
-  setupImportExportHandlers
+  setupImportExportHandlers,
+  updateTemplateNameEditor
 } from '../components/loading-screen/event-handlers.js';
 import { updatePreview } from '../components/loading-screen/preview.js';
 // DEBUG ログ制御
@@ -364,8 +365,8 @@ export default function showLoadingScreenEditor(container) {
         setupStorageUsageDisplay();
         setupImportExportHandlers();
         
-        // ヘッダーにテンプレート名を表示
-        updateEditorTitle(mode, templateName, templateId);
+        // ヘッダーに保存名入力欄を表示
+        updateTemplateNameEditor();
         
 
         // モードに応じた設定処理
@@ -563,38 +564,6 @@ export default function showLoadingScreenEditor(container) {
     } catch (error) {
       console.error('❌ クリーンアップ処理中にエラー:', error);
       console.error('エラースタック:', error.stack);
-    }
-  }
-
-  // ヘッダーのタイトルを更新する関数
-  function updateEditorTitle(mode, templateName, templateId) {
-    const titleElement = document.getElementById('editor-title');
-    const badgeElement = document.getElementById('template-name-badge');
-    
-    if (!titleElement || !badgeElement) {
-      console.warn('タイトル要素が見つかりません');
-      return;
-    }
-    
-    // デフォルトのタイトル
-    titleElement.textContent = 'ローディング画面エディタ';
-    
-    if (mode === 'new' && templateName) {
-      // 新規作成モード
-      badgeElement.textContent = templateName;
-      badgeElement.className = 'template-name-badge new-template';
-      badgeElement.style.display = 'inline-block';
-    } else if (templateId) {
-      // 編集モード - テンプレート名を取得して表示
-      const template = getLoadingScreenTemplate(templateId);
-      if (template && template.name) {
-        badgeElement.textContent = `${template.name} (編集中)`;
-        badgeElement.className = 'template-name-badge editing-template';
-        badgeElement.style.display = 'inline-block';
-      }
-    } else {
-      // 通常モード - バッジを非表示
-      badgeElement.style.display = 'none';
     }
   }
 

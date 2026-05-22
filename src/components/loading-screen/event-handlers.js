@@ -6,6 +6,7 @@ import { updatePreview, getCurrentSettingsFromDOM } from './preview.js';
 
 // 未保存チェック用の初期状態を保存
 let initialSettings = null;
+let initialTemplateName = '';
 import {
   INDIVIDUAL_IMAGE_MAX_BYTES,
   INDIVIDUAL_IMAGE_MAX_MB,
@@ -90,22 +91,47 @@ function navigateAfterLoadingSave(savedTemplate, routeParams = getRouteParams())
   if (savedTemplate?.id) {
     window.location.hash = buildLoadingEditorHash(savedTemplate.id, routeParams);
     setTimeout(() => {
-      updateEditorTitleFromUrl();
+      updateTemplateNameEditor(getRouteParams());
     }, 100);
   }
 }
 
-async function saveCurrentRouteSettings(settings, routeParams = getRouteParams()) {
+function getTemplateNameFromEditor(fallbackName = '') {
+  const input = document.getElementById('template-name-input');
+  const value = input?.value?.trim();
+  return value || fallbackName;
+}
+
+function resolveTemplateNameForSave(routeParams = getRouteParams()) {
   const mode = routeParams.get('mode');
-  const templateName = routeParams.get('name') ? decodeURIComponent(routeParams.get('name')) : null;
+  const urlName = routeParams.get('name') ? decodeURIComponent(routeParams.get('name')) : '';
   const templateId = routeParams.get('template');
 
   if (mode === 'new') {
+    return getTemplateNameFromEditor(urlName || getUntitledTemplateName());
+  }
+
+  if (templateId) {
+    const template = getLoadingScreenTemplate(templateId);
+    return getTemplateNameFromEditor(template?.name || '');
+  }
+
+  return '';
+}
+
+async function saveCurrentRouteSettings(settings, routeParams = getRouteParams()) {
+  const mode = routeParams.get('mode');
+  const templateId = routeParams.get('template');
+  const resolvedName = resolveTemplateNameForSave(routeParams);
+
+  if (mode === 'new') {
     const savedTemplate = await saveLoadingScreenTemplate({
-      name: templateName || getUntitledTemplateName(),
+      name: resolvedName,
       settings
     });
     recordLastUsedTemplate(savedTemplate.id);
+    initialTemplateName = savedTemplate.name || '';
+    updateTemplateNameEditor(routeParams);
     return savedTemplate;
   }
 
@@ -114,16 +140,55 @@ async function saveCurrentRouteSettings(settings, routeParams = getRouteParams()
     if (template) {
       const savedTemplate = await saveLoadingScreenTemplate({
         id: templateId,
-        name: template.name,
+        name: resolvedName || template.name,
         settings
       });
       recordLastUsedTemplate(savedTemplate.id);
+      initialTemplateName = savedTemplate.name || '';
+      updateTemplateNameEditor(routeParams);
       return savedTemplate;
     }
   }
 
   await settingsAPI.saveSettings(settings);
   return null;
+}
+
+/**
+ * ヘッダーの保存名入力欄を URL / テンプレート状態に合わせて更新
+ */
+export function updateTemplateNameEditor(routeParams = getRouteParams()) {
+  const editor = document.getElementById('template-name-editor');
+  const input = document.getElementById('template-name-input');
+
+  if (!editor || !input) {
+    return;
+  }
+
+  const mode = routeParams.get('mode');
+  const templateName = routeParams.get('name') ? decodeURIComponent(routeParams.get('name')) : '';
+  const templateId = routeParams.get('template');
+
+  if (mode === 'new') {
+    editor.hidden = false;
+    input.value = templateName || getUntitledTemplateName();
+    initialTemplateName = input.value;
+    return;
+  }
+
+  if (templateId) {
+    const template = getLoadingScreenTemplate(templateId);
+    if (template) {
+      editor.hidden = false;
+      input.value = template.name || '';
+      initialTemplateName = input.value;
+      return;
+    }
+  }
+
+  editor.hidden = true;
+  input.value = '';
+  initialTemplateName = '';
 }
 
 // タブ名を画面タイプに変換する関数
@@ -1322,6 +1387,15 @@ function checkForUnsavedChanges() {
         return true;
       }
     }
+
+    const nameInput = document.getElementById('template-name-input');
+    if (nameInput && !nameInput.closest('#template-name-editor')?.hidden) {
+      const currentName = nameInput.value.trim();
+      if (currentName !== initialTemplateName) {
+        console.log('🔍 保存名の変更を検出');
+        return true;
+      }
+    }
     
     return false;
   } catch (error) {
@@ -1360,40 +1434,9 @@ function showNotification(message, type = 'info') {
 }
 
 
-// URLパラメータからタイトルを更新する関数
+// URLパラメータから保存名入力欄を更新（後方互換）
 function updateEditorTitleFromUrl() {
-  const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-  const mode = urlParams.get('mode');
-  const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
-  const templateId = urlParams.get('template');
-  
-  const titleElement = document.getElementById('editor-title');
-  const badgeElement = document.getElementById('template-name-badge');
-  
-  if (!titleElement || !badgeElement) {
-    return;
-  }
-  
-  // デフォルトのタイトル
-  titleElement.textContent = 'ローディング画面エディタ';
-  
-  if (mode === 'new' && templateName) {
-    // 新規作成モード
-    badgeElement.textContent = templateName;
-    badgeElement.className = 'template-name-badge new-template';
-    badgeElement.style.display = 'inline-block';
-  } else if (templateId) {
-    // 編集モード - テンプレート名を取得して表示
-    const template = getStoredTemplates().find(t => t.id === templateId);
-    if (template && template.name) {
-      badgeElement.textContent = `${template.name} (編集中)`;
-      badgeElement.className = 'template-name-badge editing-template';
-      badgeElement.style.display = 'inline-block';
-    }
-  } else {
-    // 通常モード - バッジを非表示
-    badgeElement.style.display = 'none';
-  }
+  updateTemplateNameEditor(getRouteParams());
 }
 
 /**
