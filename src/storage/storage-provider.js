@@ -96,7 +96,7 @@ async function publishViaVercelBlob(projectData) {
     let message = `公開APIエラー (HTTP ${resp.status})`;
     try {
       const err = await resp.json();
-      if (err && err.message) message = err.message;
+      if (err && (err.message || err.error)) message = err.message || err.error;
     } catch (_) { /* JSON でないレスポンスは無視 */ }
     throw new Error(message);
   }
