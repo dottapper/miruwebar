@@ -1165,9 +1165,14 @@ export async function showQRCodeModal(options = {}) {
           delete lsPayload.editorSettings;
         }
         
-        if (editorSettings) {
+        const linkedEditorSettings = project.loadingScreen?.editorSettings ||
+          project.loadingScreen?.templateSettings ||
+          editorSettings ||
+          null;
+
+        if (linkedEditorSettings) {
           // ★★★ editorSettings内の入れ子になったeditorSettingsも削除 ★★★
-          const cleanEditorSettings = { ...editorSettings };
+          const cleanEditorSettings = { ...linkedEditorSettings };
           if (cleanEditorSettings.editorSettings) {
             console.warn('🔍 editorSettings内の重複editorSettingsを削除');
             delete cleanEditorSettings.editorSettings;
@@ -1175,14 +1180,14 @@ export async function showQRCodeModal(options = {}) {
           
           lsPayload.editorSettings = cleanEditorSettings;
           // ロゴがBase64で保持されている場合、API側でアセットとして書き出せるようにlogoImageに入れる
-          const le = editorSettings.loadingScreen || {};
+          const le = linkedEditorSettings.loadingScreen || {};
           if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
             lsPayload.logoImage = le.logo;
           }
         }
 
         // Start Screen をトップレベルに含める（Viewerが直接参照）
-        const startScreenPayload = editorSettings?.startScreen || null;
+        const startScreenPayload = project.startScreen || linkedEditorSettings?.startScreen || null;
 
         // ★★★ 最終正規化: 送信前にプロジェクトデータ全体を正規化 ★★★
         const originalProjectData = {
@@ -1190,7 +1195,7 @@ export async function showQRCodeModal(options = {}) {
           type: project.type || 'markerless',
           loadingScreen: lsPayload,
           startScreen: startScreenPayload,
-          guideScreen: editorSettings?.guideScreen || project.guideScreen || null,
+          guideScreen: project.guideScreen || linkedEditorSettings?.guideScreen || null,
           markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
           markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
           models: modelPayload

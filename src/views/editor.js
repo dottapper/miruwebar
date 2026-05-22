@@ -109,6 +109,8 @@ export function showEditor(container) {
   const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const arType = urlParams.get('type') || 'unknown';
   const projectId = urlParams.get('id') || null; // プロジェクトID取得
+  const requestedLoadingScreenId = urlParams.get('loadingScreen') || null;
+  const requestedTab = urlParams.get('tab') || null;
   const isMarkerMode = arType === 'marker';
 
   // ARタイプに応じたタイトルとヘルプテキストを設定
@@ -628,6 +630,10 @@ export function showEditor(container) {
       setTimeout(() => {
         updateLoadingSettingsDisplay();
       }, 100);
+
+      setTimeout(() => {
+        applyInitialRouteState();
+      }, 650);
 
     } catch (error) {
       console.error('エディタの初期化に失敗しました:', error);
@@ -1168,7 +1174,7 @@ export function showEditor(container) {
         e.preventDefault();
         
         // 直接ローディング画面エディターを開く（新規作成モード）
-        window.location.hash = '#/loading-screen?mode=new';
+        window.location.hash = buildLoadingEditorHash({ mode: 'new' });
       });
     }
     
@@ -1195,7 +1201,7 @@ export function showEditor(container) {
           }
           
           // 直接ローディング画面エディターを開く（編集モード）
-          window.location.hash = `#/loading-screen?template=${selectedTemplateId}`;
+          window.location.hash = buildLoadingEditorHash({ template: selectedTemplateId });
         } else {
           alert('編集するローディング画面を選択してください。');
         }
@@ -1283,7 +1289,10 @@ export function showEditor(container) {
         templates.forEach(template => {
           const option = document.createElement('option');
           option.value = template.id;
-          option.textContent = `${template.name} (${template.createdAt})`;
+          const displayDate = template.createdAt ||
+            (typeof template.created === 'number' ? new Date(template.created).toLocaleDateString('ja-JP') : template.created) ||
+            '';
+          option.textContent = displayDate ? `${template.name} (${displayDate})` : template.name;
           selectElement.appendChild(option);
         });
         
@@ -1319,13 +1328,61 @@ export function showEditor(container) {
     }
   }
 
+  function buildLoadingEditorHash(params = {}) {
+    const nextParams = new URLSearchParams(params);
+    if (projectId) {
+      nextParams.set('project', projectId);
+      nextParams.set('return', 'editor');
+    }
+    if (arType && arType !== 'unknown') {
+      nextParams.set('type', arType);
+    }
+    return `#/loading-screen?${nextParams.toString()}`;
+  }
+
+  function selectLoadingScreenForProject(templateId, options = {}) {
+    if (!templateId || templateId === 'none') return false;
+
+    loadLoadingScreens();
+
+    const selectElement = document.getElementById('loading-screen-select');
+    if (!selectElement) return false;
+
+    const optionExists = Array.from(selectElement.options).some(option => option.value === templateId);
+    if (!optionExists) {
+      console.warn('⚠️ 戻り先テンプレートがローディング画面一覧に見つかりません:', templateId);
+      return false;
+    }
+
+    selectElement.value = templateId;
+    savedSelectedScreenId = templateId;
+    updateEditButtonState();
+
+    if (options.markChanged) {
+      markAsChanged();
+      showNotification('ローディング画面をこのプロジェクトに紐づけました。保存すると公開に反映されます。', 'info');
+    }
+
+    return true;
+  }
+
+  function applyInitialRouteState() {
+    if (requestedTab === 'loading-settings') {
+      const loadingTab = document.querySelector('.panel-tab[data-tab="loading-settings"]');
+      if (loadingTab) loadingTab.click();
+    }
+
+    if (requestedLoadingScreenId) {
+      selectLoadingScreenForProject(requestedLoadingScreenId, { markChanged: true });
+    }
+  }
+
 
 
   // 現在のプロジェクトIDを取得する関数
   function getCurrentProjectId() {
-    // URLからプロジェクトIDを取得
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('project') || localStorage.getItem('currentProjectId');
+    const hashParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    return hashParams.get('id') || hashParams.get('project') || localStorage.getItem('currentProjectId');
   }
 
   // ローディング設定の表示を更新する関数
@@ -2389,45 +2446,23 @@ export function showEditor(container) {
 
   // 現在のローディング設定を取得（ローディング画面エディターの詳細設定含む）
   const getCurrentLoadingSettings = async () => {
-    // ローディング画面選択ドロップダウンの値を取得
     const loadingScreenSelect = document.getElementById('loading-screen-select');
-    
-    // ローディング画面選択の優先順位: DOM要素 > savedSelectedScreenId > 'none'
-    let selectedScreenId = 'none'; // デフォルト値
+    let selectedScreenId = 'none';
     
     if (loadingScreenSelect && loadingScreenSelect.value !== undefined && loadingScreenSelect.value !== '') {
-      // DOM要素がある場合はその値を最優先
       selectedScreenId = loadingScreenSelect.value;
     } else if (savedSelectedScreenId && savedSelectedScreenId !== 'none') {
-      // DOM要素が無効でも既存設定があれば使用
       selectedScreenId = savedSelectedScreenId;
     }
     
-    // グローバル変数を同期更新
     if (savedSelectedScreenId !== selectedScreenId) {
       savedSelectedScreenId = selectedScreenId;
     }
-    
-    // ローディング画面エディターで作成された詳細設定を取得
-    let detailedLoadingSettings = null;
-    try {
-      // 分離された状態管理を使用
-      const { getEditorLoadingScreenState } = await import('../utils/loading-screen-state.js');
-      const editorState = getEditorLoadingScreenState();
-      detailedLoadingSettings = editorState.getSettings();
-    } catch (error) {
-      console.warn('⚠️ ローディング画面エディターの設定取得に失敗:', error);
-      // フォールバック: 従来のsettingsAPI
-      try {
-        detailedLoadingSettings = settingsAPI.getSettings();
-      } catch (_) {}
-    }
-    
-    // 基本設定とエディター詳細設定を統合
+
     const baseSettings = {
-      enabled: loadingEnabled?.checked ?? true,
+      enabled: selectedScreenId !== 'none',
       selectedScreenId: selectedScreenId,
-      template: selectedScreenId !== 'none' ? selectedScreenId : 'default', // selectedScreenId をテンプレートIDとして使用
+      template: selectedScreenId !== 'none' ? selectedScreenId : 'default',
       backgroundColor: loadingBgColor?.value ?? '#1a1a1a',
       textColor: loadingTextColor?.value ?? '#ffffff',
       progressColor: loadingProgressColor?.value ?? '#4CAF50',
@@ -2435,18 +2470,49 @@ export function showEditor(container) {
       message: loadingMessage?.value ?? 'ARコンテンツを準備中...',
       showProgress: loadingShowProgress?.checked ?? true
     };
-    
-    // 詳細設定がある場合は統合
+
+    if (selectedScreenId && selectedScreenId !== 'none') {
+      try {
+        const template = getLoadingScreenTemplate(selectedScreenId);
+        if (template?.settings?.loadingScreen) {
+          const templateSettings = mergeTemplateSettings(baseSettings, template.settings);
+          return {
+            ...templateSettings,
+            enabled: true,
+            selectedScreenId,
+            template: selectedScreenId,
+            editorSettings: template.settings,
+            startScreen: template.settings.startScreen || null,
+            guideScreen: template.settings.guideScreen || null
+          };
+        }
+      } catch (error) {
+        console.warn('⚠️ テンプレート設定の取得に失敗:', error);
+      }
+    }
+
+    if (selectedScreenId === 'none') {
+      return baseSettings;
+    }
+
+    let detailedLoadingSettings = null;
+    try {
+      detailedLoadingSettings = settingsAPI.getSettings();
+      const { getEditorLoadingScreenState } = await import('../utils/loading-screen-state.js');
+      const editorState = getEditorLoadingScreenState();
+      editorState.setSettings(detailedLoadingSettings, { skipNotify: true });
+    } catch (error) {
+      console.warn('⚠️ ローディング画面エディターの設定取得に失敗:', error);
+    }
+
     if (detailedLoadingSettings) {
-      const mergedSettings = {
+      return {
         ...baseSettings,
-        // ローディング画面エディターの全設定を含める
         editorSettings: detailedLoadingSettings,
-        // 後方互換のため基本設定は維持しつつ、エディター設定で上書き
         backgroundColor: detailedLoadingSettings.loadingScreen?.backgroundColor || baseSettings.backgroundColor,
         textColor: detailedLoadingSettings.loadingScreen?.textColor || baseSettings.textColor,
-        progressColor: detailedLoadingSettings.loadingScreen?.progressColor || 
-                       detailedLoadingSettings.loadingScreen?.accentColor || 
+        progressColor: detailedLoadingSettings.loadingScreen?.progressColor ||
+                       detailedLoadingSettings.loadingScreen?.accentColor ||
                        baseSettings.progressColor,
         message: detailedLoadingSettings.loadingScreen?.loadingMessage || baseSettings.message,
         showProgress: detailedLoadingSettings.loadingScreen?.showProgress ?? baseSettings.showProgress,
@@ -2454,30 +2520,9 @@ export function showEditor(container) {
         logoSize: detailedLoadingSettings.loadingScreen?.logoSize || 1.0,
         logoPosition: detailedLoadingSettings.loadingScreen?.logoPosition || 20,
         fontScale: detailedLoadingSettings.loadingScreen?.fontScale || 1.0,
-        // エディター設定からstartScreenとguideScreenも取得
         startScreen: detailedLoadingSettings.startScreen || null,
         guideScreen: detailedLoadingSettings.guideScreen || null
       };
-
-      return mergedSettings;
-    }
-    
-    // 詳細設定がない場合、selectedScreenIdに基づいてテンプレートから完全な設定を取得
-    if (selectedScreenId && selectedScreenId !== 'none') {
-      try {
-        const stored = localStorage.getItem(TEMPLATES_STORAGE_KEY);
-        if (stored) {
-          const templates = JSON.parse(stored);
-          const template = templates.find(t => t.id === selectedScreenId);
-          if (template?.settings?.loadingScreen) {
-            const templateSettings = mergeTemplateSettings(baseSettings, template.settings);
-
-            return templateSettings;
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ テンプレート設定の取得に失敗:', error);
-      }
     }
 
     return baseSettings;

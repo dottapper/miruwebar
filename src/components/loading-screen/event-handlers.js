@@ -24,9 +24,107 @@ import { TEMPLATES_STORAGE_KEY } from './template-manager.js';
 import { 
   saveLoadingScreenTemplate, 
   getLoadingScreenTemplate, 
-  deleteLoadingScreenTemplate,
   showLoadingScreenSelector
 } from '../loading-screen-selector.js';
+
+function getRouteParams() {
+  return new URLSearchParams(window.location.hash.split('?')[1] || '');
+}
+
+function recordLastUsedTemplate(templateId) {
+  if (!templateId) return;
+  localStorage.setItem('lastUsedTemplateId', templateId);
+  syncLastUsedTemplateId(templateId);
+}
+
+function getUntitledTemplateName() {
+  const now = new Date();
+  return `ローディング画面 ${now.toLocaleDateString('ja-JP')} ${now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function buildLoadingEditorHash(templateId, routeParams = getRouteParams()) {
+  const nextParams = new URLSearchParams();
+  nextParams.set('template', templateId);
+
+  ['project', 'return', 'type'].forEach((key) => {
+    const value = routeParams.get(key);
+    if (value) nextParams.set(key, value);
+  });
+
+  return `#/loading-screen?${nextParams.toString()}`;
+}
+
+function buildEditorReturnHash(templateId = null, routeParams = getRouteParams()) {
+  const projectId = routeParams.get('project');
+  const arType = routeParams.get('type');
+  const editorParams = new URLSearchParams();
+
+  if (projectId) editorParams.set('id', projectId);
+  if (arType) editorParams.set('type', arType);
+  if (templateId) editorParams.set('loadingScreen', templateId);
+  editorParams.set('tab', 'loading-settings');
+
+  return `#/editor?${editorParams.toString()}`;
+}
+
+function shouldReturnToEditor(routeParams = getRouteParams()) {
+  return routeParams.get('return') === 'editor' && Boolean(routeParams.get('project'));
+}
+
+function navigateBackFromLoadingEditor(routeParams = getRouteParams()) {
+  if (shouldReturnToEditor(routeParams)) {
+    const templateId = routeParams.get('template') || localStorage.getItem('lastUsedTemplateId') || null;
+    window.location.hash = buildEditorReturnHash(templateId, routeParams);
+    return;
+  }
+
+  window.location.hash = '#/projects';
+}
+
+function navigateAfterLoadingSave(savedTemplate, routeParams = getRouteParams()) {
+  if (shouldReturnToEditor(routeParams)) {
+    window.location.hash = buildEditorReturnHash(savedTemplate?.id || routeParams.get('template') || null, routeParams);
+    return;
+  }
+
+  if (savedTemplate?.id) {
+    window.location.hash = buildLoadingEditorHash(savedTemplate.id, routeParams);
+    setTimeout(() => {
+      updateEditorTitleFromUrl();
+    }, 100);
+  }
+}
+
+async function saveCurrentRouteSettings(settings, routeParams = getRouteParams()) {
+  const mode = routeParams.get('mode');
+  const templateName = routeParams.get('name') ? decodeURIComponent(routeParams.get('name')) : null;
+  const templateId = routeParams.get('template');
+
+  if (mode === 'new') {
+    const savedTemplate = await saveLoadingScreenTemplate({
+      name: templateName || getUntitledTemplateName(),
+      settings
+    });
+    recordLastUsedTemplate(savedTemplate.id);
+    return savedTemplate;
+  }
+
+  if (templateId) {
+    const template = getLoadingScreenTemplate(templateId);
+    if (template) {
+      const savedTemplate = await saveLoadingScreenTemplate({
+        id: templateId,
+        name: template.name,
+        settings
+      });
+      recordLastUsedTemplate(savedTemplate.id);
+      return savedTemplate;
+    }
+  }
+
+  await settingsAPI.saveSettings(settings);
+  return null;
+}
 
 // タブ名を画面タイプに変換する関数
 function convertTabNameToScreenType(tabName) {
@@ -1038,6 +1136,7 @@ export function setupButtons() {
   if (backButton) {
     backButton.addEventListener('click', () => {
       try {
+        const routeParams = getRouteParams();
         // 変更があるかチェック（簡易版）
         let hasChanges = false;
         try {
@@ -1049,17 +1148,16 @@ export function setupButtons() {
         
         if (hasChanges) {
           showSaveConfirmDialog(() => {
-            // プロジェクト一覧に戻る
-            window.location.hash = '#/projects';
+            navigateBackFromLoadingEditor(routeParams);
           });
         } else {
-          window.location.hash = '#/projects';
+          navigateBackFromLoadingEditor(routeParams);
         }
       } catch (error) {
         console.error('戻るボタンクリック処理中にエラー:', error);
         
         // エラー発生時でも戻れるように
-        window.location.hash = '#/projects';
+        navigateBackFromLoadingEditor();
       }
     });
   } else {
@@ -1073,80 +1171,12 @@ export function setupButtons() {
       try {
         // 現在の設定を取得
         const settings = getCurrentSettingsFromDOM();
-        
-        // URLパラメータから新規作成モードと名前を確認
-        const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-        const mode = urlParams.get('mode');
-        const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
-        
-        if (mode === 'new' && templateName) {
-          // 新規作成モード：テンプレートとして保存
-          const templateData = {
-            name: templateName,
-            settings: settings
-          };
-          
-          const savedTemplate = await saveLoadingScreenTemplate(templateData);
-          showNotification('保存されました', 'success');
-          // ストレージ使用量を更新
-          updateStorageUsageDisplay();
-          
-          // 最後に使用したテンプレートIDを記録
-          localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
-        syncLastUsedTemplateId(savedTemplate.id);
-          syncLastUsedTemplateId(savedTemplate.id);
-          
-          // URLを更新して編集モードに切り替え
-          window.location.hash = `#/loading-screen?template=${savedTemplate.id}`;
-          
-          // タイトルも更新
-          setTimeout(() => {
-            updateEditorTitleFromUrl();
-          }, 100);
-        } else {
-          // 既存テンプレートの更新または通常の設定保存
-          const templateId = urlParams.get('template');
-          if (templateId) {
-            // テンプレート編集モード：既存テンプレートを更新
-            const template = getLoadingScreenTemplate(templateId);
-            if (template) {
-              // 既存のテンプレートを削除して新しいものを保存
-              deleteLoadingScreenTemplate(templateId);
-              const savedTemplate = await saveLoadingScreenTemplate({
-                name: template.name,
-                settings: settings
-              });
-              
-              showNotification('保存されました', 'success');
-              // ストレージ使用量を更新
-              updateStorageUsageDisplay();
-              
-              // 最後に使用したテンプレートIDを記録
-              localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
-              syncLastUsedTemplateId(savedTemplate.id);
-              
-              // URLを新しいテンプレートIDに更新
-              window.location.hash = `#/loading-screen?template=${savedTemplate.id}`;
-              
-              // タイトル表示を再同期
-              setTimeout(() => {
-                updateEditorTitleFromUrl();
-              }, 100);
-            } else {
-              // テンプレートが見つからない場合は通常保存
-              await settingsAPI.saveSettings(settings);
-              showNotification('保存されました', 'success');
-              // ストレージ使用量を更新
-              updateStorageUsageDisplay();
-            }
-          } else {
-            // 通常の設定保存
-            await settingsAPI.saveSettings(settings);
-            showNotification('保存されました', 'success');
-            // ストレージ使用量を更新
-            updateStorageUsageDisplay();
-          }
-        }
+        const routeParams = getRouteParams();
+        const savedTemplate = await saveCurrentRouteSettings(settings, routeParams);
+
+        showNotification('保存されました', 'success');
+        updateStorageUsageDisplay();
+        navigateAfterLoadingSave(savedTemplate, routeParams);
       } catch (error) {
         console.error('設定の保存に失敗しました:', error);
         
@@ -1451,60 +1481,19 @@ function showSaveConfirmDialog(onNavigate) {
       
       // 現在の設定を取得
       const settings = getCurrentSettingsFromDOM();
-      
-      // URLパラメータから新規作成モードと名前を確認
-      const urlParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
-      const mode = urlParams.get('mode');
-      const templateName = urlParams.get('name') ? decodeURIComponent(urlParams.get('name')) : null;
-      
-      if (mode === 'new' && templateName) {
-        // 新規作成モード：テンプレートとして保存
-        const templateData = {
-          name: templateName,
-          settings: settings
-        };
-        
-        const savedTemplate = await saveLoadingScreenTemplate(templateData);
-        console.log('💾 新規テンプレートを保存しました:', savedTemplate.name);
-        
-        // 最後に使用したテンプレートIDを記録
-        localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
-        syncLastUsedTemplateId(savedTemplate.id);
-      } else {
-        // 既存テンプレートの更新または通常の設定保存
-        const templateId = urlParams.get('template');
-        if (templateId) {
-          // テンプレート編集モード：既存テンプレートを更新
-          const template = getLoadingScreenTemplate(templateId);
-          if (template) {
-            // 既存のテンプレートを削除して新しいものを保存
-            deleteLoadingScreenTemplate(templateId);
-            const savedTemplate = await saveLoadingScreenTemplate({
-              name: template.name,
-              settings: settings
-            });
-            
-            console.log('💾 テンプレートを更新しました:', template.name);
-            localStorage.setItem('lastUsedTemplateId', savedTemplate.id);
-        syncLastUsedTemplateId(savedTemplate.id);
-          syncLastUsedTemplateId(savedTemplate.id);
-          } else {
-            // テンプレートが見つからない場合は通常保存
-            await settingsAPI.saveSettings(settings);
-            console.log('💾 設定を保存しました');
-          }
-        } else {
-          // 通常の設定保存
-          await settingsAPI.saveSettings(settings);
-          console.log('💾 設定を保存しました');
-        }
-      }
+      const routeParams = getRouteParams();
+      const savedTemplate = await saveCurrentRouteSettings(settings, routeParams);
+      console.log('💾 設定を保存しました', savedTemplate ? savedTemplate.id : 'settings');
       
       // 保存完了の通知を表示してから遷移
       console.log('💾 保存完了 - プロジェクト一覧に遷移');
       hideDialog();
       showNotification('保存されました', 'success');
-      onNavigate();
+      if (savedTemplate && shouldReturnToEditor(routeParams)) {
+        window.location.hash = buildEditorReturnHash(savedTemplate.id, routeParams);
+      } else {
+        onNavigate();
+      }
       
     } catch (error) {
       console.error('❌ 保存処理中にエラー:', error);

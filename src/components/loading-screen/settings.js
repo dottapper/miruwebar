@@ -119,6 +119,28 @@ export function validateAndFixColor(color) {
   return null;
 }
 
+export const SETTINGS_STORAGE_KEY = 'loadingScreenSettings';
+export const EDITOR_SETTINGS_STORAGE_KEY = 'loadingScreenSettings_editor';
+
+function getStoredSettingsJson() {
+  return localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(EDITOR_SETTINGS_STORAGE_KEY);
+}
+
+function persistSettingsJson(settingsJson) {
+  // 旧状態管理キーは3D編集側の stale data 原因になるため、正の保存先に統一する。
+  localStorage.removeItem(EDITOR_SETTINGS_STORAGE_KEY);
+  localStorage.setItem(SETTINGS_STORAGE_KEY, settingsJson);
+}
+
+function persistSettingsObject(settings) {
+  persistSettingsJson(JSON.stringify(settings));
+}
+
+function clearPersistedSettings() {
+  localStorage.removeItem(SETTINGS_STORAGE_KEY);
+  localStorage.removeItem(EDITOR_SETTINGS_STORAGE_KEY);
+}
+
 // IP間データ同期用
 const CROSS_IP_SYNC_KEY = 'loadingScreenSettings_cross_ip_sync';
 
@@ -249,7 +271,9 @@ function loadLastUsedTemplateId() {
 export const settingsAPI = {
   getSettings() {
     try {
-      const stored = localStorage.getItem('loadingScreenSettings');
+      const stored = getStoredSettingsJson();
+      const shouldMigrateEditorKey = !localStorage.getItem(SETTINGS_STORAGE_KEY) &&
+        Boolean(localStorage.getItem(EDITOR_SETTINGS_STORAGE_KEY));
       console.log('🔍 設定読み込み試行:', {
         hasData: !!stored,
         dataSize: stored ? (stored.length / 1024).toFixed(2) + 'KB' : '0KB',
@@ -265,7 +289,7 @@ export const settingsAPI = {
           console.log('🌐 IP間同期から設定を復元しました');
           // 復元したデータをローカルにも保存
           try {
-            localStorage.setItem('loadingScreenSettings', JSON.stringify(syncedSettings));
+            persistSettingsObject(syncedSettings);
           } catch (saveError) {
             console.warn('⚠️ 復元データの保存に失敗:', saveError);
           }
@@ -283,6 +307,13 @@ export const settingsAPI = {
       }
       
       const parsed = JSON.parse(stored);
+      if (shouldMigrateEditorKey) {
+        try {
+          persistSettingsJson(stored);
+        } catch (migrationError) {
+          console.warn('⚠️ 旧エディター設定キーの移行に失敗:', migrationError);
+        }
+      }
       console.log('✅ 設定を正常に読み込みました:', {
         screens: Object.keys(parsed),
         hasImages: this.calculateImageDataSize(parsed) > 0
@@ -307,7 +338,7 @@ export const settingsAPI = {
       this.cleanupBackups();
       
       // 保存前のバックアップを作成（容量制限付き・より厳格に）
-      const currentSettings = localStorage.getItem('loadingScreenSettings');
+      const currentSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (currentSettings) {
         try {
           const backupKey = `loadingScreenSettings_backup_${Date.now()}`;
@@ -358,7 +389,7 @@ export const settingsAPI = {
         
         if (moreCompressedSize <= maxTotalImageSize) {
           console.log('✅ 強い圧縮で容量制限内に収まりました');
-          localStorage.setItem('loadingScreenSettings', JSON.stringify(moreCompressedSettings));
+          persistSettingsObject(moreCompressedSettings);
           
           const beforeMB = (imageDataSize / 1024 / 1024).toFixed(2);
           const afterMB = (moreCompressedSize / 1024 / 1024).toFixed(2);
@@ -370,7 +401,7 @@ export const settingsAPI = {
         // 2. 画像なしで保存
         console.log('⚠️ 圧縮でも容量制限を超過。画像なしで保存します');
         const settingsWithoutImages = this.removeImageData(merged);
-        localStorage.setItem('loadingScreenSettings', JSON.stringify(settingsWithoutImages));
+        persistSettingsObject(settingsWithoutImages);
         
         const sizeMB = (imageDataSize / 1024 / 1024).toFixed(2);
         const errorMessage = new Error(ERROR_MESSAGES.saveCapacityExceeded(sizeMB));
@@ -380,7 +411,7 @@ export const settingsAPI = {
       
       // 正常な保存処理
       try {
-        localStorage.setItem('loadingScreenSettings', settingsJson);
+        persistSettingsJson(settingsJson);
         console.log('✅ 設定を正常に保存しました:', {
           size: (settingsJson.length / 1024).toFixed(2) + 'KB',
           timestamp: new Date().toISOString(),
@@ -390,7 +421,7 @@ export const settingsAPI = {
         });
         
         // 保存直後の確認
-        const verification = localStorage.getItem('loadingScreenSettings');
+        const verification = localStorage.getItem(SETTINGS_STORAGE_KEY);
         if (verification) {
           console.log('✅ 保存確認OK: データが正常に保存されています');
         } else {
@@ -409,7 +440,7 @@ export const settingsAPI = {
           this.cleanupOldData();
           
           try {
-            localStorage.setItem('loadingScreenSettings', settingsJson);
+            persistSettingsJson(settingsJson);
             console.log('✅ 通常クリーンアップ後に保存成功');
           } catch (secondError) {
             // 2. 緊急クリーンアップ
@@ -417,7 +448,7 @@ export const settingsAPI = {
             const cleanedCount = this.emergencyCleanup();
             
             try {
-              localStorage.setItem('loadingScreenSettings', settingsJson);
+              persistSettingsJson(settingsJson);
               console.log('✅ 緊急クリーンアップ後に保存成功');
               
               // ユーザーに警告通知
@@ -494,7 +525,7 @@ export const settingsAPI = {
 
   resetSettings() {
     // ローカルストレージをクリア
-    localStorage.removeItem('loadingScreenSettings');
+    clearPersistedSettings();
     console.log('設定をリセットしました');
     return JSON.parse(JSON.stringify(defaultSettings));
   },
@@ -523,7 +554,8 @@ export const settingsAPI = {
     
     // ローディング画面関連のキーのみを対象
     const relevantKeys = [
-      'loadingScreenSettings',
+      SETTINGS_STORAGE_KEY,
+      EDITOR_SETTINGS_STORAGE_KEY,
       TEMPLATES_STORAGE_KEY,
       'lastUsedTemplateId'
     ];
@@ -614,7 +646,7 @@ export const settingsAPI = {
         const recovered = JSON.parse(backupData);
         
         // 復旧した設定をメインに保存
-        localStorage.setItem('loadingScreenSettings', backupData);
+        persistSettingsJson(backupData);
         console.log('✅ 復旧した設定をメインストレージに保存しました');
         
         return this.mergeWithDefaults(recovered);

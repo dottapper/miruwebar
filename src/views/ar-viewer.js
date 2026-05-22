@@ -4,7 +4,7 @@ import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loadin
 // Takeover: viewer内で必ず読み込む（関数非依存で Start→Loading→Guide を直列制御）
 import '../dev/takeover-viewer-standalone.js';
 import { createLogger } from '../utils/logger.js';
-import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
+import { TEMPLATES_STORAGE_KEY, defaultTemplateSettings } from '../components/loading-screen/template-manager.js';
 import { generateMarkerPatternFromImage, createPatternBlob } from '../utils/marker-utils.js';
 import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
 import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
@@ -28,6 +28,57 @@ function navigateBackOrHome() {
     }
   } catch (_) {}
   window.location.hash = '#/projects';
+}
+
+function isMeaningfulValue(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function isCustomLoadingConfig(config = {}) {
+  if (!config || typeof config !== 'object') return false;
+
+  const defaults = defaultTemplateSettings.loadingScreen || {};
+  const candidates = [
+    config,
+    config.loadingScreen,
+    config.editorSettings?.loadingScreen,
+    config.templateSettings?.loadingScreen
+  ].filter(Boolean);
+
+  return candidates.some((item) => {
+    if (item.template && item.template !== 'none' && item.template !== 'default') return true;
+    if (item.selectedScreenId && item.selectedScreenId !== 'none' && item.selectedScreenId !== 'default') return true;
+    if (isMeaningfulValue(item.logo) || isMeaningfulValue(item.logoImage) || isMeaningfulValue(item.image) || isMeaningfulValue(item.background) || isMeaningfulValue(item.backgroundImage)) return true;
+    if (item.logoType && item.logoType !== 'none') return true;
+    if (isMeaningfulValue(item.brandName) && ![defaults.brandName, 'あなたのブランド'].includes(item.brandName)) return true;
+    if (isMeaningfulValue(item.subTitle) && ![defaults.subTitle, 'AR体験'].includes(item.subTitle)) return true;
+    if (isMeaningfulValue(item.loadingMessage) && item.loadingMessage !== defaults.loadingMessage) return true;
+    if (isMeaningfulValue(item.message) && item.message !== defaults.loadingMessage && item.message !== '読み込み中...') return true;
+    if (isMeaningfulValue(item.backgroundColor) && !['#1a1a1a', '#121212'].includes(item.backgroundColor.toLowerCase())) return true;
+    if (isMeaningfulValue(item.textColor) && item.textColor.toLowerCase() !== '#ffffff') return true;
+    if (isMeaningfulValue(item.progressColor) && !['#4caf50', '#6c5ce7'].includes(item.progressColor.toLowerCase())) return true;
+    if (isMeaningfulValue(item.accentColor) && item.accentColor.toLowerCase() !== '#6c5ce7') return true;
+    return false;
+  });
+}
+
+function hasCustomLoadingScreen(project = {}) {
+  return isCustomLoadingConfig(project.loadingScreen) || isCustomLoadingConfig(project.loading);
+}
+
+function hasCustomGuideScreen(project = {}) {
+  const candidates = [project.guideScreen, project.guide].filter((v) => v && typeof v === 'object');
+  const defaultTitles = new Set(['ガイド画面', 'マーカーをカメラに写してください', '画像の上にカメラを向けて合わせてください']);
+  const defaultDescriptions = new Set(['準備中', 'マーカー画像を画面内に収めてください']);
+
+  return candidates.some((guide) => {
+    if (isMeaningfulValue(guide.background) || isMeaningfulValue(guide.backgroundImage) || isMeaningfulValue(guide.guideImage) || isMeaningfulValue(guide.imageUrl)) return true;
+    if (guide.surfaceDetection && (isMeaningfulValue(guide.surfaceDetection.guideImage) || isMeaningfulValue(guide.surfaceDetection.instructionText))) return true;
+    if (guide.worldTracking && (isMeaningfulValue(guide.worldTracking.guideImage) || isMeaningfulValue(guide.worldTracking.instructionText))) return true;
+    if (isMeaningfulValue(guide.title) && !defaultTitles.has(guide.title)) return true;
+    if (isMeaningfulValue(guide.description) && !defaultDescriptions.has(guide.description)) return true;
+    return false;
+  });
 }
 
 // ★ 旧関数は削除し、getProjectSrc() を直接使用 ★
@@ -1093,13 +1144,11 @@ export default function showARViewer(container) {
       </div>
       
       <!-- マーカーガイド -->
-      <div id="ar-marker-guide" class="ar-marker-guide" style="display: none;"></div>
+      <div id="ar-marker-guide" class="ar-marker-guide" style="display: none;">
+        <img id="ar-marker-guide-preview" alt="marker preview" />
+      </div>
       <div id="marker-guide-tips" class="marker-guide-tips" style="display: none;">
-        <strong>スキャンTips:</strong><br>
-        • マーカーを枠内に収めてください<br>
-        • 十分な明るさを確保してください<br>
-        • ゆっくり動かさないように<br>
-        • 距離を適度に保ってください
+        マーカー全体が枠に入るように、明るい場所でゆっくり合わせてください
       </div>
     </div>
   `;
@@ -1115,6 +1164,10 @@ export default function showARViewer(container) {
       color: #fff;
       font-family: Arial, sans-serif;
       overflow: hidden;
+    }
+
+    .integrated-ar-viewer.is-ar-active .ar-status {
+      display: none;
     }
 
     .ar-host {
@@ -1253,6 +1306,33 @@ export default function showARViewer(container) {
       max-width: 320px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
+
+    .integrated-ar-viewer.is-ar-active .ar-controls {
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      width: min(92vw, 360px);
+      max-width: 360px;
+      padding: 0.65rem 0.75rem;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,255,255,0.14);
+      backdrop-filter: blur(10px);
+      border-radius: 10px;
+      box-shadow: none;
+    }
+
+    .integrated-ar-viewer.is-ar-active .ar-controls h3 {
+      display: none;
+    }
+
+    .integrated-ar-viewer.is-ar-active #ar-instruction {
+      margin: 0 0 0.45rem;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .integrated-ar-viewer.is-ar-active #ar-start-btn,
+    .integrated-ar-viewer.is-ar-active #ar-detect-btn {
+      display: none !important;
+    }
     
     .ar-status {
       position: absolute;
@@ -1272,60 +1352,66 @@ export default function showARViewer(container) {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 200px;
-      height: 200px;
-      border: 3px dashed #4CAF50;
-      border-radius: 12px;
+      width: min(74vw, 340px);
+      height: auto;
+      aspect-ratio: var(--marker-guide-aspect, 1 / 1);
+      border: 2px solid rgba(255,255,255,0.9);
+      outline: 1px solid rgba(0,0,0,0.45);
+      border-radius: 10px;
       z-index: 500;
-      background: rgba(76, 175, 80, 0.1);
+      background: rgba(0,0,0,0.08);
+      box-shadow: 0 0 0 999px rgba(0,0,0,0.16), 0 8px 28px rgba(0,0,0,0.18);
+      overflow: hidden;
     }
 
     .ar-marker-guide::before {
-      content: "📱 マーカーをここに";
+      content: "";
       position: absolute;
-      top: -35px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(76, 175, 80, 0.9);
-      color: white;
-      padding: 6px 12px;
-      border-radius: 15px;
-      font-size: 11px;
-      white-space: nowrap;
+      inset: 10px;
+      border: 1px dashed rgba(255,255,255,0.55);
+      border-radius: 7px;
+      pointer-events: none;
     }
 
     .ar-marker-guide::after {
-      content: "💡 十分な明るさを確保してください";
+      content: "";
       position: absolute;
-      bottom: -45px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 193, 7, 0.9);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 10px;
-      font-size: 10px;
-      white-space: nowrap;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35);
+      pointer-events: none;
+    }
+
+    #ar-marker-guide-preview {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: none;
+      opacity: 0.32;
+      filter: saturate(0.85) contrast(1.05);
+    }
+
+    .ar-marker-guide.has-preview #ar-marker-guide-preview {
+      display: block;
     }
 
     .marker-guide-tips {
       position: absolute;
-      bottom: 120px;
+      bottom: calc(92px + env(safe-area-inset-bottom, 0px));
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.8);
+      width: min(88vw, 360px);
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.58);
       color: white;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-size: 11px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 12px;
       text-align: center;
       z-index: 490;
-      max-width: 280px;
-      line-height: 1.4;
-    }
-
-    .marker-guide-tips strong {
-      color: #4CAF50;
+      line-height: 1.45;
+      backdrop-filter: blur(10px);
     }
     
     .btn-primary, .btn-success, .btn-secondary {
@@ -1498,6 +1584,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   const loadingMessage = container.querySelector('#ar-loading-message');
   const loadingLogo = container.querySelector('#ar-loading-logo');
   const loadingTextGroup = container.querySelector('#ar-loading-text-group');
+  const viewerRoot = container.querySelector('#webar-ui');
   const startScreen = container.querySelector('#ar-start-screen');
   const startLogo = container.querySelector('#ar-start-logo');
   const startTitle = container.querySelector('#ar-start-title');
@@ -1518,6 +1605,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let layoutStartScreenHandler = null;
   const backBtn = container.querySelector('#ar-back-btn');
   const markerGuide = container.querySelector('#ar-marker-guide');
+  const markerGuidePreview = container.querySelector('#ar-marker-guide-preview');
   const markerGuideTips = container.querySelector('#marker-guide-tips');
 
   // 画面表示状態の統一管理
@@ -1532,6 +1620,59 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let currentScreenState = null;
   // カスタムマーカーガイド有無（プロジェクト保存のガイド画像/テキストがあるか）
   let hasCustomMarkerGuide = false;
+  let hasConfiguredLoadingScreen = false;
+  let hasConfiguredGuideScreen = false;
+
+  function resolveViewerAssetUrl(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    try {
+      if (/^(https?:|blob:|data:)/i.test(rawUrl)) return rawUrl;
+      if (rawUrl.startsWith('/')) return new URL(rawUrl, location.origin).href;
+      const baseUrl = currentProject?.__sourceUrl || location.href;
+      const projectFolder = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+      return new URL(rawUrl, projectFolder).href;
+    } catch (_) {
+      return rawUrl;
+    }
+  }
+
+  function getMarkerPreviewUrl(project = {}) {
+    const { guideScreen } = extractDesign(project);
+    return guideScreen?.marker?.src
+      || guideScreen?.markerImage
+      || project.markerImageUrl
+      || project.markerImage
+      || project.marker?.src
+      || project.marker?.url
+      || project.guide?.marker?.src
+      || project.guide?.markerImage
+      || project.guideScreen?.marker?.src
+      || project.guideScreen?.markerImage
+      || null;
+  }
+
+  function configureDefaultMarkerGuide(project = {}) {
+    if (!markerGuide || !markerGuidePreview) return;
+
+    const markerUrl = resolveViewerAssetUrl(getMarkerPreviewUrl(project));
+    markerGuide.classList.remove('has-preview');
+    markerGuide.style.removeProperty('--marker-guide-aspect');
+    markerGuidePreview.removeAttribute('src');
+
+    if (!markerUrl) return;
+
+    markerGuidePreview.onload = () => {
+      const w = markerGuidePreview.naturalWidth || 1;
+      const h = markerGuidePreview.naturalHeight || 1;
+      markerGuide.style.setProperty('--marker-guide-aspect', `${w} / ${h}`);
+      markerGuide.classList.add('has-preview');
+    };
+    markerGuidePreview.onerror = () => {
+      markerGuide.classList.remove('has-preview');
+      markerGuide.style.removeProperty('--marker-guide-aspect');
+    };
+    markerGuidePreview.src = markerUrl;
+  }
 
   async function showScreen(state, options = {}) {
     if (currentScreenState === state && !options.force) {
@@ -1553,6 +1694,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       }
     });
     currentScreenState = state;
+    if (viewerRoot) {
+      const active = state === screenStates.AR || state === null;
+      viewerRoot.classList.toggle('is-ar-active', active);
+      viewerRoot.classList.toggle('is-viewer-error', state === screenStates.ERROR);
+    }
 
     // 全ての画面を初期化（非表示）
     if (startScreen) startScreen.style.display = 'none';
@@ -1604,6 +1750,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         break;
 
       case screenStates.LOADING:
+        if (!hasConfiguredLoadingScreen && !isCustomLoadingConfig(options.settings)) {
+          arViewerLogger.info('ℹ️ ローディング画面未設定のため全画面ローディングをスキップ');
+          break;
+        }
         if (loadingScreen) {
           if (window.__project) {
             try { 
@@ -1640,6 +1790,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         break;
 
       case screenStates.GUIDE:
+        if ((currentProject?.type || currentProject?.mode) === 'marker' && !hasConfiguredGuideScreen) {
+          arViewerLogger.info('ℹ️ ガイド画面未設定のため全画面ガイドをスキップ');
+          break;
+        }
         if (guideScreen) {
           if (window.__project) {
             try { 
@@ -1691,7 +1845,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (markerGuideTips) markerGuideTips.style.display = 'none';
           arViewerLogger.info('✅ カスタムガイドを表示（AR実行中の案内として使用）');
         } else {
-          // 既定の正方形枠ガイド
+          // 既定ガイド。マーカー画像があれば縦横比に合わせる。
+          configureDefaultMarkerGuide(currentProject);
           let arDisplayed = false;
           if (markerGuide) { markerGuide.style.display = 'block'; arDisplayed = true; }
           if (markerGuideTips) { markerGuideTips.style.display = 'block'; arDisplayed = true; }
@@ -1725,7 +1880,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   }
 
   function showLoadingScreenOverlay(settings) {
-    showScreen(screenStates.LOADING, { force: true });
+    showScreen(screenStates.LOADING, { force: true, settings });
     if (!settings) return;
     try {
       if (settings.backgroundColor && loadingScreen) {
@@ -1791,7 +1946,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       loadingScreen.style.backgroundColor = '';
       loadingScreen.style.background = '';
       loadingScreen.style.color = '';
-      loadingScreen.style.display = 'flex';
+      loadingScreen.style.display = 'none';
     }
     
     // ローディング画面内の要素をリセット
@@ -1968,6 +2123,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     if (currentProject && typeof currentProject === 'object') {
       currentProject.__sourceUrl = currentProject.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
     }
+    hasConfiguredLoadingScreen = hasCustomLoadingScreen(currentProject);
+    hasConfiguredGuideScreen = hasCustomGuideScreen(currentProject);
+    configureDefaultMarkerGuide(currentProject);
+    arViewerLogger.info('🔍 画面設定有無:', {
+      loading: hasConfiguredLoadingScreen,
+      guide: hasConfiguredGuideScreen
+    });
     updateStatus('✅ プロジェクトデータ取得完了', 'success');
     updateProgress(30, 'プロジェクト設定を確認中...');
 
@@ -2741,12 +2903,14 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       recommendation: fallbackInfo.type
     });
 
-    // AR経路確定（WebXR or AR.js）
-    const useWebXR = xrSupport.supported && !data.engineOverride;
-    const arPath = useWebXR ? 'webxr' : 'marker';
+    // AR経路確定（プロジェクト種別を優先。marker案件でWebXRへ逸れないようにする）
+    const projectWantsMarker = (currentProject?.type || currentProject?.mode) === 'marker';
+    const useWebXR = xrSupport.supported && !data.engineOverride && !projectWantsMarker;
+    const arPath = data.engineOverride || (useWebXR ? 'webxr' : 'marker');
 
     arViewerLogger.info(`🎯 AR経路確定: ${arPath}${data.engineOverride ? ' (URL強制指定)' : ' (自動判定)'}`, {
       webxrSupported: xrSupport.supported,
+      projectType: currentProject?.type || currentProject?.mode,
       engineOverride: data.engineOverride,
       finalPath: arPath
     });

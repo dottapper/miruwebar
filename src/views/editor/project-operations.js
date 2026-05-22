@@ -97,9 +97,24 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
     const modelsData = getCurrentModelsData();
     const loadingScreenData = getCurrentLoadingScreenData(savedSelectedScreenId);
 
+    const selectedTemplateId = loadingScreenData?.selectedScreenId || savedSelectedScreenId || '';
+
     // エディター設定を取得（軽量化してプロジェクトへ反映）
     let editorSettingsSafe = null;
-    try {
+    if (selectedTemplateId && selectedTemplateId !== 'none') {
+      try {
+        const templatesJson = localStorage.getItem('miruwebAR_loading_templates');
+        if (templatesJson) {
+          const all = JSON.parse(templatesJson);
+          const match = all.find(t => t.id === selectedTemplateId);
+          if (match?.settings) editorSettingsSafe = match.settings;
+        }
+      } catch (e) {
+        console.warn('選択テンプレート設定の取得に失敗（settingsAPIにフォールバック）:', e);
+      }
+    }
+
+    if (!editorSettingsSafe) try {
       const s = settingsAPI.getSettings();
       // 画像を含む巨大なエディター全体設定はプロジェクトに埋め込まない
       // ビューア表示に必要な screen 単位の設定のみプロジェクト直下へ保存
@@ -114,7 +129,7 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
       const templatesJson = localStorage.getItem('miruwebAR_loading_templates');
       if (templatesJson) {
         const all = JSON.parse(templatesJson);
-        const tid = loadingScreenData?.selectedScreenId || savedSelectedScreenId || '';
+        const tid = selectedTemplateId;
         if (tid && tid !== 'none') {
           const match = all.find(t => t.id === tid);
           if (match && match.settings) {
