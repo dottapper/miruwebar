@@ -31,8 +31,9 @@ export async function exportProjectBundle({ project, assetUrls = [] }) {
 
   // 3. viewer.html（最小版）
   const viewerHtml = `<!doctype html>
-<html lang="ja">
+<html lang="ja" translate="no">
 <meta charset="utf-8" />
+<meta name="google" content="notranslate" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>miru-webAR Viewer</title>
 <style>
