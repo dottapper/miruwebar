@@ -329,6 +329,13 @@ async function loadProjectFromQR() {
 
     if (!response.ok) {
       arViewerLogger.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
+      if (typeof window !== 'undefined') {
+        window.__projectLoadError = {
+          status: response.status,
+          statusText: response.statusText,
+          url: projectSrc
+        };
+      }
       if (DEV_STRICT_MODE) {
         throw new Error(`STRICT MODE: Project fetch failed (${response.status}). No fallback allowed.`);
       }
@@ -1541,7 +1548,14 @@ export default function showARViewer(container) {
     }
 
     if (!window.__project) {
-      showBootError('project.json を読み込めませんでした');
+      const loadError = typeof window !== 'undefined' ? window.__projectLoadError : null;
+      const detail = loadError
+        ? { fetchStatus: loadError.status, fetchUrl: loadError.url }
+        : {};
+      const message = loadError?.status === 404
+        ? 'project.json が見つかりません（404）。PCでQRモーダルを開き直すか、保存後にもう一度お試しください。'
+        : 'project.json を読み込めませんでした';
+      showBootError(message, detail);
       return;
     }
 

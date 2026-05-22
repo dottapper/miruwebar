@@ -621,6 +621,7 @@ export async function showQRCodeModal(options = {}) {
 
             <div id="lan-settings" class="method-settings">
                 <p class="qrm-desc">同じWi-Fiのスマホで、下のQRコードをカメラから読み取ってください。</p>
+                <div id="lan-publish-status" class="qrm-status" style="display: none;"></div>
             </div>
 
             <div id="tunnel-settings" class="method-settings" style="display: none;">
@@ -695,7 +696,9 @@ export async function showQRCodeModal(options = {}) {
     const releaseSettings = modalOverlay.querySelector('#release-settings');
 
     let currentMethod = options.defaultMethod || (getTunnelBaseUrl() ? 'tunnel' : 'lan');
-    let currentUrl = localUrl;
+    let currentUrl = '';
+    let localPublishReady = !import.meta.env.DEV;
+    let localPublishError = '';
 
     // 公開リリースのURL（公開後に設定される）
     let releasePublishedUrl = storedReleaseUrl;
@@ -742,7 +745,12 @@ export async function showQRCodeModal(options = {}) {
       // 現在のURLを決定
       let emptyHint = '';
       if (method === 'lan') {
-        currentUrl = localUrl;
+        currentUrl = localPublishReady ? localUrl : '';
+        if (!localPublishReady && !localPublishError) {
+          emptyHint = 'project.json をサーバーに公開しています...';
+        } else if (localPublishError) {
+          emptyHint = localPublishError;
+        }
       } else if (method === 'tunnel') {
         currentUrl = buildTunnelViewerUrl(projectId) || '';
         emptyHint = '上の入力欄にトンネルURLを保存してください';
@@ -757,17 +765,164 @@ export async function showQRCodeModal(options = {}) {
     lanTab.addEventListener('click', () => switchTab('lan'));
     releaseTab.addEventListener('click', () => switchTab('release'));
 
-    // 初期状態を設定（DOM要素が完全に準備されてから実行）
-    setTimeout(() => {
-      // Canvas要素の存在を確認
-      const canvas = document.querySelector('#qrcode-canvas');
-      if (!canvas) {
-        uiLogger.error('❌ 初期化時: Canvas要素が見つかりません');
-        console.error('❌ QRコード生成に失敗しました\nエラー: Canvas element not found');
+    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    const toVec3 = (value, fallback) => {
+      if (Array.isArray(value) && value.length >= 3) {
+        return value.slice(0, 3).map((v, i) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : fallback[i];
+        });
+      }
+      if (value && typeof value === 'object') {
+        const x = Number(value.x);
+        const y = Number(value.y);
+        const z = Number(value.z);
+        return [
+          Number.isFinite(x) ? x : fallback[0],
+          Number.isFinite(y) ? y : fallback[1],
+          Number.isFinite(z) ? z : fallback[2]
+        ];
+      }
+      return [...fallback];
+    };
+
+    const normalizeTransform = (model) => {
+      const transform = model?.transform || {};
+      return {
+        position: toVec3(model?.position || transform.position, [0, 0, 0]),
+        rotation: toVec3(model?.rotation || transform.rotation, [0, 0, 0]),
+        scale: toVec3(model?.scale || transform.scale, [1, 1, 1])
+      };
+    };
+
+    // project.json が配信可能か確認
+    const verifyProjectJsonAccessible = async (projectJsonUrl) => {
+      try {
+        const res = await fetch(projectJsonUrl, { method: 'GET', cache: 'no-store', credentials: 'same-origin' });
+        if (!res.ok) return { ok: false, status: res.status };
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('text/html')) return { ok: false, reason: 'html' };
+        const data = await res.json();
+        if (!data || typeof data !== 'object') return { ok: false, reason: 'invalid' };
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, reason: error.message };
+      }
+    };
+
+    // 同一Wi-Fi用: サーバーへ project.json を書き出してから QR を出す
+    const prepareLocalPublishForQR = async () => {
+      if (!import.meta.env.DEV) return;
+      if (!projectId || projectId === 'sample') throw new Error('プロジェクトID不明');
+
+      try {
+        const viewerHost = new URL(localUrl).hostname;
+        if (viewerHost === 'localhost' || viewerHost === '127.0.0.1') {
+          throw new Error(
+            'PCのLAN IPを取得できませんでした。ターミナルに表示される Network URL（例: https://192.168.x.x:3000）でエディターを開いてからQRを生成してください。'
+          );
+        }
+      } catch (error) {
+        if (error.message.includes('LAN IP')) throw error;
       }
 
-      switchTab(currentMethod);
-    }, 200);
+      const project = getProject(projectId);
+      if (!project) throw new Error('プロジェクトデータが見つかりません。先に保存してください。');
+
+      const withModels = await loadProjectWithModels(project);
+      const modelPayload = [];
+      for (const m of withModels.modelData || []) {
+        if (m.blob) {
+          const dataBase64 = await blobToBase64(m.blob);
+          const transform = normalizeTransform(m);
+          modelPayload.push({
+            fileName: m.fileName || 'model.glb',
+            dataBase64,
+            position: transform.position,
+            rotation: transform.rotation,
+            scale: transform.scale
+          });
+        }
+      }
+
+      let editorSettings = null;
+      try {
+        const { getLoadingSettingsForProject } = await import('../utils/loading-screen-state.js');
+        editorSettings = getLoadingSettingsForProject();
+      } catch (error) {
+        console.warn('ローディング画面設定の取得に失敗:', error);
+        try {
+          editorSettings = settingsAPI.getSettings();
+        } catch (_) {}
+      }
+
+      const lsPayload = { ...(project.loadingScreen || {}) };
+      if (lsPayload.editorSettings) delete lsPayload.editorSettings;
+
+      const linkedEditorSettings = project.loadingScreen?.editorSettings ||
+        project.loadingScreen?.templateSettings ||
+        editorSettings ||
+        null;
+
+      if (linkedEditorSettings) {
+        const cleanEditorSettings = { ...linkedEditorSettings };
+        if (cleanEditorSettings.editorSettings) delete cleanEditorSettings.editorSettings;
+        lsPayload.editorSettings = cleanEditorSettings;
+        const le = linkedEditorSettings.loadingScreen || {};
+        if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
+          lsPayload.logoImage = le.logo;
+        }
+      }
+
+      const originalProjectData = {
+        id: projectId,
+        type: project.type || 'markerless',
+        loadingScreen: lsPayload,
+        startScreen: project.startScreen || linkedEditorSettings?.startScreen || null,
+        guideScreen: project.guideScreen || linkedEditorSettings?.guideScreen || null,
+        markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
+        markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
+        models: modelPayload
+      };
+
+      const normalizedProjectData = normalizeProjectData(originalProjectData);
+      reportSizeReduction(originalProjectData, normalizedProjectData);
+
+      const resp = await fetch('/api/publish-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(normalizedProjectData)
+      });
+
+      if (!resp.ok) {
+        let message = `公開APIエラー (HTTP ${resp.status})`;
+        try {
+          const err = await resp.json();
+          if (err?.message || err?.error) message = err.message || err.error;
+        } catch (_) {}
+        if (resp.status === 401) {
+          message = 'ログインが必要です。PCで再ログインしてからお試しください。';
+        }
+        throw new Error(message);
+      }
+
+      const verified = await verifyProjectJsonAccessible(localUrlInfo.projectJsonUrl);
+      if (!verified.ok) {
+        throw new Error(
+          `project.json の配信確認に失敗しました (${verified.status ? `HTTP ${verified.status}` : verified.reason || 'unknown'})`
+        );
+      }
+
+      localPublishReady = true;
+      uiLogger.log('✅ ローカル公開完了:', localUrlInfo.projectJsonUrl);
+    };
 
     // URLをコピー（現在表示中のタブのURL）
     modalOverlay.querySelector('#copy-url').addEventListener('click', () => {
@@ -1021,176 +1176,41 @@ export async function showQRCodeModal(options = {}) {
         }
     };
 
-    // 補助: Blob→Base64
-    const blobToBase64 = (blob) => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    
-    // 補助: transformをviewer互換の配列形式に正規化
-    const toVec3 = (value, fallback) => {
-      if (Array.isArray(value) && value.length >= 3) {
-        return value.slice(0, 3).map((v, i) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n : fallback[i];
-        });
-      }
-      if (value && typeof value === 'object') {
-        const x = Number(value.x);
-        const y = Number(value.y);
-        const z = Number(value.z);
-        return [
-          Number.isFinite(x) ? x : fallback[0],
-          Number.isFinite(y) ? y : fallback[1],
-          Number.isFinite(z) ? z : fallback[2]
-        ];
-      }
-      return [...fallback];
-    };
-    
-    const normalizeTransform = (model) => {
-      const transform = model?.transform || {};
-      const position = toVec3(model?.position || transform.position, [0, 0, 0]);
-      const rotation = toVec3(model?.rotation || transform.rotation, [0, 0, 0]);
-      const scale = toVec3(model?.scale || transform.scale, [1, 1, 1]);
-      return { position, rotation, scale };
-    };
-
-    // 開いたタイミングでローカル公開を試行（同一Wi-Fi前提）
-    // 本番（デプロイ済み）では実行しない。同一Wi-Fiタブは開発時のみ意味があり、
-    // 本番で実行すると QRモーダルを開くたびに不要な公開アップロードが走るため。
+    // 初期状態: ローカル公開完了後に QR を表示
     (async () => {
-      try {
-        if (!import.meta.env.DEV) {
-          uiLogger.log('ℹ️ 本番環境のため自動ローカル公開をスキップ（公開はリリース作成タブで実行）');
-          return;
+      const lanStatus = modalOverlay.querySelector('#lan-publish-status');
+      if (import.meta.env.DEV) {
+        if (lanStatus) {
+          lanStatus.style.display = 'block';
+          lanStatus.textContent = '🔄 スマホ用 project.json を準備中...';
+          lanStatus.style.background = '#E3F2FD';
+          lanStatus.style.color = '#1565C0';
         }
-        if (!projectId || projectId === 'sample') throw new Error('プロジェクトID不明');
-
-        const project = getProject(projectId);
-        if (!project) throw new Error('プロジェクトデータが見つかりません');
-
-        const withModels = await loadProjectWithModels(project);
-        const modelPayload = [];
-        for (const m of withModels.modelData || []) {
-          if (m.blob) {
-            const dataBase64 = await blobToBase64(m.blob);
-            const transform = normalizeTransform(m);
-            modelPayload.push({
-              fileName: m.fileName || 'model.glb',
-              dataBase64,
-              position: transform.position,
-              rotation: transform.rotation,
-              scale: transform.scale
-            });
-          }
-        }
-
-        // ローディング画面エディターの詳細設定を取得し、公開用データに含める
-        let editorSettings = null;
+        refreshOutputUI('project.json をサーバーに公開しています...');
         try {
-          // 分離された状態管理を使用してエディターとビューアの結合を解除
-          const { getLoadingSettingsForProject } = await import('../utils/loading-screen-state.js');
-          editorSettings = getLoadingSettingsForProject();
+          await prepareLocalPublishForQR();
+          if (lanStatus) {
+            lanStatus.textContent = '✅ スマホから読み込める状態です';
+            lanStatus.style.background = '#E8F5E9';
+            lanStatus.style.color = '#2E7D32';
+          }
         } catch (error) {
-          console.warn('ローディング画面設定の取得に失敗:', error);
-          // フォールバック: 従来のsettingsAPIを使用
-          try {
-            editorSettings = settingsAPI.getSettings();
-          } catch (_) {}
-        }
-
-        // 送信するローディング画面設定
-        const lsPayload = { ...(project.loadingScreen || {}) };
-        
-        // ★★★ 重複データ防止: 既存のeditorSettingsを削除してから新しいものを設定 ★★★
-        if (lsPayload.editorSettings) {
-          console.warn('🔍 既存のeditorSettingsを削除して重複を防止');
-          delete lsPayload.editorSettings;
-        }
-        
-        const linkedEditorSettings = project.loadingScreen?.editorSettings ||
-          project.loadingScreen?.templateSettings ||
-          editorSettings ||
-          null;
-
-        if (linkedEditorSettings) {
-          // ★★★ editorSettings内の入れ子になったeditorSettingsも削除 ★★★
-          const cleanEditorSettings = { ...linkedEditorSettings };
-          if (cleanEditorSettings.editorSettings) {
-            console.warn('🔍 editorSettings内の重複editorSettingsを削除');
-            delete cleanEditorSettings.editorSettings;
-          }
-          
-          lsPayload.editorSettings = cleanEditorSettings;
-          // ロゴがBase64で保持されている場合、API側でアセットとして書き出せるようにlogoImageに入れる
-          const le = linkedEditorSettings.loadingScreen || {};
-          if (typeof le.logo === 'string' && le.logo.startsWith('data:')) {
-            lsPayload.logoImage = le.logo;
+          localPublishError = error.message || 'ローカル公開に失敗しました';
+          localPublishReady = false;
+          uiLogger.warn('⚠️ ローカル公開に失敗:', localPublishError);
+          if (lanStatus) {
+            lanStatus.textContent = `⚠️ ${localPublishError}`;
+            lanStatus.style.background = '#FFEBEE';
+            lanStatus.style.color = '#C62828';
           }
         }
-
-        // Start Screen をトップレベルに含める（Viewerが直接参照）
-        const startScreenPayload = project.startScreen || linkedEditorSettings?.startScreen || null;
-
-        // ★★★ 最終正規化: 送信前にプロジェクトデータ全体を正規化 ★★★
-        const originalProjectData = {
-          id: projectId,
-          type: project.type || 'markerless',
-          loadingScreen: lsPayload,
-          startScreen: startScreenPayload,
-          guideScreen: project.guideScreen || linkedEditorSettings?.guideScreen || null,
-          markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
-          markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
-          models: modelPayload
-        };
-        
-        const normalizedProjectData = normalizeProjectData(originalProjectData);
-        reportSizeReduction(originalProjectData, normalizedProjectData);
-
-        const resp = await fetch('/api/publish-project', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(normalizedProjectData)
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.viewerUrl) {
-            // APIがlocalhostを返す場合は上書きしない（スマホ不可）。IPが含まれている場合のみ採用
-            try {
-              const u = new URL(data.viewerUrl);
-              const isLocalHost = (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
-              if (!isLocalHost) {
-                localUrl = stripDefaultPort(data.viewerUrl);
-              }
-            } catch (_) {}
-            // 同一Wi-Fiタブを表示中なら出力エリアを更新
-            if (currentMethod === 'lan') {
-              currentUrl = localUrl;
-              refreshOutputUI();
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('ローカル公開に失敗（フォールバックでURLのみ表示）:', e);
-        // QRキャンバスは残す。ローカル公開に失敗しても、生成済みのURLでQR表示を継続する。
-      } finally {
-        // 初期QR生成（公開に成功していれば更新されたURLになる）
-        // DOM要素の準備を確実に待つ
-        setTimeout(() => {
-          const canvas = document.querySelector('#qrcode-canvas');
-          if (canvas) {
-            generateQRCode();
-          } else {
-            uiLogger.warn('⚠️ 初期QR生成: Canvas要素またはURLが見つかりません', {
-              hasCanvas: !!canvas,
-              hasUrl: !!currentUrl
-            });
-          }
-        }, 300);
       }
+
+      const canvas = document.querySelector('#qrcode-canvas');
+      if (!canvas) {
+        uiLogger.error('❌ 初期化時: Canvas要素が見つかりません');
+      }
+      switchTab(currentMethod);
     })();
 
     // QRコードモーダルの強制クローズを検出するための監視
