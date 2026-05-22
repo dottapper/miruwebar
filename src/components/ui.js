@@ -7,7 +7,8 @@ import { loadQRCode } from '../utils/qrcode-loader.js';
 import { createLogger } from '../utils/logger.js';
 import { createURLStabilizer, URLType } from '../utils/url-stabilizer.js';
 import { normalizeProjectData, reportSizeReduction } from '../utils/project-data-normalizer.js';
-import { publishProjectToFirebase } from '../firebase/storage.js';
+import { publishRelease } from '../storage/storage-provider.js';
+import { getTunnelBaseUrl, getStoredTunnelUrl, setStoredTunnelUrl, buildTunnelViewerUrl } from '../utils/tunnel-url.js';
 import { updateProjectPublishInfo } from '../storage/project-store.js';
 import { security } from '../utils/security-manager.js';
 
@@ -527,10 +528,11 @@ export async function showQRCodeModal(options = {}) {
     // プロジェクトIDを正確に使用（modelNameにIDが来ている想定）
     const projectId = options.modelName ? decodeURIComponent(options.modelName) : 'sample';
 
-    let storedFirebaseUrl = '';
+    let storedReleaseUrl = '';
     try {
       const project = await getProject(projectId);
-      storedFirebaseUrl = project?.publishInfo?.firebase?.viewerUrl || '';
+      storedReleaseUrl = project?.publishInfo?.release?.viewerUrl
+        || project?.publishInfo?.firebase?.viewerUrl || '';
     } catch (error) {
       uiLogger.warn('⚠️ 公開情報の取得に失敗:', error);
     }
@@ -555,8 +557,8 @@ export async function showQRCodeModal(options = {}) {
     const localUrlInfo = await stabilizer.generateARViewerURL(projectId, URLType.LOCAL, { validateProject: false, skipValidation: true });
     let localUrl = localUrlInfo.viewerUrl;
     const appOrigin = window.location.origin;
-    // 初期表示用の公開URL（プレースホルダー）。実際の公開先は入力欄で更新
-    const webUrl = storedFirebaseUrl || `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
+    // 初期表示用の公開URL（プレースホルダー）。実際の公開先は公開リリース作成後に更新
+    const webUrl = storedReleaseUrl || `${appOrigin}/?src=${encodeURIComponent(`/projects/${projectId}/project.json`)}#/viewer`;
     
     uiLogger.log('🔗 QRコード用URL生成:', {
       projectId,
@@ -574,26 +576,48 @@ export async function showQRCodeModal(options = {}) {
               HTTPSでの起動を推奨します（自己署名証明書でも可）。
             </div>` : ''}
             <p style="margin: 0 0 1.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.4;">
-                QRコードをスマホでスキャンしてAR体験を開始できます。まずは「📱 スマホでテスト」で同じWi-Fi内のスマホから確認し、
-                問題なければ「🌐 公開用」でインターネット公開用のQRコードを生成してください。
+                QRコードをスマホでスキャンしてAR体験を開始できます。「📶 同一Wi-Fi」は同じネットワーク内での確認用、
+                「📡 トンネルURL」は ngrok 等の公開URL経由での確認用、「🚀 公開リリース作成」は本番公開用です。
             </p>
-            
+
             <!-- 公開方法選択 -->
             <div class="publish-method" style="margin-bottom: 1.5rem;">
                 <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">公開方法を選択</h3>
                 <div class="method-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                    <button id="local-tab" class="method-tab active" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-primary); color: white; border-radius: 6px; cursor: pointer;">
-                        📱 スマホでテスト
+                    <button id="tunnel-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                        📡 トンネルURL
                     </button>
-                    <button id="web-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer;">
-                        🌐 公開用
+                    <button id="lan-tab" class="method-tab active" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: var(--color-primary); color: white; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                        📶 同一Wi-Fi
+                    </button>
+                    <button id="release-tab" class="method-tab" style="flex: 1; padding: 0.8rem; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                        🚀 公開リリース作成
                     </button>
                 </div>
-                
-                <!-- Local設定 -->
-                <div id="local-settings" class="method-settings">
+
+                <!-- トンネルURL設定 -->
+                <div id="tunnel-settings" class="method-settings" style="display: none;">
                     <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        📱 同じWi-Fi内のスマホで即座にテスト可能（開発・確認用）
+                        📡 ngrok / Cloudflare Tunnel の公開URLを貼ってください。同じWi-Fiでなくてもスマホで確認できます。
+                    </p>
+                    <input id="tunnel-url-input" type="url" placeholder="https://xxxx.ngrok-free.app"
+                        style="width: 100%; padding: 0.7rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); margin-bottom: 0.5rem; box-sizing: border-box;" />
+                    <button id="save-tunnel-url" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); border: none; color: white; font-weight: bold; cursor: pointer;">
+                        URLを保存してQR生成
+                    </button>
+                    <div id="tunnel-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); text-align: center;"></div>
+                    <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
+                        <span id="tunnel-url-display">トンネルURLを保存してください</span>
+                    </div>
+                    <button id="copy-tunnel-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium);">
+                        URLをコピー
+                    </button>
+                </div>
+
+                <!-- 同一Wi-Fi設定 -->
+                <div id="lan-settings" class="method-settings">
+                    <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
+                        📶 同じWi-Fi内のスマホで即座にテスト可能（開発・確認用）
                     </p>
                     <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
                         <span id="local-url">${localUrl}</span>
@@ -608,22 +632,20 @@ export async function showQRCodeModal(options = {}) {
                         🖥️ PC で開く
                     </button>
                 </div>
-                
-                <!-- Web設定 -->
-                <div id="web-settings" class="method-settings" style="display: none;">
+
+                <!-- 公開リリース作成 -->
+                <div id="release-settings" class="method-settings" style="display: none;">
                     <p style="margin: 0 0 0.5rem 0; color: var(--color-text-secondary); font-size: 0.9rem;">
-                        🌐 Firebase Storageにアップロードして、世界中の誰でもアクセス可能に
+                        🚀 公開リリースを作成して、インターネット経由で誰でもアクセスできるURLを発行します。
                     </p>
-                    <button id="publish-to-firebase" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); background: #FFA000; border: none; color: white; font-weight: bold; cursor: pointer;">
-                        🔥 Firebaseに公開する
+                    <button id="publish-release" class="primary-button" style="width: 100%; padding: 0.8rem; margin-bottom: 0.5rem; border-radius: var(--border-radius-medium); border: none; color: white; font-weight: bold; cursor: pointer;">
+                        🚀 公開リリースを作成
                     </button>
-                    <div id="firebase-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); background: #E3F2FD; color: #1565C0; text-align: center;">
-                        アップロード中...
-                    </div>
+                    <div id="release-status" style="display: none; margin-bottom: 0.5rem; padding: 0.5rem; border-radius: var(--border-radius-medium); text-align: center;"></div>
                     <div class="url-display" style="width: 100%; padding: 0.8rem; border-radius: var(--border-radius-medium); border: 1px solid var(--color-border); background-color: rgba(0,0,0,0.05); word-break: break-all; margin-bottom: 0.5rem;">
-                        <span id="web-url">${webUrl}</span>
+                        <span id="release-url">${webUrl}</span>
                     </div>
-                    <button id="copy-web-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
+                    <button id="copy-release-url" class="secondary-button" style="padding: 0.5rem 1rem; border-radius: var(--border-radius-medium); margin-right: 0.5rem;">
                         公開URLをコピー
                     </button>
                 </div>
@@ -645,16 +667,21 @@ export async function showQRCodeModal(options = {}) {
             <div class="usage-instructions" style="margin-bottom: 1.5rem; padding: 1rem; background-color: rgba(0,0,0,0.05); border-radius: var(--border-radius-medium); border-left: 4px solid var(--color-primary);">
                 <h4 style="margin: 0 0 0.5rem 0; color: var(--color-text-primary);">📱 スマホでの確認方法</h4>
                 <div style="font-size: 0.9rem; color: var(--color-text-secondary); line-height: 1.4;">
-                    <p style="margin: 0 0 0.5rem 0;"><strong>📱 スマホでテスト:</strong></p>
+                    <p style="margin: 0 0 0.5rem 0;"><strong>📶 同一Wi-Fi:</strong></p>
                     <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
                         <li>PCとスマホが同じWi-Fiに接続されていることを確認</li>
                         <li>スマホのカメラアプリでQRコードをスキャン</li>
-                        <li>ブラウザが開いてAR体験が開始されます</li>
                     </ul>
-                    <p style="margin: 0 0 0.5rem 0;"><strong>🌐 公開用:</strong></p>
+                    <p style="margin: 0 0 0.5rem 0;"><strong>📡 トンネルURL:</strong></p>
                     <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
-                        <li>「Firebaseに公開する」ボタンをクリック</li>
-                        <li>自動でFirebase Storageにアップロード</li>
+                        <li>ngrok / Cloudflare Tunnel で発行した公開URLを入力欄に貼る</li>
+                        <li>「URLを保存してQR生成」を押す</li>
+                        <li>別のネットワークのスマホからもアクセス可能</li>
+                    </ul>
+                    <p style="margin: 0 0 0.5rem 0;"><strong>🚀 公開リリース作成:</strong></p>
+                    <ul style="margin: 0 0 0.5rem 0; padding-left: 1.5rem;">
+                        <li>「公開リリースを作成」ボタンをクリック</li>
+                        <li>ストレージにアップロードして公開URLを発行</li>
                         <li>世界中の誰でもアクセス可能になります</li>
                     </ul>
                 </div>
@@ -678,39 +705,55 @@ export async function showQRCodeModal(options = {}) {
     document.body.appendChild(modalOverlay);
 
     // タブ切り替え機能
-    const localTab = modalOverlay.querySelector('#local-tab');
-    const webTab = modalOverlay.querySelector('#web-tab');
-    const localSettings = modalOverlay.querySelector('#local-settings');
-    const webSettings = modalOverlay.querySelector('#web-settings');
-    
-    let currentMethod = options.defaultMethod || (storedFirebaseUrl ? 'web' : 'local');
+    const tunnelTab = modalOverlay.querySelector('#tunnel-tab');
+    const lanTab = modalOverlay.querySelector('#lan-tab');
+    const releaseTab = modalOverlay.querySelector('#release-tab');
+    const tunnelSettings = modalOverlay.querySelector('#tunnel-settings');
+    const lanSettings = modalOverlay.querySelector('#lan-settings');
+    const releaseSettings = modalOverlay.querySelector('#release-settings');
+
+    let currentMethod = options.defaultMethod || (getTunnelBaseUrl() ? 'tunnel' : 'lan');
     let currentUrl = localUrl;
 
-    // Firebase公開済みURL（公開後に設定される）
-    let firebasePublishedUrl = storedFirebaseUrl;
+    // 公開リリースのURL（公開後に設定される）
+    let releasePublishedUrl = storedReleaseUrl;
 
-    async function switchTab(method) {
+    // トンネルURL入力欄に保存済みの値を反映
+    const tunnelInput = modalOverlay.querySelector('#tunnel-url-input');
+    if (tunnelInput) tunnelInput.value = getStoredTunnelUrl();
+
+    function switchTab(method) {
       currentMethod = method;
 
       // タブの見た目を切り替え
-      localTab.classList.toggle('active', method === 'local');
-      webTab.classList.toggle('active', method === 'web');
+      [[tunnelTab, 'tunnel'], [lanTab, 'lan'], [releaseTab, 'release']].forEach(([tab, m]) => {
+        const on = m === method;
+        tab.classList.toggle('active', on);
+        tab.style.background = on ? 'var(--color-primary)' : 'transparent';
+        tab.style.color = on ? 'white' : 'var(--color-text-primary)';
+      });
 
       // 設定の表示を切り替え
-      localSettings.style.display = method === 'local' ? 'block' : 'none';
-      webSettings.style.display = method === 'web' ? 'block' : 'none';
+      tunnelSettings.style.display = method === 'tunnel' ? 'block' : 'none';
+      lanSettings.style.display = method === 'lan' ? 'block' : 'none';
+      releaseSettings.style.display = method === 'release' ? 'block' : 'none';
 
       // URLを更新
-      if (method === 'local') {
+      if (method === 'lan') {
         currentUrl = localUrl;
         modalOverlay.querySelector('#local-url').textContent = localUrl;
+      } else if (method === 'tunnel') {
+        const tunnelViewerUrl = buildTunnelViewerUrl(projectId);
+        currentUrl = tunnelViewerUrl || '';
+        modalOverlay.querySelector('#tunnel-url-display').textContent =
+          tunnelViewerUrl || 'トンネルURLを保存してください';
       } else {
-        // Firebase公開済みURLがあればそれを使用
-        if (firebasePublishedUrl) {
-          currentUrl = firebasePublishedUrl;
-          modalOverlay.querySelector('#web-url').textContent = firebasePublishedUrl;
+        // 公開リリース済みURLがあればそれを使用
+        if (releasePublishedUrl) {
+          currentUrl = releasePublishedUrl;
+          modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
         } else {
-          modalOverlay.querySelector('#web-url').textContent = '「Firebaseに公開する」ボタンを押してください';
+          modalOverlay.querySelector('#release-url').textContent = '「公開リリースを作成」ボタンを押してください';
           currentUrl = '';
         }
       }
@@ -727,8 +770,9 @@ export async function showQRCodeModal(options = {}) {
       }, 150);
     }
 
-    localTab.addEventListener('click', () => switchTab('local'));
-    webTab.addEventListener('click', () => switchTab('web'));
+    tunnelTab.addEventListener('click', () => switchTab('tunnel'));
+    lanTab.addEventListener('click', () => switchTab('lan'));
+    releaseTab.addEventListener('click', () => switchTab('release'));
 
     // 初期状態を設定（DOM要素が完全に準備されてから実行）
     setTimeout(() => {
@@ -739,11 +783,7 @@ export async function showQRCodeModal(options = {}) {
         console.error('❌ QRコード生成に失敗しました\nエラー: Canvas element not found');
       }
 
-      if (currentMethod === 'web') {
-        switchTab('web');
-      } else {
-        switchTab('local');
-      }
+      switchTab(currentMethod);
     }, 200);
 
     // URLコピー機能
@@ -755,13 +795,51 @@ export async function showQRCodeModal(options = {}) {
       });
     });
 
-    modalOverlay.querySelector('#copy-web-url').addEventListener('click', () => {
-      const webUrl = modalOverlay.querySelector('#web-url').textContent;
-      navigator.clipboard.writeText(webUrl).then(() => {
+    modalOverlay.querySelector('#copy-release-url').addEventListener('click', () => {
+      const releaseUrl = modalOverlay.querySelector('#release-url').textContent;
+      navigator.clipboard.writeText(releaseUrl).then(() => {
         alert('公開URLをクリップボードにコピーしました');
       }).catch(() => {
         alert('URLのコピーに失敗しました');
       });
+    });
+
+    // トンネルURLをコピー
+    modalOverlay.querySelector('#copy-tunnel-url').addEventListener('click', () => {
+      const tunnelUrl = modalOverlay.querySelector('#tunnel-url-display').textContent;
+      navigator.clipboard.writeText(tunnelUrl).then(() => {
+        alert('トンネルURLをクリップボードにコピーしました');
+      }).catch(() => {
+        alert('URLのコピーに失敗しました');
+      });
+    });
+
+    // トンネルURLを保存してQRコードを生成
+    modalOverlay.querySelector('#save-tunnel-url').addEventListener('click', () => {
+      const input = modalOverlay.querySelector('#tunnel-url-input');
+      const status = modalOverlay.querySelector('#tunnel-status');
+      const saved = setStoredTunnelUrl(input.value);
+      status.style.display = 'block';
+      if (!saved) {
+        status.textContent = '⚠️ 有効なURLを入力してください（例: https://xxxx.ngrok-free.app）';
+        status.style.background = '#FFEBEE';
+        status.style.color = '#C62828';
+        return;
+      }
+      input.value = saved;
+      status.textContent = '✅ トンネルURLを保存しました';
+      status.style.background = '#E8F5E9';
+      status.style.color = '#2E7D32';
+
+      const tunnelViewerUrl = buildTunnelViewerUrl(projectId);
+      modalOverlay.querySelector('#tunnel-url-display').textContent = tunnelViewerUrl;
+      if (currentMethod === 'tunnel') {
+        currentUrl = tunnelViewerUrl;
+        setTimeout(() => {
+          const canvas = document.querySelector('#qrcode-canvas');
+          if (canvas) generateQRCode();
+        }, 100);
+      }
     });
 
     // プレビュー機能（スマホ向けレスポンシブ表示）
@@ -774,19 +852,19 @@ export async function showQRCodeModal(options = {}) {
       window.open(localUrl, '_blank', 'noopener,noreferrer');
     });
 
-    // Firebase公開ボタン
-    modalOverlay.querySelector('#publish-to-firebase').addEventListener('click', async () => {
-      const statusEl = modalOverlay.querySelector('#firebase-status');
-      const publishBtn = modalOverlay.querySelector('#publish-to-firebase');
+    // 公開リリース作成ボタン
+    modalOverlay.querySelector('#publish-release').addEventListener('click', async () => {
+      const statusEl = modalOverlay.querySelector('#release-status');
+      const publishBtn = modalOverlay.querySelector('#publish-release');
 
       try {
         // UI状態を更新
         statusEl.style.display = 'block';
-        statusEl.textContent = '🔄 アップロード中...';
+        statusEl.textContent = '🔄 公開中...';
         statusEl.style.background = '#E3F2FD';
         statusEl.style.color = '#1565C0';
         publishBtn.disabled = true;
-        publishBtn.textContent = '⏳ アップロード中...';
+        publishBtn.textContent = '⏳ 公開中...';
 
         // プロジェクトデータを取得
         const project = await getProject(projectId);
@@ -798,10 +876,10 @@ export async function showQRCodeModal(options = {}) {
           throw new Error('プロジェクトデータの取得に失敗しました');
         }
 
-        uiLogger.log('🔥 Firebase公開開始:', projectId, projectData);
+        uiLogger.log('🚀 公開リリース作成開始:', projectId);
 
-        // Firebaseにアップロード（modelDataを使用）
-        const result = await publishProjectToFirebase({
+        // ストレージプロバイダ抽象層経由で公開（vercelBlob優先、firebaseは後方互換）
+        const result = await publishRelease({
           id: projectId,
           name: projectData.name || 'Untitled',
           type: projectData.type || 'markerless',
@@ -815,17 +893,18 @@ export async function showQRCodeModal(options = {}) {
           arSettings: projectData.arSettings || {}
         });
 
-        uiLogger.log('✅ Firebase公開完了:', result);
+        uiLogger.log('✅ 公開リリース作成完了:', result);
 
         // 成功
-        firebasePublishedUrl = result.viewerUrl;
-        currentUrl = firebasePublishedUrl;
-        
+        releasePublishedUrl = result.viewerUrl;
+        currentUrl = releasePublishedUrl;
+
         uiLogger.log('🔗 更新されたURL:', currentUrl);
 
         try {
           updateProjectPublishInfo(projectId, {
-            firebase: {
+            release: {
+              provider: result.provider,
               viewerUrl: result.viewerUrl,
               projectUrl: result.projectUrl,
               publishedAt: new Date().toISOString()
@@ -835,13 +914,13 @@ export async function showQRCodeModal(options = {}) {
           uiLogger.warn('⚠️ 公開情報の保存に失敗:', updateError);
         }
 
-        statusEl.textContent = '✅ 公開完了！';
+        statusEl.textContent = `✅ 公開完了！（${result.provider}）`;
         statusEl.style.background = '#E8F5E9';
         statusEl.style.color = '#2E7D32';
 
-        modalOverlay.querySelector('#web-url').textContent = firebasePublishedUrl;
+        modalOverlay.querySelector('#release-url').textContent = releasePublishedUrl;
 
-        publishBtn.textContent = '✅ 公開済み';
+        publishBtn.textContent = '✅ 公開済み（再公開）';
         publishBtn.style.background = '#4CAF50';
         publishBtn.disabled = false; // 再公開可能にする
 
@@ -851,28 +930,28 @@ export async function showQRCodeModal(options = {}) {
           if (canvas && currentUrl) {
             generateQRCode();
           } else {
-            uiLogger.warn('⚠️ Firebase公開後: Canvas要素が見つかりません');
+            uiLogger.warn('⚠️ 公開リリース作成後: Canvas要素が見つかりません');
           }
         }, 100);
 
       } catch (error) {
-        console.error('Firebase公開エラー:', error);
+        console.error('公開リリース作成エラー:', error);
         let errorMessage = error.message;
-        
+
         // Firebase設定エラーの場合、より分かりやすいメッセージを表示
-        if (error.message.includes('Firebase設定が完了していません') || 
-            error.message.includes('Firebase設定')) {
+        if (errorMessage && (errorMessage.includes('Firebase設定が完了していません') ||
+            errorMessage.includes('Firebase設定'))) {
           errorMessage = 'Firebase設定が必要です。.envファイルにFirebase設定を追加してください。\n詳細は env.example を参照してください。';
         }
-        
+
         statusEl.textContent = `❌ エラー: ${errorMessage}`;
         statusEl.style.background = '#FFEBEE';
         statusEl.style.color = '#C62828';
         publishBtn.disabled = false;
-        publishBtn.textContent = '🔥 Firebaseに公開する';
-        
+        publishBtn.textContent = '🚀 公開リリースを作成';
+
         // ユーザーに通知
-        alert(`Firebase公開に失敗しました:\n\n${errorMessage}\n\nFirebase機能を使用しない場合は、エクスポート機能をご利用ください。`);
+        alert(`公開リリースの作成に失敗しました:\n\n${errorMessage}\n\n公開機能を使用しない場合は、エクスポート機能をご利用ください。`);
       }
     });
 
@@ -1027,8 +1106,14 @@ export async function showQRCodeModal(options = {}) {
     };
 
     // 開いたタイミングでローカル公開を試行（同一Wi-Fi前提）
+    // 本番（デプロイ済み）では実行しない。同一Wi-Fiタブは開発時のみ意味があり、
+    // 本番で実行すると QRモーダルを開くたびに不要な公開アップロードが走るため。
     (async () => {
       try {
+        if (!import.meta.env.DEV) {
+          uiLogger.log('ℹ️ 本番環境のため自動ローカル公開をスキップ（公開はリリース作成タブで実行）');
+          return;
+        }
         if (!projectId || projectId === 'sample') throw new Error('プロジェクトID不明');
 
         const project = getProject(projectId);
@@ -1126,8 +1211,8 @@ export async function showQRCodeModal(options = {}) {
             // 表示を更新
             const localUrlEl = modalOverlay.querySelector('#local-url');
             if (localUrlEl) localUrlEl.textContent = localUrl;
-            // タブ状態がlocalならQR再生成
-            if (currentMethod === 'local') {
+            // タブ状態が同一Wi-FiならQR再生成
+            if (currentMethod === 'lan') {
               currentUrl = localUrl;
               generateQRCode();
             }
