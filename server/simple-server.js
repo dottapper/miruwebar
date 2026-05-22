@@ -2,10 +2,40 @@ import http from 'http';
 import https from 'https';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import { createLogger } from './utils/logger.js';
+
+/**
+ * サーバーのLAN IPv4アドレスを取得する（スマホ実機テスト用）
+ * @returns {string} LAN IP（取得できない場合は 'localhost'）
+ */
+function getServerLanIP() {
+  const interfaces = os.networkInterfaces();
+  // WiFi/Ethernet系のインターフェースを優先
+  const preferred = ['en0', 'en1', 'eth0', 'wlan0', 'Wi-Fi', 'WiFi'];
+  for (const name of preferred) {
+    const iface = interfaces[name];
+    if (iface) {
+      for (const config of iface) {
+        if (config.family === 'IPv4' && !config.internal) {
+          return config.address;
+        }
+      }
+    }
+  }
+  // フォールバック: 最初の非内部IPv4アドレス
+  for (const configs of Object.values(interfaces)) {
+    for (const config of configs) {
+      if (config.family === 'IPv4' && !config.internal) {
+        return config.address;
+      }
+    }
+  }
+  return 'localhost';
+}
 
 // 環境変数の読み込み
 dotenv.config();
@@ -380,6 +410,25 @@ async function requestHandler(req, res) {
       return;
     }
     
+    // ネットワーク情報API: /api/network-info（スマホ実機テスト用のLAN IP取得）
+    if (pathname === '/api/network-info' && req.method === 'GET') {
+      const hostHeader = req.headers.host || '';
+      const portFromHeader = hostHeader.includes(':') ? Number(hostHeader.split(':').pop()) : undefined;
+      const networkInfo = {
+        networkIP: getServerLanIP(),
+        port: portFromHeader || Number(PORT) || 3001,
+        timestamp: Date.now()
+      };
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      });
+      res.end(JSON.stringify(networkInfo));
+      return;
+    }
+
     // プロジェクト取得
     if (pathname.startsWith('/api/projects/') && req.method === 'GET') {
       try {

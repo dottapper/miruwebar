@@ -185,41 +185,101 @@ export class URLStabilizer {
 
   /**
    * ローカルネットワークIP取得
+   *
+   * スマホ実機テスト用QRに埋め込むため、開発機のLAN IPを確実に取得する。
+   * 固定IPを推測するとアクセス不能なQRが生成されるため、検出失敗時は
+   * localhost を返して問題が明示されるようにする。
+   *
    * @private
-   * @returns {Promise<string>} ローカルIP
+   * @returns {Promise<string>} ローカルIP（取得不能時は 'localhost'）
    */
   async getLocalNetworkIP() {
-    try {
-      // WebRTC接続を利用したIP取得（一般的な手法）
-      const rtc = new RTCPeerConnection({ iceServers: [] });
-
-      return new Promise((resolve) => {
-        rtc.createDataChannel('');
-
-        rtc.onicecandidate = (event) => {
-          if (event.candidate) {
-            const candidate = event.candidate.candidate;
-            const ipMatch = candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
-            if (ipMatch && !ipMatch[1].startsWith('127.')) {
-              resolve(ipMatch[1]);
-              rtc.close();
-            }
-          }
-        };
-
-        rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
-
-        // フォールバック（3秒後）
-        setTimeout(() => {
-          resolve('192.168.1.100'); // デフォルトIP
-          rtc.close();
-        }, 3000);
-      });
-
-    } catch (error) {
-      logger.warn('ローカルIP取得エラー、フォールバック使用', error);
-      return '192.168.1.100'; // フォールバック
+    // 1) すでに LAN ホスト/IP でページを開いている場合はそれをそのまま使う
+    const currentHost = window.location.hostname;
+    if (currentHost && currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
+      logger.debug('現在のhostnameをローカルIPとして使用', { currentHost });
+      return currentHost;
     }
+
+    // 2) 開発サーバーの /api/network-info から実IPを取得（最も信頼できる）
+    try {
+      const response = await fetch('/api/network-info', { method: 'GET', cache: 'no-cache' });
+      if (response.ok) {
+        const data = await response.json();
+        const ip = data && data.networkIP;
+        if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+          logger.info('network-info API からローカルIPを取得', { ip });
+          return ip;
+        }
+      }
+    } catch (error) {
+      logger.debug('network-info API が利用できません（WebRTCにフォールバック）', { error: error.message });
+    }
+
+    // 3) WebRTC でプライベートIPを検出（ベストエフォート）
+    const webrtcIP = await this.detectIPViaWebRTC();
+    if (webrtcIP) {
+      logger.info('WebRTC でローカルIPを検出', { webrtcIP });
+      return webrtcIP;
+    }
+
+    // 4) 検出失敗: 固定IPを推測せず localhost を返す（誤ったQRを避ける）
+    logger.warn('ローカルIPの自動検出に失敗しました。localhost を使用します（スマホからはアクセスできません）');
+    return 'localhost';
+  }
+
+  /**
+   * WebRTC を用いてプライベートIPv4アドレスを検出する（ベストエフォート）
+   * @private
+   * @returns {Promise<string|null>} 検出したプライベートIP、失敗時は null
+   */
+  async detectIPViaWebRTC() {
+    return new Promise((resolve) => {
+      let rtc;
+      try {
+        rtc = new RTCPeerConnection({
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+      } catch (error) {
+        logger.debug('RTCPeerConnection の生成に失敗', { error: error.message });
+        resolve(null);
+        return;
+      }
+
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        try { rtc.close(); } catch (_) { /* noop */ }
+        resolve(value);
+      };
+
+      // 172.16.0.0〜172.31.255.255 を含むプライベートIPv4判定
+      const isPrivateIPv4 = (ip) => {
+        if (ip.startsWith('192.168.') || ip.startsWith('10.')) return true;
+        if (ip.startsWith('172.')) {
+          const second = parseInt(ip.split('.')[1], 10);
+          return second >= 16 && second <= 31;
+        }
+        return false;
+      };
+
+      rtc.onicecandidate = (event) => {
+        if (!event.candidate) return;
+        const match = event.candidate.candidate.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+        if (match && isPrivateIPv4(match[1])) {
+          finish(match[1]);
+        }
+      };
+
+      rtc.createDataChannel('');
+      rtc.createOffer()
+        .then((offer) => rtc.setLocalDescription(offer))
+        .catch(() => finish(null));
+
+      // 3秒で打ち切り
+      setTimeout(() => finish(null), 3000);
+    });
   }
 
   /**
