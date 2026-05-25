@@ -1088,14 +1088,43 @@ export async function showQRCodeModal(options = {}) {
         }
       }
 
+      // マーカー画像はプロジェクト編集画面で管理。プロジェクトに無ければ
+      // 編集中の localStorage 値（マーカーアップロード直後など）にフォールバック。
+      let markerImageForLocal = project.markerImage || project.markerImageUrl || null;
+      let markerPatternForLocal = project.markerPattern || null;
+      if (!markerImageForLocal) {
+        try {
+          markerImageForLocal = localStorage.getItem('markerImageUrl') || null;
+        } catch (_) {}
+      }
+      if (markerImageForLocal && !markerPatternForLocal) {
+        try {
+          const { generateMarkerPatternFromImage } = await import('../utils/marker-utils.js');
+          markerPatternForLocal = await generateMarkerPatternFromImage(markerImageForLocal);
+          uiLogger.log('🧩 ローカル公開直前に markerPattern を生成しました');
+        } catch (patternError) {
+          uiLogger.warn('⚠️ ローカル公開直前のmarkerPattern生成に失敗:', patternError);
+        }
+      }
+
+      // 画面設定は LSE 最新値（editorSettings）を最優先、次にプロジェクト保存値。
+      const startScreenForLocal = editorSettings?.startScreen
+        || linkedEditorSettings?.startScreen
+        || project.startScreen
+        || null;
+      const guideScreenForLocal = editorSettings?.guideScreen
+        || linkedEditorSettings?.guideScreen
+        || project.guideScreen
+        || null;
+
       const originalProjectData = {
         id: projectId,
         type: project.type || 'markerless',
         loadingScreen: lsPayload,
-        startScreen: project.startScreen || linkedEditorSettings?.startScreen || null,
-        guideScreen: project.guideScreen || linkedEditorSettings?.guideScreen || null,
-        markerImage: editorSettings?.markerImage || project.markerImage || project.markerImageUrl || null,
-        markerPattern: editorSettings?.markerPattern || project.markerPattern || null,
+        startScreen: startScreenForLocal,
+        guideScreen: guideScreenForLocal,
+        markerImage: markerImageForLocal,
+        markerPattern: markerPatternForLocal,
         models: modelPayload
       };
 
@@ -1201,7 +1230,46 @@ export async function showQRCodeModal(options = {}) {
           throw new Error('プロジェクトデータの取得に失敗しました');
         }
 
-        uiLogger.log('🚀 公開リリース作成開始:', projectId);
+        // ローディング画面エディタの最新設定をマージ（公開直前に必ず取り込む）
+        // これにより「LSEを編集→保存→公開リリース」が project の再保存なしで反映される。
+        let lseLatest = null;
+        try {
+          const { getLoadingSettingsForProject } = await import('../utils/loading-screen-state.js');
+          lseLatest = getLoadingSettingsForProject();
+        } catch (lseError) {
+          uiLogger.warn('⚠️ LSE設定の取得に失敗（プロジェクト保存値を使用）:', lseError);
+        }
+
+        // マーカー画像とパターンはプロジェクト編集画面で管理するため、まず project の値を使い
+        // 不足時のみ localStorage の暫定値（編集中のもの）にフォールバックする。
+        let markerImageForPublish = projectData.markerImage || projectData.markerImageUrl || null;
+        let markerPatternForPublish = projectData.markerPattern || null;
+        if (!markerImageForPublish) {
+          try {
+            markerImageForPublish = localStorage.getItem('markerImageUrl') || null;
+          } catch (_) {}
+        }
+        if (markerImageForPublish && !markerPatternForPublish) {
+          try {
+            const { generateMarkerPatternFromImage } = await import('../utils/marker-utils.js');
+            markerPatternForPublish = await generateMarkerPatternFromImage(markerImageForPublish);
+            uiLogger.log('🧩 公開直前に markerPattern を生成しました');
+          } catch (patternError) {
+            uiLogger.warn('⚠️ 公開直前のmarkerPattern生成に失敗（markerImageのみ公開）:', patternError);
+          }
+        }
+
+        // 画面設定は LSE 最新値を最優先（LSE未保存ならプロジェクト保存値）。
+        const mergedLoadingScreen = lseLatest?.loadingScreen || projectData.loadingScreen || null;
+        const mergedStartScreen = lseLatest?.startScreen || projectData.startScreen || null;
+        const mergedGuideScreen = lseLatest?.guideScreen || projectData.guideScreen || null;
+
+        uiLogger.log('🚀 公開リリース作成開始:', projectId, {
+          markerImage: markerImageForPublish ? `${String(markerImageForPublish).slice(0, 60)}...` : 'なし',
+          markerPattern: markerPatternForPublish ? `あり (${markerPatternForPublish.length}文字)` : 'なし',
+          loadingScreenFromLSE: !!lseLatest?.loadingScreen,
+          guideScreenFromLSE: !!lseLatest?.guideScreen
+        });
 
         // ストレージプロバイダ抽象層経由で公開（vercelBlob優先、firebaseは後方互換）
         const result = await publishRelease({
@@ -1209,12 +1277,12 @@ export async function showQRCodeModal(options = {}) {
           name: projectData.name || 'Untitled',
           type: projectData.type || 'markerless',
           modelData: projectData.modelData || [],
-          loadingScreen: projectData.loadingScreen || null,
-          startScreen: projectData.startScreen || null,
-          guideScreen: projectData.guideScreen || null,
+          loadingScreen: mergedLoadingScreen,
+          startScreen: mergedStartScreen,
+          guideScreen: mergedGuideScreen,
           theme: projectData.theme || null,
-          markerImage: projectData.markerImage || projectData.markerImageUrl || null,
-          markerPattern: projectData.markerPattern || null,
+          markerImage: markerImageForPublish,
+          markerPattern: markerPatternForPublish,
           arSettings: projectData.arSettings || {}
         });
 

@@ -2641,18 +2641,15 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (guideTitle) guideTitle.textContent = guideTitleText;
         if (guideDescription) guideDescription.textContent = guideDescText;
 
-        // ガイド画像とマーカープレビュー画像はどちらも project.markerImage を使う。
+        // ガイド画像は #ar-guide-image (<img>) に統一して設定。
+        // 古い#ar-guide-marker ラッパーは使わない（display:none のまま）。
         if (projectMarkerImage && guideImage) {
           guideImage.src = abs(projectMarkerImage);
           guideImage.style.display = 'block';
           hasCustomMarkerGuide = true;
-          if (guideMarker) guideMarker.style.display = 'none';
           if (markerGuideTips) markerGuideTips.style.display = 'none';
         }
-        if (projectMarkerImage && guideMarkerImage) {
-          guideMarkerImage.src = abs(projectMarkerImage);
-          if (guideMarker) guideMarker.style.display = 'block';
-        }
+        if (guideMarker) guideMarker.style.display = 'none';
       } else if (guideMode === 'world') {
         // 空間検出モード: タイトル/説明はエディタの worldTracking を最優先。
         const world = gs.worldTracking || {};

@@ -487,24 +487,35 @@ function applyGuideScreen(guide, screenElement) {
     log('背景画像適用:', guide.background);
   }
 
-  // マーカー画像
+  // ガイド画像（プロジェクト編集画面でアップロードしたマーカー画像）
+  // 統合ビューアでは #ar-guide-image が実体の <img> 要素。
+  // #ar-guide-marker は <div> ラッパー（中に #ar-guide-marker-image）なので
+  // ここに .src を設定しても表示されない。必ず <img> 要素にセットすること。
   const markerSrc = guide.markerImage || guide.marker?.src || guide.image;
   if (markerSrc) {
-    let markerImg = screenElement.querySelector('#ar-guide-marker');
-    if (!markerImg) {
-      markerImg = document.createElement('img');
-      markerImg.id = 'ar-guide-marker';
-      markerImg.style.maxWidth = '60%';
-      markerImg.style.maxHeight = '300px';
-      markerImg.style.marginBottom = '20px';
-      markerImg.style.border = '2px solid #ffffff';
-      markerImg.style.borderRadius = '8px';
-      screenElement.appendChild(markerImg);
-    }
     try { preloadImage(markerSrc); } catch {}
-    markerImg.src = markerSrc;
-    markerImg.style.setProperty('display', 'block', 'important');
-    log('ガイドマーカー画像適用:', markerSrc);
+    const guideImg = screenElement.querySelector('#ar-guide-image');
+    if (guideImg) {
+      guideImg.src = markerSrc;
+      guideImg.style.setProperty('display', 'block', 'important');
+      log('ガイド画像適用 (#ar-guide-image):', markerSrc);
+    } else {
+      // 統合ビューア以外のレイアウト用フォールバック: <img>を生成
+      let fallbackImg = screenElement.querySelector('#ar-guide-fallback-image');
+      if (!fallbackImg) {
+        fallbackImg = document.createElement('img');
+        fallbackImg.id = 'ar-guide-fallback-image';
+        fallbackImg.style.maxWidth = '60%';
+        fallbackImg.style.maxHeight = '300px';
+        fallbackImg.style.marginBottom = '20px';
+        fallbackImg.style.border = '2px solid #ffffff';
+        fallbackImg.style.borderRadius = '8px';
+        screenElement.appendChild(fallbackImg);
+      }
+      fallbackImg.src = markerSrc;
+      fallbackImg.style.setProperty('display', 'block', 'important');
+      log('ガイド画像適用 (fallback):', markerSrc);
+    }
   }
 
   // タイトル/説明/メッセージ
