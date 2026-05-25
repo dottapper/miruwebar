@@ -207,10 +207,11 @@ export class ARScreenManager {
    */
   applyGuideSettings(guideElement, settings) {
     try {
-      // 背景色（background/backgroundColor の両方を設定して確実に反映）
+      // 注意: ガイド画面はカメラ映像の上に重ねるオーバーレイ。
+      // 背景色で覆うとカメラが見えなくなり AR スキャンができないため適用しない。
+      // CSS変数 --guide-bg は他要素から参照される可能性があるため値だけ保持する。
       if (settings.backgroundColor) {
         guideElement.style.setProperty('--guide-bg', settings.backgroundColor);
-        guideElement.style.backgroundColor = settings.backgroundColor; // 互換
       }
 
       // タイトル・説明更新

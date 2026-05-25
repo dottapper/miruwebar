@@ -480,12 +480,9 @@ function applyGuideScreen(guide, screenElement) {
   }
 
   // 背景画像
-  if (guide.background) {
-    screenElement.style.setProperty('background-image', `url("${guide.background}")`, 'important');
-    screenElement.style.setProperty('background-size', 'cover', 'important');
-    screenElement.style.setProperty('background-position', 'center', 'important');
-    log('背景画像適用:', guide.background);
-  }
+  // 注意: ガイド画面はカメラ映像の上に重ねるオーバーレイ。
+  // 背景画像で覆うとカメラが見えなくなり AR スキャンができないため、ここでは適用しない。
+  // 必要なら個別UI要素（マーカー枠など）の意匠で表現する。
 
   // ガイド画像（プロジェクト編集画面でアップロードしたマーカー画像）
   // 統合ビューアでは #ar-guide-image が実体の <img> 要素。
@@ -543,9 +540,8 @@ function applyGuideScreen(guide, screenElement) {
   }
 
   // 背景色
-  if (guide.backgroundColor) {
-    screenElement.style.setProperty('background-color', guide.backgroundColor, 'important');
-  }
+  // 注意: ガイド画面はカメラ映像の上に重ねるオーバーレイ。
+  // 背景色で覆うとカメラが見えなくなり AR スキャンができないため、ここでは適用しない。
 
   // テキスト色
   if (guide.textColor) {
