@@ -1147,13 +1147,21 @@ export default function showARViewer(container) {
       
       <!-- ガイド画面（マーカー検出/平面検出の説明） -->
       <div id="ar-guide-screen" class="ar-guide-screen" data-screen="guide" style="display: none;">
-        <div class="guide-content">
-          <img id="ar-guide-image" alt="guide image" style="display:none;max-width:240px;max-height:180px;margin-bottom:16px;" />
-          <h2 id="ar-guide-title">読み込み中...</h2>
-          <p id="ar-guide-description"></p>
-          <div id="ar-guide-marker" style="display:none;">
-            <img id="ar-guide-marker-image" alt="marker" style="max-width:200px;max-height:150px;margin:16px 0;" />
+        <div class="guide-header" id="ar-guide-header">
+          <div class="guide-title" id="ar-guide-title">読み込み中...</div>
+          <div class="guide-description" id="ar-guide-description"></div>
+        </div>
+
+        <div class="guide-center-area" id="ar-guide-center">
+          <div class="marker-image-container" id="ar-guide-marker-container">
+            <img id="ar-guide-image" alt="marker image" style="display:none;" />
+            <div class="marker-placeholder-icon" id="ar-guide-marker-placeholder">📷</div>
           </div>
+          <div class="marker-label" id="ar-guide-marker-label">マーカー画像</div>
+        </div>
+
+        <div class="guide-footer" id="ar-guide-footer">
+          <div class="guide-status" id="ar-guide-status">画像を認識しています...</div>
         </div>
       </div>
       
@@ -1253,27 +1261,121 @@ export default function showARViewer(container) {
       left: 0;
       width: 100%;
       height: 100%;
+      background-color: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+      box-sizing: border-box;
+      z-index: 1100;
+      --guide-accent: #6c5ce7;
+      --guide-text-size: 1;
+      --guide-marker-size: 1;
+      --guide-text-position: 20%;
+      --guide-footer-position: 85%;
+    }
+    .ar-guide-screen .guide-header {
+      position: absolute;
+      top: var(--guide-text-position);
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+      width: 90%;
+    }
+    .ar-guide-screen .guide-title {
+      font-size: calc(16px * var(--guide-text-size));
+      font-weight: bold;
+      margin-bottom: 8px;
+      text-align: center;
+      line-height: 1.3;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      color: inherit;
+    }
+    .ar-guide-screen .guide-description {
+      font-size: calc(12px * var(--guide-text-size));
+      line-height: 1.4;
+      text-align: center;
+      opacity: 0.9;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      color: inherit;
+    }
+    .ar-guide-screen .guide-center-area {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      z-index: 5;
+    }
+    .ar-guide-screen .marker-image-container {
+      width: calc(120px * var(--guide-marker-size));
+      height: calc(90px * var(--guide-marker-size));
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1100;
+      border: 2px dashed var(--guide-accent);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      animation: ar-marker-glow 2s infinite;
+      overflow: hidden;
     }
-    .guide-content { 
-      text-align: center; 
-      padding: 2rem; 
-      position: relative;
+    .ar-guide-screen .marker-image-container.has-image {
+      border-style: solid;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(5px);
+    }
+    .ar-guide-screen .marker-image-container img {
       max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
     }
-    .guide-content h2 { 
-      color: #fff; 
-      font-size: 1.4rem; 
-      margin: 0.5rem 0 1rem; 
+    .ar-guide-screen .marker-placeholder-icon {
+      font-size: calc(min(120px, 90px) * var(--guide-marker-size) * 0.2);
+      opacity: 0.6;
     }
-    .guide-content p { 
-      color: #ccc; 
-      font-size: 1rem; 
-      margin: 0.5rem 0 1rem; 
-      line-height: 1.4;
+    .ar-guide-screen .marker-image-container.has-image .marker-placeholder-icon {
+      display: none;
+    }
+    .ar-guide-screen .marker-label {
+      margin-top: 8px;
+      font-size: 10px;
+      opacity: 0.9;
+      text-align: center;
+      color: inherit;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      animation: ar-status-pulse 3s ease-in-out infinite;
+    }
+    .ar-guide-screen .guide-footer {
+      position: absolute;
+      top: var(--guide-footer-position);
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      z-index: 10;
+    }
+    .ar-guide-screen .guide-status {
+      font-size: 12px;
+      opacity: 0.9;
+      text-align: center;
+      color: inherit;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      animation: ar-status-pulse 3s ease-in-out infinite;
+    }
+    @keyframes ar-marker-glow {
+      0%, 100% {
+        border-color: var(--guide-accent);
+        box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+      }
+      50% {
+        border-color: rgba(108, 92, 231, 0.8);
+        box-shadow: 0 0 20px rgba(108, 92, 231, 0.6);
+      }
+    }
+    @keyframes ar-status-pulse {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.98); }
     }
 
     .ar-loading-screen {
@@ -1632,8 +1734,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   const guideImage = container.querySelector('#ar-guide-image');
   const guideTitle = container.querySelector('#ar-guide-title');
   const guideDescription = container.querySelector('#ar-guide-description');
-  const guideMarker = container.querySelector('#ar-guide-marker');
-  const guideMarkerImage = container.querySelector('#ar-guide-marker-image');
+  const guideMarkerContainer = container.querySelector('#ar-guide-marker-container');
+  const guideMarkerLabel = container.querySelector('#ar-guide-marker-label');
+  const guideStatus = container.querySelector('#ar-guide-status');
+  const guideCenterArea = container.querySelector('#ar-guide-center');
   const arHost = container.querySelector('#ar-host');
   const statusText = container.querySelector('#ar-status-text');
   const instruction = container.querySelector('#ar-instruction');
@@ -2091,13 +2195,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       guideImage.style.display = 'none';
       guideImage.src = '';
     }
-    
-    if (guideMarker) {
-      guideMarker.style.display = 'none';
-    }
-    
-    if (guideMarkerImage) {
-      guideMarkerImage.src = '';
+
+    if (guideMarkerContainer) {
+      guideMarkerContainer.classList.remove('has-image');
     }
 
     if (startCTA) {
@@ -2619,58 +2719,82 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       // ガイド画面の設定を準備（AR開始時に表示）
     try {
-      // ガイド画面の背景色設定
-      if (gs.backgroundColor && guideScreen) {
-        guideScreen.style.background = gs.backgroundColor;
+      // 背景色 / 文字色
+      if (guideScreen) {
+        if (gs.backgroundColor) guideScreen.style.backgroundColor = gs.backgroundColor;
+        if (gs.textColor) guideScreen.style.color = gs.textColor;
+        if (gs.accentColor) guideScreen.style.setProperty('--guide-accent', gs.accentColor);
       }
-      
+
       // ガイド画面のモード判定（surface/world）
       const guideMode = gs.mode || (currentProject.type === 'marker' ? 'marker' : 'world');
       const abs = (u) => { try { return new URL(u, currentProject.__sourceUrl || (typeof location!== 'undefined' ? location.href : undefined)).href; } catch { return u; } };
-      
+
       // ガイド画面に表示する画像は、プロジェクト編集画面（ARエディタ）で
       // アップロードした markerImage を唯一のソースとする。
       const projectMarkerImage = currentProject.markerImage || currentProject.markerImageUrl || null;
 
+      // モード別の設定（surfaceDetection / worldTracking）
+      const surface = gs.surfaceDetection || gs.markerGuide || {};
+      const world = gs.worldTracking || {};
+      const modeSettings = guideMode === 'marker' ? surface : world;
+
+      // テキスト位置・サイズ・フッター位置を CSS変数経由で反映
+      if (guideScreen) {
+        const textPos = modeSettings.textPosition ?? 20;
+        const textSize = modeSettings.textSize ?? 1.0;
+        const footerPos = modeSettings.footerPosition ?? 85;
+        guideScreen.style.setProperty('--guide-text-position', `${textPos}%`);
+        guideScreen.style.setProperty('--guide-text-size', String(textSize));
+        guideScreen.style.setProperty('--guide-footer-position', `${footerPos}%`);
+      }
+
       if (guideMode === 'marker') {
         // マーカー用ガイド: タイトル/説明はエディタが編集する surfaceDetection を最優先。
-        // トップレベル gs.title/description は常にデフォルト値が入るためフォールバック用。
-        const surface = gs.surfaceDetection || gs.markerGuide || {};
         const guideTitleText = surface.title || gs.title || 'マーカーをカメラに写してください';
         const guideDescText = surface.description || gs.description || 'マーカー画像を画面内に収めてください';
         if (guideTitle) guideTitle.textContent = guideTitleText;
         if (guideDescription) guideDescription.textContent = guideDescText;
 
-        // ガイド画像は #ar-guide-image (<img>) に統一して設定。
-        // 古い#ar-guide-marker ラッパーは使わない（display:none のまま）。
-        if (projectMarkerImage && guideImage) {
+        // マーカーサイズ
+        if (guideScreen) {
+          guideScreen.style.setProperty('--guide-marker-size', String(surface.markerSize ?? 1.0));
+        }
+
+        // マーカー画像 or プレースホルダー
+        if (projectMarkerImage && guideImage && guideMarkerContainer) {
           guideImage.src = abs(projectMarkerImage);
           guideImage.style.display = 'block';
+          guideMarkerContainer.classList.add('has-image');
           hasCustomMarkerGuide = true;
           if (markerGuideTips) markerGuideTips.style.display = 'none';
+        } else if (guideImage && guideMarkerContainer) {
+          guideImage.style.display = 'none';
+          guideMarkerContainer.classList.remove('has-image');
         }
-        if (guideMarker) guideMarker.style.display = 'none';
+
+        // フッター（"画像を認識しています..."）
+        if (guideStatus) {
+          guideStatus.textContent = surface.instructionText || '画像を認識しています...';
+        }
+
+        // マーカーラベル・中央エリアを表示
+        if (guideCenterArea) guideCenterArea.style.display = 'flex';
+        if (guideMarkerLabel) guideMarkerLabel.style.display = '';
       } else if (guideMode === 'world') {
         // 空間検出モード: タイトル/説明はエディタの worldTracking を最優先。
-        const world = gs.worldTracking || {};
-        if (world.title && guideTitle) {
-          guideTitle.textContent = world.title;
-        }
-        if (world.description && guideDescription) {
-          guideDescription.textContent = world.description;
-        }
-        // 空間検出にはマーカー画像不要。プレビューは非表示。
-        if (guideMarker) {
-          guideMarker.style.display = 'none';
+        if (guideTitle) guideTitle.textContent = world.title || gs.title || '画面をタップしてください';
+        if (guideDescription) guideDescription.textContent = world.description || gs.description || '平らな面を見つけて画面をタップしてください';
+
+        // 空間検出にはマーカー画像不要。中央エリアとマーカーラベルを非表示。
+        if (guideCenterArea) guideCenterArea.style.display = 'none';
+
+        // フッター（"平面を検出中..."）
+        if (guideStatus) {
+          guideStatus.textContent = world.instructionText || '平面を検出中...';
         }
       }
-      
-      // テキスト色設定
-      if (gs.textColor) {
-        if (guideTitle) guideTitle.style.color = gs.textColor;
-        if (guideDescription) guideDescription.style.color = gs.textColor;
-      }
-      
+
     } catch (guideError) {
       arViewerLogger.warn('⚠️ ガイド画面設定エラー:', guideError);
     }
