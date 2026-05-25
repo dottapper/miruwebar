@@ -1261,9 +1261,8 @@ export default function showARViewer(container) {
       left: 0;
       width: 100%;
       height: 100%;
-      /* カメラ映像を透過させる: 背景は半透明グラデーション（中央を抜く） */
-      background:
-        radial-gradient(ellipse at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 75%, rgba(0,0,0,0.65) 100%);
+      /* カメラ映像を見せるため背景は完全透明。文字の可読性は各テキストに付ける text-shadow で確保 */
+      background: transparent;
       color: #fff;
       padding: 20px;
       box-sizing: border-box;
@@ -1476,6 +1475,38 @@ export default function showARViewer(container) {
     .integrated-ar-viewer.is-ar-active #ar-start-btn,
     .integrated-ar-viewer.is-ar-active #ar-detect-btn {
       display: none !important;
+    }
+
+    /* ガイド画面/AR中: 戻るボタンを小さく目立たない見た目に */
+    .integrated-ar-viewer.is-ar-active #ar-back-btn,
+    .ar-guide-screen ~ #ar-controls #ar-back-btn {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 0;
+      background: rgba(255,255,255,0.12);
+      color: rgba(255,255,255,0.85);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      box-shadow: none;
+      min-width: 0;
+    }
+    .integrated-ar-viewer.is-ar-active #ar-back-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+    /* ガイド画面表示中: controls パネル自体も最小化 */
+    .integrated-ar-viewer:not(.is-ar-active) #ar-controls:has(#ar-instruction[style*="display: none"]) {
+      padding: 6px 10px;
+      background: rgba(0,0,0,0.45);
+      max-width: none;
+      width: auto;
+      box-shadow: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      backdrop-filter: blur(8px);
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+    .integrated-ar-viewer:not(.is-ar-active) #ar-controls:has(#ar-instruction[style*="display: none"]) h3 {
+      display: none;
     }
     
     .ar-status {
@@ -1968,6 +1999,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           // ガイド画面の status footer がスキャン案内を担うため、下部 controls の指示文は隠す。
           // 戻るボタンは残す。
           if (instruction) instruction.style.display = 'none';
+          // GUIDE 状態でもカメラ層 (#ar-host) は明示的に表示しておく
+          // （AR.js がカメラ映像を arHost に挿入するため、ガイドの背面で見えている必要がある）
+          if (arHost) {
+            arHost.style.display = 'block';
+            arHost.style.visibility = 'visible';
+            arHost.style.zIndex = '1';
+          }
           arViewerLogger.info('✅ ガイド画面を表示');
           arViewerLogger.info('🔍 表示後の確認:', {
             display: guideScreen.style.display,
