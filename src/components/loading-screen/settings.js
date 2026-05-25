@@ -60,7 +60,7 @@ export const defaultSettings = {
       title: '画像の上にカメラを向けて合わせてください',
       description: 'マーカー画像を画面内に収めてください',
       instructionText: '画像を認識しています...',
-      guideImage: null, // ガイド用のマーカー画像
+      // マーカー画像は project.markerImage（ARエディタ）を使用
       markerSize: 1.0, // マーカー画像のサイズ倍率
       textPosition: 20, // テキストの上からの位置（%）
       textSize: 1.0, // テキストサイズの倍率
@@ -70,7 +70,6 @@ export const defaultSettings = {
       title: '画面をタップしてください',
       description: '平らな面を見つけて画面をタップしてください',
       instructionText: '平面を検出中...',
-      guideImage: null, // ガイド用の平面検出画像
       textPosition: 20, // テキストの上からの位置（%）
       textSize: 1.0, // テキストサイズの倍率
       footerPosition: 85 // フッターテキスト位置（上から%）

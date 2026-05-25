@@ -358,22 +358,10 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
           </div>
         </div>
         
-        <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">マーカー画像</label>
-          <div class="loading-screen-editor__file-preview" id="surfaceGuideImageDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
-            <div class="loading-screen-editor__drop-zone">
-              <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
-              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-              <div class="loading-screen-editor__supported-formats">
-                ${IMAGE_FORMAT_LABELS.default}
-              </div>
-            </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
-          </div>
+        <div class="loading-screen-editor__form-group loading-screen-editor__note">
+          <p style="font-size:12px;color:#888;margin:0;">マーカー画像はプロジェクト編集画面（ARエディタ）でアップロードしたものが使用されます。</p>
         </div>
-        
+
         <div class="loading-screen-editor__form-group">
           <label class="loading-screen-editor__label">マーカーサイズ</label>
           <div class="loading-screen-editor__slider-with-value">
@@ -421,20 +409,8 @@ export function createGuideTabContent(currentSettings = defaultSettings) {
           </div>
         </div>
         
-        <div class="loading-screen-editor__form-group">
-          <label class="loading-screen-editor__label">ガイド画像</label>
-          <div class="loading-screen-editor__file-preview" id="worldGuideImageDropzone">
-            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
-            <div class="loading-screen-editor__drop-zone">
-              <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
-              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-              <div class="loading-screen-editor__supported-formats">
-                ${IMAGE_FORMAT_LABELS.default}
-              </div>
-            </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
-          </div>
+        <div class="loading-screen-editor__form-group loading-screen-editor__note">
+          <p style="font-size:12px;color:#888;margin:0;">ガイド画像はプロジェクト編集画面（ARエディタ）でアップロードしたマーカー画像が使用されます。</p>
         </div>
       </div>
     </div>

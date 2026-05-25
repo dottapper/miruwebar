@@ -9,7 +9,11 @@ const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 function shallowMerge(...parts) {
   const out = {};
   for (const p of parts) {
-    if (isObj(p)) Object.assign(out, p);
+    if (!isObj(p)) continue;
+    // undefined 値で先行レイヤー（テンプレート等）を上書きしないようにする
+    for (const [k, v] of Object.entries(p)) {
+      if (v !== undefined) out[k] = v;
+    }
   }
   return out;
 }
@@ -42,30 +46,36 @@ function normalizeStartScreen({ tpl = {}, direct = {} }) {
   };
 }
 
+// ローディング画面の設定を単一形式へマッピング
+// エディタの保存スキーマ（loadingMessage / brandName / subTitle / logoType 等）を
+// 取りこぼさないよう、両スキーマのキーを吸収する。
+function mapLoadingScreen(src = {}) {
+  return {
+    backgroundColor: src.backgroundColor || src.bgColor,
+    textColor: src.textColor,
+    accentColor: src.accentColor,
+    progressColor: src.progressColor || src.accentColor,
+    // message と loadingMessage の双方向エイリアス
+    message: src.message || src.loadingMessage || src.text,
+    loadingMessage: src.loadingMessage || src.message || src.text,
+    brandName: src.brandName,
+    subTitle: src.subTitle,
+    showProgress: src.showProgress,
+    image: src.image || src.logo,
+    logo: src.logo || src.image,
+    logoType: src.logoType,
+    logoPosition: src.logoPosition,
+    logoSize: src.logoSize,
+    fontScale: src.fontScale,
+    textPosition: src.textPosition,
+    background: src.background || src.backgroundImage
+  };
+}
+
 function normalizeLoadingScreen({ tpl = {}, direct = {} }) {
   const base = defaultTemplateSettings?.loadingScreen || {};
   // プロジェクト直下（loading / loadingScreen）を最優先、templateSettingsは補完のみ
-  const tplMapped = {
-    backgroundColor: tpl.backgroundColor || tpl.bgColor,
-    textColor: tpl.textColor,
-    progressColor: tpl.progressColor,
-    message: tpl.message || tpl.loadingMessage || tpl.text,
-    showProgress: tpl.showProgress,
-    logo: tpl.logo || tpl.image,
-    logoPosition: tpl.logoPosition,
-    logoSize: tpl.logoSize,
-    textPosition: tpl.textPosition,
-    background: tpl.background || tpl.backgroundImage
-  };
-  const directMapped = {
-    backgroundColor: direct.backgroundColor || direct.bgColor,
-    textColor: direct.textColor,
-    message: direct.message || direct.text,
-    image: direct.image || direct.logo,
-    logo: direct.logo || direct.image,
-    background: direct.background || direct.backgroundImage
-  };
-  const merged = shallowMerge(base, tplMapped, directMapped);
+  const merged = shallowMerge(mapLoadingScreen(base), mapLoadingScreen(tpl), mapLoadingScreen(direct));
   return merged;
 }
 
@@ -77,18 +87,27 @@ function normalizeGuideScreen({ tpl = {}, direct = {}, projectType = null, proje
   // ★ markerタイプのプロジェクトではガイドモードをmarkerに強制
   const mode = (projectType === 'marker') ? 'marker' : (merged.mode || direct.mode || 'surface');
 
-  const markerSrc = merged.marker?.src || merged.markerImage || merged.markerImageUrl || merged.guideImage || merged.imageUrl || projectMarkerImage;
+  // エディタが実際に編集するのはモード別のネスト設定（surfaceDetection / worldTracking）。
+  // marker モードは surfaceDetection のUIで編集される。
+  const surface = merged.surfaceDetection || {};
+  const world = merged.worldTracking || {};
+  const modeConfig = (mode === 'world') ? world : surface;
+
+  // マーカー画像は「プロジェクト編集画面（ARエディタ）でアップロードした画像」を唯一のソースとする。
+  // ローディング画面エディタ側の guideImage 設定は廃止済み。
+  // ただし旧データ互換のためフォールバックとして既存パスも参照する。
+  const markerSrc = projectMarkerImage
+    || merged.marker?.src || merged.markerImage || merged.markerImageUrl
+    || merged.guideImage || merged.imageUrl
+    || modeConfig.guideImage || surface.guideImage;
   const bgImage = merged.backgroundImage || merged.background || merged.bg;
 
-  // modeに応じた適切なタイトル/説明を選択
-  let title, description;
-  if (mode === 'marker') {
-    title = direct.title || tpl.title || merged.surfaceDetection?.title || 'マーカーをカメラに写してください';
-    description = direct.description || tpl.description || merged.surfaceDetection?.description || 'マーカー画像を画面内に収めてください';
-  } else {
-    title = merged.title || merged.worldTracking?.title || merged.surfaceDetection?.title;
-    description = merged.description || merged.worldTracking?.description || merged.surfaceDetection?.description;
-  }
+  // modeに応じた適切なタイトル/説明を選択。
+  // モード別ネスト設定を最優先し、レガシーのトップレベル title/description
+  // （常に既定値 'ガイド画面' / '準備中' が入る）は補完のみとする。
+  const title = modeConfig.title || merged.title;
+  const description = modeConfig.description || merged.description;
+  const instructionText = modeConfig.instructionText;
 
   return {
     backgroundColor: merged.backgroundColor || merged.bgColor,
@@ -97,10 +116,13 @@ function normalizeGuideScreen({ tpl = {}, direct = {}, projectType = null, proje
     mode,
     title,
     description,
-    message: merged.message, // 旧API互換
+    message: merged.message || instructionText, // 旧API互換
     marker: markerSrc ? { src: markerSrc } : undefined,
     // apply-project-design.jsとの互換性
-    markerImage: markerSrc
+    markerImage: markerSrc,
+    // ビューア側でモード別表示を行う場合のためにネスト設定も保持
+    surfaceDetection: merged.surfaceDetection,
+    worldTracking: merged.worldTracking
   };
 }
 

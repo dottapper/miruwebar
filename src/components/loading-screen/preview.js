@@ -333,16 +333,10 @@ function updateGuidePreview(previewScreen, settings) {
   const screen = settings.guideScreen;
   const mode = screen.mode || 'surface';
   
-  // モードに応じてガイド画像を取得
-  let guideImageDropzone, guideImg, guideSrc;
-  if (mode === 'surface') {
-    guideImageDropzone = document.getElementById('surfaceGuideImageDropzone');
-  } else {
-    guideImageDropzone = document.getElementById('worldGuideImageDropzone');
-  }
-  
-  guideImg = guideImageDropzone?.querySelector('img');
-  guideSrc = guideImg?.src || '';
+  // マーカー画像はARエディタ側で管理するため、ローディング画面エディタのプレビューでは
+  // プレースホルダーのみ表示する（実際のマーカー画像はビューア側で project.markerImage から取得）。
+  const guideImg = null;
+  const guideSrc = '';
   
   // マーカーサイズを取得
   const markerSizeSlider = document.getElementById('guideScreen-markerSize');
@@ -722,13 +716,11 @@ export function getCurrentSettingsFromDOM() {
     settings.loadingScreen.logoType = logoTypeRadio.value;
   }
 
-  // 画像データを取得
+  // 画像データを取得（ガイド画像はARエディタ側で管理）
   const imageSettings = [
     { dropzoneId: 'thumbnailDropzone', target: settings.startScreen, property: 'thumbnail' },
     { dropzoneId: 'startLogoDropzone', target: settings.startScreen, property: 'logo' },
-    { dropzoneId: 'loadingLogoDropzone', target: settings.loadingScreen, property: 'logo' },
-    { dropzoneId: 'surfaceGuideImageDropzone', target: settings.guideScreen.surfaceDetection, property: 'guideImage' },
-    { dropzoneId: 'worldGuideImageDropzone', target: settings.guideScreen.worldTracking, property: 'guideImage' }
+    { dropzoneId: 'loadingLogoDropzone', target: settings.loadingScreen, property: 'logo' }
   ];
   
   imageSettings.forEach(({ dropzoneId, target, property }) => {

@@ -38,6 +38,14 @@ function isCustomLoadingConfig(config = {}) {
   if (!config || typeof config !== 'object') return false;
 
   const defaults = defaultTemplateSettings.loadingScreen || {};
+
+  // ユーザーがエディタを開いて何か設定を保存していれば、それだけで「設定済み」とみなす。
+  // これは loadingScreen.editorSettings / templateSettings の存在で判定する。
+  if (config.editorSettings?.loadingScreen && Object.keys(config.editorSettings.loadingScreen).length > 0) return true;
+  if (config.templateSettings?.loadingScreen && Object.keys(config.templateSettings.loadingScreen).length > 0) return true;
+  if (config.loadingScreen?.editorSettings) return true;
+  if (config.loadingScreen?.templateSettings) return true;
+
   const candidates = [
     config,
     config.loadingScreen,
@@ -67,14 +75,31 @@ function hasCustomLoadingScreen(project = {}) {
 }
 
 function hasCustomGuideScreen(project = {}) {
+  // マーカーモードで markerImage が設定されていれば、ガイド画面に表示すべき内容がある。
+  const isMarker = (project.type || project.mode) === 'marker';
+  if (isMarker && (isMeaningfulValue(project.markerImage) || isMeaningfulValue(project.markerImageUrl))) {
+    return true;
+  }
+
   const candidates = [project.guideScreen, project.guide].filter((v) => v && typeof v === 'object');
-  const defaultTitles = new Set(['ガイド画面', 'マーカーをカメラに写してください', '画像の上にカメラを向けて合わせてください']);
-  const defaultDescriptions = new Set(['準備中', 'マーカー画像を画面内に収めてください']);
+  const defaultTitles = new Set(['ガイド画面', 'マーカーをカメラに写してください', '画像の上にカメラを向けて合わせてください', '画面をタップしてください']);
+  const defaultDescriptions = new Set(['準備中', 'マーカー画像を画面内に収めてください', '平らな面を見つけて画面をタップしてください']);
 
   return candidates.some((guide) => {
-    if (isMeaningfulValue(guide.background) || isMeaningfulValue(guide.backgroundImage) || isMeaningfulValue(guide.guideImage) || isMeaningfulValue(guide.imageUrl)) return true;
-    if (guide.surfaceDetection && (isMeaningfulValue(guide.surfaceDetection.guideImage) || isMeaningfulValue(guide.surfaceDetection.instructionText))) return true;
-    if (guide.worldTracking && (isMeaningfulValue(guide.worldTracking.guideImage) || isMeaningfulValue(guide.worldTracking.instructionText))) return true;
+    if (isMeaningfulValue(guide.background) || isMeaningfulValue(guide.backgroundImage)) return true;
+    // モード別ネスト設定: title / description / instructionText のいずれかがデフォルト以外なら設定済み
+    if (guide.surfaceDetection) {
+      const s = guide.surfaceDetection;
+      if (isMeaningfulValue(s.instructionText)) return true;
+      if (isMeaningfulValue(s.title) && !defaultTitles.has(s.title)) return true;
+      if (isMeaningfulValue(s.description) && !defaultDescriptions.has(s.description)) return true;
+    }
+    if (guide.worldTracking) {
+      const w = guide.worldTracking;
+      if (isMeaningfulValue(w.instructionText)) return true;
+      if (isMeaningfulValue(w.title) && !defaultTitles.has(w.title)) return true;
+      if (isMeaningfulValue(w.description) && !defaultDescriptions.has(w.description)) return true;
+    }
     if (isMeaningfulValue(guide.title) && !defaultTitles.has(guide.title)) return true;
     if (isMeaningfulValue(guide.description) && !defaultDescriptions.has(guide.description)) return true;
     return false;
@@ -2404,6 +2429,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       }
     } else {
       updateProgress(60, 'カメラ起動の準備中...');
+      // マーカーモードもローディング画面のカスタマイズを確認できるよう最低表示時間を確保
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
     updateProgress(80, 'ARシステムを準備中...');
@@ -2601,43 +2628,41 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       const guideMode = gs.mode || (currentProject.type === 'marker' ? 'marker' : 'world');
       const abs = (u) => { try { return new URL(u, currentProject.__sourceUrl || (typeof location!== 'undefined' ? location.href : undefined)).href; } catch { return u; } };
       
+      // ガイド画面に表示する画像は、プロジェクト編集画面（ARエディタ）で
+      // アップロードした markerImage を唯一のソースとする。
+      const projectMarkerImage = currentProject.markerImage || currentProject.markerImageUrl || null;
+
       if (guideMode === 'marker') {
-        // マーカー用ガイド（extractDesignの正規化結果 gs.title/gs.description を優先）
-        const markerGuide = gs.markerGuide || gs.surfaceDetection || {};
-        const guideTitleText = gs.title || markerGuide.title || 'マーカーをカメラに写してください';
-        const guideDescText = gs.description || markerGuide.description || 'マーカー画像を画面内に収めてください';
+        // マーカー用ガイド: タイトル/説明はエディタが編集する surfaceDetection を最優先。
+        // トップレベル gs.title/description は常にデフォルト値が入るためフォールバック用。
+        const surface = gs.surfaceDetection || gs.markerGuide || {};
+        const guideTitleText = surface.title || gs.title || 'マーカーをカメラに写してください';
+        const guideDescText = surface.description || gs.description || 'マーカー画像を画面内に収めてください';
         if (guideTitle) guideTitle.textContent = guideTitleText;
         if (guideDescription) guideDescription.textContent = guideDescText;
 
-        const guideImgUrl = markerGuide.guideImage || markerGuide.imageUrl || markerGuide.url;
-        if (guideImgUrl && guideImage) {
-          guideImage.src = abs(guideImgUrl);
+        // ガイド画像とマーカープレビュー画像はどちらも project.markerImage を使う。
+        if (projectMarkerImage && guideImage) {
+          guideImage.src = abs(projectMarkerImage);
           guideImage.style.display = 'block';
-          // カスタムガイドがある場合は既定の枠ガイドを隠す
           hasCustomMarkerGuide = true;
           if (guideMarker) guideMarker.style.display = 'none';
           if (markerGuideTips) markerGuideTips.style.display = 'none';
         }
-
-        // 実マーカー画像（あればプレビュー表示）
-        const markerPreview = gs.markerImage || currentProject.markerGuide?.previewImage || currentProject.markerImage || currentProject.markerImageUrl;
-        if (markerPreview && guideMarkerImage) {
-          guideMarkerImage.src = abs(markerPreview);
-          guideMarker.style.display = 'block';
+        if (projectMarkerImage && guideMarkerImage) {
+          guideMarkerImage.src = abs(projectMarkerImage);
+          if (guideMarker) guideMarker.style.display = 'block';
         }
-      } else if (guideMode === 'world' && gs.worldTracking) {
-        // 平面検出モード
-        if (gs.worldTracking.title && guideTitle) {
-          guideTitle.textContent = gs.worldTracking.title;
+      } else if (guideMode === 'world') {
+        // 空間検出モード: タイトル/説明はエディタの worldTracking を最優先。
+        const world = gs.worldTracking || {};
+        if (world.title && guideTitle) {
+          guideTitle.textContent = world.title;
         }
-        if (gs.worldTracking.description && guideDescription) {
-          guideDescription.textContent = gs.worldTracking.description;
+        if (world.description && guideDescription) {
+          guideDescription.textContent = world.description;
         }
-        if (gs.worldTracking.guideImage && guideImage) {
-          guideImage.src = abs(gs.worldTracking.guideImage);
-          guideImage.style.display = 'block';
-        }
-        // マーカーは非表示
+        // 空間検出にはマーカー画像不要。プレビューは非表示。
         if (guideMarker) {
           guideMarker.style.display = 'none';
         }

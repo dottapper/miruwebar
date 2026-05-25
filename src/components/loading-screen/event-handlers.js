@@ -743,14 +743,6 @@ function removeFile(dropzone, removeButton) {
     icon = '🖼️';
     formats = IMAGE_FORMAT_LABELS.logo;
     acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
-  } else if (id === 'surfaceGuideImageDropzone') {
-    defaultText = 'マーカー画像をドロップ';
-    formats = IMAGE_FORMAT_LABELS.default;
-    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
-  } else if (id === 'worldGuideImageDropzone') {
-    defaultText = 'ガイド画像をドロップ';
-    formats = IMAGE_FORMAT_LABELS.default;
-    acceptTypes = ACCEPT_ATTRIBUTES.otherImages;
   }
   
   // 完全なドロップゾーン構造を再作成
@@ -1119,12 +1111,8 @@ function loadTemplateSettings(settings) {
     // ローディング画面カスタムロゴ
     restoreImage('loadingLogoDropzone', settings.loadingScreen?.logo, 'ローディング画面ロゴ');
     
-    // ガイド画面画像（平面検出用）
-    restoreImage('surfaceGuideImageDropzone', settings.guideScreen?.surfaceDetection?.guideImage, '平面検出ガイド画像');
-    
-    // ガイド画面画像（空間検出用）
-    restoreImage('worldGuideImageDropzone', settings.guideScreen?.worldTracking?.guideImage, '空間検出ガイド画像');
-    
+    // ガイド画像はプロジェクト編集画面（ARエディタ）の markerImage から取得するため、
+    // ローディング画面エディタ側では復元しない。
     console.log('🖼️ 画像データ読み込み処理完了');
     
     // 画像復元後にイベントリスナーを再設定
@@ -1352,10 +1340,8 @@ function checkForUnsavedChanges() {
     // 各ドロップゾーンの画像変更をチェック
     const dropzoneIds = [
       'thumbnailDropzone',
-      'startLogoDropzone', 
-      'loadingLogoDropzone',
-      'surfaceGuideImageDropzone',
-      'worldGuideImageDropzone'
+      'startLogoDropzone',
+      'loadingLogoDropzone'
     ];
     
     for (const dropzoneId of dropzoneIds) {
@@ -1612,9 +1598,7 @@ function calculateImageDataSize(settingsObject = null) {
       const imageElements = [
         { id: 'thumbnailDropzone' },
         { id: 'startLogoDropzone' },
-        { id: 'loadingLogoDropzone' },
-        { id: 'surfaceGuideImageDropzone' },
-        { id: 'worldGuideImageDropzone' }
+        { id: 'loadingLogoDropzone' }
       ];
       
       imageElements.forEach(({ id }) => {
@@ -1663,8 +1647,7 @@ export function updateStorageUsageDisplay() {
         logo: currentSettings.loadingScreen?.logo ? 'あり' : 'なし'
       },
       guideScreen: {
-        surfaceGuideImage: currentSettings.guideScreen?.surfaceDetection?.guideImage ? 'あり' : 'なし',
-        worldGuideImage: currentSettings.guideScreen?.worldTracking?.guideImage ? 'あり' : 'なし'
+        info: 'マーカー画像はARエディタ側で管理'
       }
     });
     
@@ -1801,10 +1784,8 @@ function resetDOMElements() {
     // 画像アップロードエリアをリセット
     const dropzones = [
       'thumbnailDropzone',
-      'startLogoDropzone', 
-      'loadingLogoDropzone',
-      'surfaceGuideImageDropzone',
-      'worldGuideImageDropzone'
+      'startLogoDropzone',
+      'loadingLogoDropzone'
     ];
     
     dropzones.forEach(dropzoneId => {
@@ -1835,32 +1816,6 @@ ${IMAGE_FORMAT_LABELS.default}
               <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
               <div class="loading-screen-editor__supported-formats">
 ${IMAGE_FORMAT_LABELS.logo}
-              </div>
-            </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
-          `;
-        } else if (dropzoneId === 'surfaceGuideImageDropzone') {
-          defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
-            <div class="loading-screen-editor__drop-zone">
-              <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">マーカー画像をドロップ</div>
-              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-              <div class="loading-screen-editor__supported-formats">
-${IMAGE_FORMAT_LABELS.default}
-              </div>
-            </div>
-            <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>
-          `;
-        } else if (dropzoneId === 'worldGuideImageDropzone') {
-          defaultHTML = `
-            <input type="file" class="loading-screen-editor__file-input" accept="${ACCEPT_ATTRIBUTES.otherImages}" style="display: none;">
-            <div class="loading-screen-editor__drop-zone">
-              <div class="loading-screen-editor__drop-zone-icon">📁</div>
-              <div class="loading-screen-editor__drop-zone-text">ガイド画像をドロップ</div>
-              <div class="loading-screen-editor__drop-zone-subtext">またはクリックして選択</div>
-              <div class="loading-screen-editor__supported-formats">
-${IMAGE_FORMAT_LABELS.default}
               </div>
             </div>
             <button class="loading-screen-editor__remove-button" style="display: none;">✕</button>

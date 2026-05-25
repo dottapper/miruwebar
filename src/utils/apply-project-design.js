@@ -392,10 +392,14 @@ function applyLoadingScreen(loading, screenElement) {
     log('背景画像適用:', loading.background);
   }
 
-  // 画像（ロゴ/イメージ）
+  // 画像（ロゴ/イメージ）。logoType が 'none' の場合は logo/image 自体が
+  // 空になるため、ここでの明示的な抑制は不要。
   const loadingImgSrc = loading.image || loading.logo;
   if (loadingImgSrc) {
-    let imgElement = screenElement.querySelector('#ar-loading-image');
+    // 統合ビューアの既存ロゴ要素を優先し、無ければ生成する
+    let imgElement =
+      screenElement.querySelector('#ar-loading-logo') ||
+      screenElement.querySelector('#ar-loading-image');
     if (!imgElement) {
       imgElement = document.createElement('img');
       imgElement.id = 'ar-loading-image';
@@ -410,8 +414,19 @@ function applyLoadingScreen(loading, screenElement) {
     log('ローディング画像適用:', loadingImgSrc);
   }
 
-  // メッセージ
-  if (loading.message) {
+  // 見出し（ブランド名 / サブタイトル）
+  const heading = loading.brandName || loading.subTitle;
+  if (heading) {
+    const titleElement = screenElement.querySelector('#ar-loading-title');
+    if (titleElement) {
+      titleElement.textContent = heading;
+      log('ローディング見出し適用:', heading);
+    }
+  }
+
+  // メッセージ（loadingMessage / message のどちらでも反映）
+  const loadingMsg = loading.message || loading.loadingMessage;
+  if (loadingMsg) {
     let msgElement = screenElement.querySelector('#ar-loading-message');
     if (!msgElement) {
       msgElement = document.createElement('p');
@@ -421,8 +436,8 @@ function applyLoadingScreen(loading, screenElement) {
       msgElement.style.margin = '10px 0';
       screenElement.appendChild(msgElement);
     }
-    msgElement.textContent = loading.message;
-    log('ローディングメッセージ適用:', loading.message);
+    msgElement.textContent = loadingMsg;
+    log('ローディングメッセージ適用:', loadingMsg);
   }
 
   // 背景色

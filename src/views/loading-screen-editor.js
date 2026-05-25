@@ -253,61 +253,9 @@ export default function showLoadingScreenEditor(container) {
         }
       }
       
-      // ガイド画面画像（平面検出用）
-      if (settings.guideScreen.surfaceDetection?.guideImage) {
-        const surfaceGuideDropzone = document.getElementById('surfaceGuideImageDropzone');
-        if (surfaceGuideDropzone) {
-          const dropZone = surfaceGuideDropzone.querySelector('.loading-screen-editor__drop-zone');
-          const removeButton = surfaceGuideDropzone.querySelector('.loading-screen-editor__remove-button');
-          
-          if (dropZone) {
-            const imgElement = document.createElement('img');
-            imgElement.src = settings.guideScreen.surfaceDetection.guideImage;
-            imgElement.alt = '平面検出ガイド画像';
-            imgElement.setAttribute('data-original-src', settings.guideScreen.surfaceDetection.guideImage);
-            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
-            
-            const fileName = '平面検出ガイド画像';
-            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
-            dropZone.insertBefore(imgElement, dropZone.firstChild);
-            
-            if (removeButton) {
-              removeButton.style.display = 'block';
-            }
-          }
-        } else {
-          console.warn('🖼️ 平面検出ガイドDropzoneが見つかりません');
-        }
-      }
-      
-      // ガイド画面画像（空間検出用）
-      if (settings.guideScreen.worldTracking?.guideImage) {
-        const worldGuideDropzone = document.getElementById('worldGuideImageDropzone');
-        if (worldGuideDropzone) {
-          const dropZone = worldGuideDropzone.querySelector('.loading-screen-editor__drop-zone');
-          const removeButton = worldGuideDropzone.querySelector('.loading-screen-editor__remove-button');
-          
-          if (dropZone) {
-            const imgElement = document.createElement('img');
-            imgElement.src = settings.guideScreen.worldTracking.guideImage;
-            imgElement.alt = '空間検出ガイド画像';
-            imgElement.setAttribute('data-original-src', settings.guideScreen.worldTracking.guideImage);
-            imgElement.style.cssText = 'max-width: 100%; max-height: 100px; object-fit: contain;';
-            
-            const fileName = '空間検出ガイド画像';
-            dropZone.innerHTML = `<div class="loading-screen-editor__file-name">${fileName}</div>`;
-            dropZone.insertBefore(imgElement, dropZone.firstChild);
-            
-            if (removeButton) {
-              removeButton.style.display = 'block';
-            }
-          }
-        } else {
-          console.warn('🖼️ 空間検出ガイドDropzoneが見つかりません');
-        }
-      }
-      
-      
+      // ガイド画像はプロジェクト編集画面（ARエディタ）の markerImage から取得するため、
+      // ローディング画面エディタ側では復元しない。
+
       // 画像復元後にファイルドロップゾーンのイベントリスナーを再設定
       setTimeout(() => {
         setupFileDropzones();
