@@ -99,6 +99,7 @@ const viewModules = {
   '#/loading-screen': () => import('./views/loading-screen-editor.js'),
   '#/usage-guide': () => import('./views/usage-guide.js'),
   '#/viewer': () => import('./views/ar-viewer.js'),
+  '#/viewer-v2': () => import('./viewer-v2/index.js'),
   '#/diag': () => import('./views/diag.js'),
   '#/smoke': () => import('./views/smoke.js')
 };
