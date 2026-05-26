@@ -4,6 +4,7 @@ import { devSslPlugin } from './vite/plugins/devSsl.js';
 import { networkInfoPlugin } from './vite/plugins/networkInfo.js';
 import { projectsStaticPlugin } from './vite/plugins/projectsStatic.js';
 import { projectsApiPlugin } from './vite/plugins/projectsApi.js';
+import { mindarThreeCompatPlugin } from './vite/plugins/mindarThreeCompat.js';
 import { authMiddlewarePlugin } from './vite/plugins/authMiddleware.js';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
@@ -38,6 +39,7 @@ export default defineConfig({
     strictPort: true
   },
   plugins: [
+    mindarThreeCompatPlugin(),
     // LAN IP を SAN に含む開発用 HTTPS（スマホ実機テスト用）
     ...(isDev ? [devSslPlugin()] : []),
     // 開発サーバー専用プラグイン（Vercelのビルド時には無効化）
@@ -83,7 +85,8 @@ export default defineConfig({
     include: [
       'uuid',
       'idb-keyval',
-      'qrcode'
+      'qrcode',
+      'mind-ar'
     ]
   },
   // ★★★ キャッシュ設定の最適化 ★★★

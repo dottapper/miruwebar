@@ -15,6 +15,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { put } from '@vercel/blob';
+import {
+  decodeDataUrl,
+  extFromContentType,
+  collectDataImagePaths,
+  preparePublishedScreens,
+  buildMarkerAssetForPublish
+} from './publish-assets.js';
 
 // セキュリティ: IDとファイル名の検証
 const sanitizeId = (id) => String(id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || 'project';
@@ -54,16 +61,6 @@ const normalizeVec3 = (value, fallback) => {
     ];
   }
   return [...fallback];
-};
-
-/** data URL から { buffer, contentType } を取り出す。data URL でなければ null */
-const decodeDataUrl = (value) => {
-  if (typeof value !== 'string' || !value.startsWith('data:')) return null;
-  const match = value.match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
-  if (!match) return null;
-  const contentType = match[1] || 'application/octet-stream';
-  const base64 = (match[3] || '').split(',').pop();
-  return { buffer: Buffer.from(base64, 'base64'), contentType };
 };
 
 export default async function handler(req, res) {
@@ -106,6 +103,7 @@ export default async function handler(req, res) {
       guideScreen = null,
       markerImage = null,
       markerPattern = null,
+      marker = null,
       arSettings = null,
       effects = [],
       models = []
@@ -135,7 +133,7 @@ export default async function handler(req, res) {
       // ===== Vercel Blob にアップロード =====
       const result = await publishToBlob({
         id, releaseId, type, token,
-        loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects: normalizedEffects, models
+        loadingScreen, startScreen, guideScreen, markerImage, markerPattern, marker, arSettings, effects: normalizedEffects, models
       });
       const viewerUrl = `${appOrigin}/#/viewer?src=${encodeURIComponent(result.projectUrl)}`;
       return res.status(200).json({
@@ -149,7 +147,7 @@ export default async function handler(req, res) {
 
     // ===== ローカル開発フォールバック（vercel dev）: public/projects/ に書き出し =====
     await publishToLocalFs({
-      id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects: normalizedEffects, models
+      id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, marker, arSettings, effects: normalizedEffects, models
     });
     const projectUrl = `${appOrigin}/projects/${id}/project.json`;
     const viewerUrl = `${appOrigin}/#/viewer?src=${encodeURIComponent(projectUrl)}`;
@@ -178,11 +176,44 @@ export default async function handler(req, res) {
  * モデル/画像を先にアップロードし、返却された絶対URLで project.json を構築する。
  */
 async function publishToBlob(input) {
-  const { id, releaseId, type, token, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects = [], models } = input;
+  const {
+    id, releaseId, type, token,
+    loadingScreen, startScreen, guideScreen,
+    markerImage, markerPattern, marker,
+    arSettings, effects = [], models
+  } = input;
   const base = `projects/${id}/releases/${releaseId}`;
   // addRandomSuffix: true → ファイル名にランダム文字列が付与され URL が推測不能になる。
   // project.json 内のURLや viewerUrl は put() が返す blob.url を使うため透過的に動作する。
   const putOpts = { access: 'public', token, addRandomSuffix: true };
+
+  let imageUploadSeq = 0;
+  const uploadImageDataUrl = async (dataUrl, namePrefix = 'image') => {
+    const decoded = decodeDataUrl(dataUrl);
+    if (!decoded) return dataUrl;
+    if (decoded.buffer.length > 4 * 1024 * 1024) {
+      throw new Error(`${namePrefix} too large`);
+    }
+    const ext = extFromContentType(decoded.contentType);
+    imageUploadSeq += 1;
+    const blob = await put(
+      `${base}/assets/${namePrefix}-${imageUploadSeq}.${ext}`,
+      decoded.buffer,
+      { ...putOpts, contentType: decoded.contentType }
+    );
+    return blob.url;
+  };
+
+  const uploadFileBuffer = async (buffer, fileName, contentType) => {
+    if (buffer.length > 8 * 1024 * 1024) {
+      throw new Error(`file too large: ${fileName}`);
+    }
+    const blob = await put(`${base}/assets/${fileName}`, buffer, {
+      ...putOpts,
+      contentType
+    });
+    return blob.url;
+  };
 
   // 1. モデル（GLB）をアップロード
   const modelEntries = [];
@@ -214,34 +245,24 @@ async function publishToBlob(input) {
     });
   }
 
-  // 2. ローディング画面のロゴをアップロード
-  const lsOut = loadingScreen ? { ...loadingScreen } : null;
-  if (lsOut) {
-    const decoded = decodeDataUrl(lsOut.logoImage || lsOut.logo);
-    if (decoded) {
-      if (decoded.buffer.length > 2 * 1024 * 1024) throw new Error('logo too large');
-      const ext = decoded.contentType.includes('jpeg') ? 'jpg' : (decoded.contentType.split('/')[1] || 'png');
-      const blob = await put(`${base}/assets/loading-logo.${ext}`, decoded.buffer, {
-        ...putOpts,
-        contentType: decoded.contentType
-      });
-      lsOut.logo = blob.url;
-      delete lsOut.logoImage;
-    }
-  }
+  // 2. 画面アセット（開始 / ローディング / ガイド）の data URL を Blob URL 化
+  const screens = await preparePublishedScreens(
+    { startScreen, loadingScreen, guideScreen },
+    (dataUrl) => uploadImageDataUrl(dataUrl, 'screen')
+  );
+  const { startScreen: ssOut, loadingScreen: lsOut, guideScreen: gsOut } = screens;
 
-  // 3. マーカー画像をアップロード（data URL の場合のみ。既にURLならそのまま）
-  let markerImageUrl = markerImage;
-  const decodedMarker = decodeDataUrl(markerImage);
-  if (decodedMarker) {
-    if (decodedMarker.buffer.length > 4 * 1024 * 1024) throw new Error('marker image too large');
-    const ext = decodedMarker.contentType.includes('jpeg') ? 'jpg' : (decodedMarker.contentType.split('/')[1] || 'png');
-    const blob = await put(`${base}/assets/marker.${ext}`, decodedMarker.buffer, {
-      ...putOpts,
-      contentType: decodedMarker.contentType
-    });
-    markerImageUrl = blob.url;
-  }
+  // 3. マーカー（pattern / imageTarget）
+  const markerBuilt = await buildMarkerAssetForPublish(
+    { markerImage, markerPattern, marker },
+    {
+      uploadImage: (dataUrl, prefix) => uploadImageDataUrl(dataUrl, prefix),
+      uploadFile: (buffer, fileName, contentType) => uploadFileBuffer(buffer, fileName, contentType)
+    }
+  );
+  const markerImageUrl = markerBuilt.markerImageUrl;
+  const markerPatternOut = markerBuilt.markerPattern;
+  const markerAsset = markerBuilt.asset;
 
   // 4. project.json を構築（すべて絶対URL）してアップロード
   //    形式は docs/product-spec.md §7 の v2 を唯一の現行スキーマとする。
@@ -252,9 +273,7 @@ async function publishToBlob(input) {
     type,
     publishedAt: new Date().toISOString(),
     assets: {
-      marker: markerImageUrl
-        ? { type: 'pattern', url: markerImageUrl, patternUrl: null }
-        : null,
+      marker: markerAsset,
       models: modelEntries.map((m, index) => ({
         id: `model-${index}`,
         url: m.url,
@@ -263,22 +282,27 @@ async function publishToBlob(input) {
       audio: []
     },
     experience: {
-      startScreen: startScreen || null,
+      startScreen: ssOut || null,
       loadingScreen: lsOut || null,
-      guideScreen: guideScreen || null
+      guideScreen: gsOut || null
     },
     effects: Array.isArray(effects) ? effects : [],
 
     // Transitional legacy fields (旧形式互換)。
     // Viewer が v2 (assets.* / experience.*) を全面で読めるようになったら削除予定。
-    startScreen: startScreen || null,
-    guideScreen: guideScreen || null,
+    startScreen: ssOut || null,
+    guideScreen: gsOut || null,
     loadingScreen: lsOut,
     markerImage: markerImageUrl || null,
-    markerPattern: markerPattern || null,
+    markerPattern: markerPatternOut || null,
     arSettings: arSettings || null,
     models: modelEntries
   };
+  const embeddedImages = collectDataImagePaths(projectJson);
+  if (embeddedImages.length > 0) {
+    console.warn('⚠️ 公開 project.json に data:image が残っています:', embeddedImages);
+  }
+
   const projectBlob = await put(`${base}/project.json`, JSON.stringify(projectJson, null, 2), {
     ...putOpts,
     addRandomSuffix: false,
@@ -292,10 +316,32 @@ async function publishToBlob(input) {
  * ローカル開発（vercel dev）用フォールバック: public/projects/ にファイル書き出し。
  */
 async function publishToLocalFs(input) {
-  const { id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects = [], models } = input;
+  const {
+    id, type, loadingScreen, startScreen, guideScreen,
+    markerImage, markerPattern, marker, arSettings, effects = [], models
+  } = input;
   const dir = path.join(process.cwd(), 'public', 'projects', id);
   const assetsDir = path.join(dir, 'assets');
   await fs.mkdir(assetsDir, { recursive: true });
+
+  let imageUploadSeq = 0;
+  const uploadImageDataUrl = async (dataUrl, namePrefix = 'image') => {
+    const decoded = decodeDataUrl(dataUrl);
+    if (!decoded) return dataUrl;
+    if (decoded.buffer.length > 4 * 1024 * 1024) {
+      throw new Error(`${namePrefix} too large`);
+    }
+    imageUploadSeq += 1;
+    const ext = extFromContentType(decoded.contentType);
+    const fileName = `${namePrefix}-${imageUploadSeq}.${ext}`;
+    await fs.writeFile(path.join(assetsDir, fileName), decoded.buffer);
+    return `/projects/${id}/assets/${fileName}`;
+  };
+
+  const uploadFileBuffer = async (buffer, fileName) => {
+    await fs.writeFile(path.join(assetsDir, fileName), buffer);
+    return `/projects/${id}/assets/${fileName}`;
+  };
 
   const modelEntries = [];
   let totalBytes = 0;
@@ -323,26 +369,19 @@ async function publishToLocalFs(input) {
     });
   }
 
-  const lsOut = loadingScreen ? { ...loadingScreen } : null;
-  if (lsOut) {
-    const decoded = decodeDataUrl(lsOut.logoImage || lsOut.logo);
-    if (decoded && decoded.buffer.length <= 2 * 1024 * 1024) {
-      const ext = decoded.contentType.includes('jpeg') ? 'jpg' : (decoded.contentType.split('/')[1] || 'png');
-      const logoName = `loading-logo.${ext}`;
-      await fs.writeFile(path.join(assetsDir, logoName), decoded.buffer);
-      lsOut.logo = `/projects/${id}/assets/${logoName}`;
-      delete lsOut.logoImage;
-    }
-  }
+  const screens = await preparePublishedScreens(
+    { startScreen, loadingScreen, guideScreen },
+    (dataUrl) => uploadImageDataUrl(dataUrl, 'screen')
+  );
+  const { startScreen: ssOut, loadingScreen: lsOut, guideScreen: gsOut } = screens;
 
-  let markerImageUrl = markerImage;
-  const decodedMarker = decodeDataUrl(markerImage);
-  if (decodedMarker && decodedMarker.buffer.length <= 4 * 1024 * 1024) {
-    const ext = decodedMarker.contentType.includes('jpeg') ? 'jpg' : (decodedMarker.contentType.split('/')[1] || 'png');
-    const markerName = `marker.${ext}`;
-    await fs.writeFile(path.join(assetsDir, markerName), decodedMarker.buffer);
-    markerImageUrl = `/projects/${id}/assets/${markerName}`;
-  }
+  const markerBuilt = await buildMarkerAssetForPublish(
+    { markerImage, markerPattern, marker },
+    {
+      uploadImage: (dataUrl, prefix) => uploadImageDataUrl(dataUrl, prefix),
+      uploadFile: (buffer, fileName) => uploadFileBuffer(buffer, fileName)
+    }
+  );
 
   // ローカルFS書き出しも v2 で揃える（docs/product-spec.md §7）。
   const projectJson = {
@@ -351,9 +390,7 @@ async function publishToLocalFs(input) {
     type,
     publishedAt: new Date().toISOString(),
     assets: {
-      marker: markerImageUrl
-        ? { type: 'pattern', url: markerImageUrl, patternUrl: null }
-        : null,
+      marker: markerBuilt.asset,
       models: modelEntries.map((m, index) => ({
         id: `model-${index}`,
         url: m.url,
@@ -362,21 +399,25 @@ async function publishToLocalFs(input) {
       audio: []
     },
     experience: {
-      startScreen: startScreen || null,
+      startScreen: ssOut || null,
       loadingScreen: lsOut || null,
-      guideScreen: guideScreen || null
+      guideScreen: gsOut || null
     },
     effects: Array.isArray(effects) ? effects : [],
 
     // Transitional legacy fields。Viewer の v2 全面対応後に削除予定。
-    startScreen: startScreen || null,
-    guideScreen: guideScreen || null,
+    startScreen: ssOut || null,
+    guideScreen: gsOut || null,
     loadingScreen: lsOut,
-    markerImage: markerImageUrl || null,
-    markerPattern: markerPattern || null,
+    markerImage: markerBuilt.markerImageUrl || null,
+    markerPattern: markerBuilt.markerPattern || null,
     arSettings: arSettings || null,
     models: modelEntries
   };
+  const embeddedImages = collectDataImagePaths(projectJson);
+  if (embeddedImages.length > 0) {
+    console.warn('⚠️ 公開 project.json に data:image が残っています:', embeddedImages);
+  }
   await fs.writeFile(path.join(dir, 'project.json'), JSON.stringify(projectJson, null, 2), 'utf8');
   return { ok: true };
 }

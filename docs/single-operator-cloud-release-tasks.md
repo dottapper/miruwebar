@@ -209,6 +209,22 @@ Done when:
 
 **Phase 6 との境界**: Phase 6 は「モデルがマーカー上に出る」まで。Portal は Phase 7。
 
+## Phase 8: Image Target And Release Size
+
+詳細タスク: [Image Target And Release Size Tasks](./image-target-release-size-tasks.md)
+
+背景:
+
+- 現行の `pattern` マーカー方式は、表紙・ポスターのような自然画像を安定認識する方式ではない。
+- 実公開 `project.json` に開始画面ロゴの `data:image/png;base64,...` が入り、JSONが肥大化している。
+
+Done when:
+
+- `project.json` から巨大な `data:image` が消え、開始画面ロゴは Blob URL 参照になる。
+- `assets.marker.type === "imageTarget"` の Release で MindAR image target エンジンが起動する。
+- `pattern` Release は既存の AR.js pattern エンジンのまま動く。
+- QR から実機で、自然画像マーカーにモデルまたは演出が追従する。
+
 ## Review Checklist
 
 タスク完了後、チェック時に見る項目。

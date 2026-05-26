@@ -246,6 +246,26 @@ export async function analyzeMarkerImage(dataUrl, { size = 64 } = {}) {
   };
 }
 
+/**
+ * 画像の自然サイズを取得（data URL / http URL 対応）
+ * @param {string} src
+ * @returns {Promise<{ width: number, height: number }>}
+ */
+export function getImageDimensions(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth || img.width,
+        height: img.naturalHeight || img.height
+      });
+    };
+    img.onerror = (event) => reject(event || new Error('画像サイズの取得に失敗しました'));
+    img.src = src;
+  });
+}
+
 export function createPatternBlob(patternString) {
   if (!patternString) throw new Error('patternString が未定義です');
   const blockCount = String(patternString).trim().split(/\n\s*\n/).filter(Boolean).length;

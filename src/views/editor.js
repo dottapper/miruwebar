@@ -8,7 +8,8 @@ import { isFirebaseConfigured } from '../firebase/config.js';
 import { updateProjectPublishInfo } from '../storage/project-store.js';
 import { getLoadingScreenTemplate } from '../components/loading-screen-selector.js';
 import { settingsAPI } from '../components/loading-screen/settings.js';
-import { generateMarkerPatternFromImage } from '../utils/marker-utils.js';
+import { generateMarkerPatternFromImage, getImageDimensions } from '../utils/marker-utils.js';
+import { inferMarkerTypeFromDimensions } from '../utils/marker-engine-resolve.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 import { security } from '../utils/security-manager.js';
 
@@ -2633,8 +2634,21 @@ export function showEditor(container) {
           localStorage.setItem('markerImageUrl', markerImageData);
         }
 
-        let markerPattern = null;
+        let markerType = localStorage.getItem('markerType') || 'pattern';
+        let markerDims = null;
         if (markerImageData) {
+          try {
+            markerDims = await getImageDimensions(markerImageData);
+            if (!localStorage.getItem('markerType')) {
+              markerType = inferMarkerTypeFromDimensions(markerDims.width, markerDims.height);
+            }
+          } catch (dimError) {
+            console.warn('⚠️ マーカー画像サイズの取得に失敗:', dimError);
+          }
+        }
+
+        let markerPattern = null;
+        if (markerImageData && markerType === 'pattern') {
           try {
             markerPattern = await generateMarkerPatternFromImage(markerImageData);
           } catch (patternError) {
@@ -2674,10 +2688,12 @@ export function showEditor(container) {
           type: arType,
           markerImage: markerImageData,
           markerPattern,
-          // 将来の pattern / imageTarget 分岐に備えたマーカー種別情報
           marker: isMarkerMode ? {
-            type: 'pattern',
-            sourceImage: markerImageData || null
+            type: markerType,
+            sourceImage: markerImageData || null,
+            targetMind: localStorage.getItem('markerTargetMind') || null,
+            imageWidth: markerDims?.width ?? null,
+            imageHeight: markerDims?.height ?? null
           } : null,
           // ローディング設定を保存（現在のUI設定を反映）
           loadingScreen: {
@@ -2716,10 +2732,12 @@ export function showEditor(container) {
               arSettings: savedProject.arSettings || {},
               markerImage: savedProject.markerImage || markerImageData || null,
               markerPattern: savedProject.markerPattern || markerPattern || null,
-              // 将来の pattern / imageTarget 分岐に備えたマーカー種別情報
               marker: savedProject.marker || (isMarkerMode ? {
-                type: 'pattern',
-                sourceImage: markerImageData || null
+                type: markerType,
+                sourceImage: markerImageData || null,
+                targetMind: localStorage.getItem('markerTargetMind') || null,
+                imageWidth: markerDims?.width ?? null,
+                imageHeight: markerDims?.height ?? null
               } : null)
             };
 

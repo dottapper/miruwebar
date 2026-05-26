@@ -81,6 +81,7 @@ async function publishViaVercelBlob(projectData) {
     guideScreen: projectData.guideScreen || null,
     markerImage: projectData.markerImage || projectData.markerImageUrl || null,
     markerPattern: projectData.markerPattern || null,
+    marker: projectData.marker || projectData.assets?.marker || null,
     arSettings: projectData.arSettings || null,
     effects: Array.isArray(projectData.effects) ? projectData.effects : [],
     models

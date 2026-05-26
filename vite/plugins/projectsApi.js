@@ -8,6 +8,11 @@ import {
   formatBytes,
   getQuotaInfo
 } from '../../api/blob-release-utils.js';
+import {
+  preparePublishedScreens,
+  buildMarkerAssetForPublish,
+  collectDataImagePaths
+} from '../../api/publish-assets.js';
 
 const ROOT = process.cwd();
 
@@ -104,6 +109,7 @@ export function projectsApiPlugin() {
             guideScreen = null,
             markerImage = null,
             markerPattern = null,
+            marker = null,
             arSettings = null,
             effects = [],
             models = []
@@ -152,39 +158,86 @@ export function projectsApiPlugin() {
               if (DEBUG) console.warn('⚠️ モデル書き込み失敗（継続）:', e.message);
             }
           }
-          // loadingScreen のアセット処理（ロゴ）
-          let lsOut = loadingScreen ? { ...loadingScreen } : null;
+          let imageUploadSeq = 0;
+          const uploadImageDataUrl = async (dataUrl, namePrefix = 'image') => {
+            const mime = (dataUrl.split(';')[0] || '').replace('data:', '') || 'image/png';
+            const ext = mime.includes('jpeg') ? 'jpg' : (mime.split('/')[1] || 'png');
+            const base64 = dataUrl.split(',')[1] || '';
+            const buf = Buffer.from(base64, 'base64');
+            if (buf.length > 4 * 1024 * 1024) throw new Error(`${namePrefix} too large`);
+            imageUploadSeq += 1;
+            const fileName = `${namePrefix}-${imageUploadSeq}.${ext}`;
+            await fs.writeFile(path.join(assetsDir, fileName), buf);
+            return `/projects/${id}/assets/${fileName}`;
+          };
+
+          const uploadFileBuffer = async (buffer, fileName) => {
+            await fs.writeFile(path.join(assetsDir, fileName), buffer);
+            return `/projects/${id}/assets/${fileName}`;
+          };
+
+          let screens;
           try {
-            if (lsOut && typeof lsOut.logoImage === 'string' && /^data:image\//.test(lsOut.logoImage)) {
-              const mime = (lsOut.logoImage.split(';')[0] || '').replace('data:', '') || 'image/png';
-              const ext = mime.includes('jpeg') ? 'jpg' : (mime.split('/')[1] || 'png');
-              const base64 = lsOut.logoImage.split(',')[1] || '';
-              const buf = Buffer.from(base64, 'base64');
-              // 画像は最大 2MB 程度に制限（安全策）
-              if (buf.length > 2 * 1024 * 1024) throw new Error('logo too large');
-              const logoName = `loading-logo.${ext}`;
-              const logoPath = path.join(assetsDir, logoName);
-              await fs.writeFile(logoPath, buf);
-              lsOut.logo = `/projects/${id}/assets/${logoName}`;
-              delete lsOut.logoImage;
-            }
+            screens = await preparePublishedScreens(
+              { startScreen, loadingScreen, guideScreen },
+              (dataUrl) => uploadImageDataUrl(dataUrl, 'screen')
+            );
           } catch (e) {
-            console.warn('⚠️ ロゴ画像の書き出し失敗（継続）:', e.message);
+            console.warn('⚠️ 画面アセットの書き出し失敗（継続）:', e.message);
+            screens = { startScreen, loadingScreen, guideScreen };
           }
+
+          let markerBuilt;
+          try {
+            markerBuilt = await buildMarkerAssetForPublish(
+              { markerImage, markerPattern, marker },
+              {
+                uploadImage: (dataUrl, prefix) => uploadImageDataUrl(dataUrl, prefix),
+                uploadFile: (buffer, fileName) => uploadFileBuffer(buffer, fileName)
+              }
+            );
+          } catch (e) {
+            console.warn('⚠️ マーカーアセットの書き出し失敗（継続）:', e.message);
+            markerBuilt = {
+              asset: markerImage ? { type: 'pattern', url: markerImage, patternUrl: markerPattern || null } : null,
+              markerImageUrl: markerImage || null,
+              markerPattern: markerPattern || null
+            };
+          }
+
+          const { startScreen: ssOut, loadingScreen: lsOut, guideScreen: gsOut } = screens;
 
           const projectJson = {
             schemaVersion: 2,
             id,
             type,
-            startScreen: startScreen || null,
-            guideScreen: guideScreen || null,
-            loadingScreen: lsOut,
-            markerImage: markerImage || null,
-            markerPattern: markerPattern || null,
-            arSettings: arSettings || null,
+            assets: {
+              marker: markerBuilt.asset,
+              models: modelEntries.map((m, index) => ({
+                id: `model-${index}`,
+                url: m.url,
+                transform: { position: m.position, rotation: m.rotation, scale: m.scale }
+              })),
+              audio: []
+            },
+            experience: {
+              startScreen: ssOut || null,
+              loadingScreen: lsOut || null,
+              guideScreen: gsOut || null
+            },
             effects: normalizedEffects,
+            startScreen: ssOut || null,
+            guideScreen: gsOut || null,
+            loadingScreen: lsOut,
+            markerImage: markerBuilt.markerImageUrl || null,
+            markerPattern: markerBuilt.markerPattern || null,
+            arSettings: arSettings || null,
             models: modelEntries
           };
+          const embeddedImages = collectDataImagePaths(projectJson);
+          if (embeddedImages.length > 0) {
+            console.warn('⚠️ 公開 project.json に data:image が残っています:', embeddedImages);
+          }
           await fs.writeJson(path.join(dir, 'project.json'), projectJson, { spaces: 2 });
 
           // 実際にリッスン中のポート/スキームを推定

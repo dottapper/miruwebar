@@ -265,6 +265,9 @@ export class AREngineAdapter {
     switch (engineType) {
       case 'marker':
         return await import('../components/ar/marker-ar.js');
+
+      case 'mindar':
+        return await import('../components/ar/mindar-image-ar.js');
       
       case 'webxr':
         return await import('../components/ar/webxr-ar.js');
@@ -279,7 +282,7 @@ export class AREngineAdapter {
    * @returns {Promise<string[]>} エンジンタイプ配列
    */
   static async getAvailableEngines() {
-    const engines = ['marker', 'webxr'];
+    const engines = ['marker', 'mindar', 'webxr'];
     const available = [];
 
     for (const engineType of engines) {

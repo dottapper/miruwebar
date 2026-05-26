@@ -7,6 +7,7 @@ import { createLogger } from '../utils/logger.js';
 import { TEMPLATES_STORAGE_KEY, defaultTemplateSettings } from '../components/loading-screen/template-manager.js';
 import { createPatternBlob } from '../utils/marker-utils.js';
 import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
+import { resolveMarkerEngineType, resolveImageTargetSrc } from '../utils/marker-engine-resolve.js';
 import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
 import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
 import { createLoadingStateManager, LoadingState } from '../utils/loading-state-manager.js';
@@ -677,8 +678,10 @@ async function normalizeProject(project, baseHref) {
     const markerCandidates = deepFindMarkerImageUrl(project);
     const hasMarkerImage = markerCandidates.length > 0 && markerCandidates[0]?.url;
     const hasMarkerPattern = !!(project.markerPattern || project.marker?.pattern);
+    const hasImageTarget = project.assets?.marker?.type === 'imageTarget'
+      || project.marker?.type === 'imageTarget';
     
-    if (hasMarkerImage || hasMarkerPattern) {
+    if (hasMarkerImage || hasMarkerPattern || hasImageTarget) {
       project.type = 'marker';
       arViewerLogger.info('[FLOW] type自動推定: marker（マーカー画像/パターンが存在）');
     } else {
@@ -721,11 +724,34 @@ async function normalizeProject(project, baseHref) {
   }
 
   // markerImage / markerPattern も v2 (project.assets.marker.*) からフォールバック
+  const markerAsset = project.assets?.marker;
+  if (markerAsset) {
+    project.marker = { ...markerAsset, ...(project.marker || {}) };
+    if (markerAsset.type === 'imageTarget') {
+      project.markerEngine = 'mindar';
+      project.imageTargetSrc = markerAsset.targetUrl || project.imageTargetSrc || null;
+      if (!project.markerImage && markerAsset.sourceImageUrl) {
+        project.markerImage = markerAsset.sourceImageUrl;
+      }
+      if (!project.markerImage && markerAsset.url) {
+        project.markerImage = markerAsset.url;
+      }
+    }
+  }
   if (!project.markerImage && project.assets?.marker?.url) {
     project.markerImage = project.assets.marker.url;
   }
+  if (!project.markerImage && project.assets?.marker?.sourceImageUrl) {
+    project.markerImage = project.assets.marker.sourceImageUrl;
+  }
   if (!project.markerPattern && project.assets?.marker?.patternUrl) {
     project.markerPattern = project.assets.marker.patternUrl;
+  }
+  if (!project.imageTargetSrc) {
+    project.imageTargetSrc = resolveImageTargetSrc(project);
+  }
+  if (!project.markerEngine) {
+    project.markerEngine = resolveMarkerEngineType(project);
   }
 
   // models の絶対化と検証
@@ -3398,6 +3424,34 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         arViewerLogger.warn('📌 プロジェクト設定でマーカー画像をアップロードしてください');
       }
       
+      const markerEngine = resolveMarkerEngineType(currentProject);
+      const imageTargetSrc = resolveImageTargetSrc(currentProject);
+
+      if (markerEngine === 'mindar') {
+        if (!imageTargetSrc) {
+          throw new Error('image target targetUrl missing');
+        }
+        const baseUrl = currentProject.__sourceUrl || location.href;
+        let absTarget;
+        try {
+          absTarget = new URL(imageTargetSrc, baseUrl).href;
+        } catch {
+          absTarget = imageTargetSrc;
+        }
+        arViewerLogger.info('MindAR imageTarget エンジンを使用:', absTarget);
+        const arEngine = await AREngineAdapter.create({
+          container: arHost,
+          preferredEngine: 'mindar',
+          imageTargetSrc: absTarget
+        });
+        currentAREngine = arEngine;
+        await arEngine.initialize();
+        return {
+          nextState: ARState.LOADING_ASSETS,
+          data: { arEngine }
+        };
+      }
+
       const finalMarkerUrl = markerUrlOption || null;
       arViewerLogger.info('🎯 AREngineAdapter.create()に渡すmarkerUrl:', finalMarkerUrl);
 

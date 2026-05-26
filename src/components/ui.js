@@ -1283,6 +1283,7 @@ export async function showQRCodeModal(options = {}) {
           theme: projectData.theme || null,
           markerImage: markerImageForPublish,
           markerPattern: markerPatternForPublish,
+          marker: projectData.marker || projectData.assets?.marker || null,
           arSettings: projectData.arSettings || {},
           effects: Array.isArray(projectData.effects) ? projectData.effects : []
         });
