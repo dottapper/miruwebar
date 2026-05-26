@@ -53,6 +53,41 @@ describe('publish-assets', () => {
     expect(built.markerPattern).toBeNull();
   });
 
+  it('buildMarkerAssetForPublish promotes non-square marker dimensions to imageTarget', async () => {
+    const built = await buildMarkerAssetForPublish(
+      {
+        markerImage: 'data:image/jpeg;base64,anBn',
+        markerPattern: 'legacy-pattern',
+        marker: {
+          type: 'pattern',
+          targetMind: Buffer.from('mind-test').toString('base64'),
+          imageWidth: 555,
+          imageHeight: 800
+        }
+      },
+      {
+        uploadImage: vi.fn(async () => 'https://cdn.example/cover.jpg'),
+        uploadFile: vi.fn(async () => 'https://cdn.example/cover.mind')
+      }
+    );
+
+    expect(built.asset.type).toBe('imageTarget');
+    expect(built.asset.patternUrl).toBeNull();
+    expect(built.markerPattern).toBeNull();
+  });
+
+  it('non-square imageTarget without mind file throws', async () => {
+    await expect(
+      buildMarkerAssetForPublish(
+        {
+          markerImage: 'data:image/jpeg;base64,anBn',
+          marker: { type: 'pattern', imageWidth: 555, imageHeight: 800 }
+        },
+        { uploadImage: vi.fn(), uploadFile: vi.fn() }
+      )
+    ).rejects.toMatchObject({ code: 'IMAGE_TARGET_MIND_MISSING', status: 400 });
+  });
+
   it('imageTarget without mind file throws', async () => {
     await expect(
       buildMarkerAssetForPublish(

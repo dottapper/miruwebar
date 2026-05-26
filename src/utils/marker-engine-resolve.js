@@ -10,6 +10,8 @@ export function resolveMarkerEngineType(project) {
   const marker = project?.assets?.marker || project?.marker;
   if (marker?.type === 'imageTarget') return 'mindar';
   if (marker?.engine === 'mindar') return 'mindar';
+  // .mind ターゲット URL があれば imageTarget 扱い（type 未設定の公開 JSON 対策）
+  if (marker?.targetUrl || project?.imageTargetSrc) return 'mindar';
   return 'marker';
 }
 

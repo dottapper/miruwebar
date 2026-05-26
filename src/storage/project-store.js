@@ -220,6 +220,53 @@ export function saveProject(projectData) {
  * @param {Object} projectData - 元のプロジェクトデータ
  * @returns {Object} 軽量化されたプロジェクトデータ
  */
+const MARKER_METADATA_KEYS = [
+  'type',
+  'engine',
+  'sourceImage',
+  'sourceImageUrl',
+  'url',
+  'src',
+  'patternUrl',
+  'targetUrl',
+  'targetMind',
+  'targetMindBase64',
+  'imageWidth',
+  'imageHeight',
+  'physicalAspectRatio'
+];
+
+function createLightweightMarker(markerData, fallbackSourceImage) {
+  if (!markerData || typeof markerData !== 'object') {
+    return fallbackSourceImage ? { type: 'pattern', sourceImage: fallbackSourceImage } : null;
+  }
+
+  const marker = {};
+  for (const key of MARKER_METADATA_KEYS) {
+    const value = markerData[key];
+    if (value !== undefined && value !== null && value !== '') {
+      marker[key] = value;
+    }
+  }
+
+  if (!marker.type) {
+    marker.type = marker.engine === 'mindar' || marker.targetUrl || marker.targetMind || marker.targetMindBase64
+      ? 'imageTarget'
+      : 'pattern';
+  }
+
+  if (!marker.sourceImage && !marker.sourceImageUrl && !marker.url && fallbackSourceImage) {
+    marker.sourceImage = fallbackSourceImage;
+  }
+
+  if (marker.type !== 'imageTarget') {
+    delete marker.targetMind;
+    delete marker.targetMindBase64;
+  }
+
+  return Object.keys(marker).length > 0 ? marker : null;
+}
+
 function createLightweightProject(projectData) {
   // ビューアに必要な設定を保持しつつ、巨大データは参照にする
   const base = {
@@ -259,6 +306,14 @@ function createLightweightProject(projectData) {
   }
   if (projectData.markerPattern) {
     base.markerPattern = projectData.markerPattern;
+  }
+
+  const marker = createLightweightMarker(
+    projectData.marker || projectData.assets?.marker,
+    base.markerImage || projectData.markerImage || null
+  );
+  if (marker) {
+    base.marker = marker;
   }
 
   if (projectData.publishInfo && typeof projectData.publishInfo === 'object') {

@@ -1,5 +1,6 @@
 // src/views/marker-upload.js
 import { analyzeMarkerImage } from '../utils/marker-utils.js';
+import { inferMarkerTypeFromDimensions } from '../utils/marker-engine-resolve.js';
 
 export function showMarkerUpload() {
     // モーダルの背景（オーバーレイ）要素を作成
@@ -114,8 +115,9 @@ export function showMarkerUpload() {
 
         // 長方形画像の場合は「中央の正方形だけが認識対象」と明示する
         if (!result.isSquare) {
-          rectNotice.innerHTML = '⚠️ 長方形の画像です。<strong>中央の正方形（青枠の範囲）だけ</strong>がマーカーとして認識されます。'
-            + '本やポスター全体を追跡したい場合は、デザイン内に正方形の目印を作り、その部分を登録してください。';
+          rectNotice.innerHTML = '⚠️ 縦長・横長の画像です。表紙・ポスター全体を追跡するには <strong>MindAR（imageTarget）</strong> が必要です。'
+            + '公開前に <a href="https://hiukim.github.io/mind-ar-js-doc/quick-start/compile/" target="_blank" rel="noopener">MindAR Compiler</a> で .mind を作成し、'
+            + 'エディタから Cloud Release してください（従来の正方形パターン方式では中央の一部だけしか認識されません）。';
           rectNotice.style.display = 'block';
         }
 
@@ -221,8 +223,19 @@ export function showMarkerUpload() {
             // 実際の実装ではAPIにアップロードしたマーカーIDやURLを取得します
             // 仮実装としてローカルストレージに保存
             localStorage.setItem('markerImageUrl', dataURL);
-            // 将来の pattern / imageTarget 分岐に備え、マーカー種別を保存
-            localStorage.setItem('markerType', 'pattern');
+            const w = lastQuality?.naturalWidth;
+            const h = lastQuality?.naturalHeight;
+            const markerType = (w && h)
+              ? inferMarkerTypeFromDimensions(w, h)
+              : 'pattern';
+            localStorage.setItem('markerType', markerType);
+            if (markerType === 'imageTarget' && !localStorage.getItem('markerTargetMind')) {
+              alert(
+                '縦長・横長の表紙画像は MindAR 用の .mind ファイルが必要です。\n'
+                + 'MindAR Compiler で .mind を作成し、登録してから Cloud Release してください。\n'
+                + '（手順: tasks.md の imageTarget セクション参照）'
+              );
+            }
 
             // アップロード完了後、エディタ画面へ遷移
             window.location.hash = '#/editor?type=marker';
@@ -234,7 +247,12 @@ export function showMarkerUpload() {
               if (confirm('ローカルデータをクリアして再試行しますか？')) {
                 localStorage.clear();
                 localStorage.setItem('markerImageUrl', dataURL);
-                localStorage.setItem('markerType', 'pattern');
+                const w2 = lastQuality?.naturalWidth;
+                const h2 = lastQuality?.naturalHeight;
+                localStorage.setItem(
+                  'markerType',
+                  (w2 && h2) ? inferMarkerTypeFromDimensions(w2, h2) : 'pattern'
+                );
                 window.location.hash = '#/editor?type=marker';
                 closeModal();
               }

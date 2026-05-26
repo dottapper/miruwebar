@@ -103,9 +103,60 @@ export class MindARImageAR extends AREngineInterface {
 
     await this._initGLTFLoader();
     await this.mindarThree.start();
+    this._ensureCameraVisible();
     this._startRenderLoop();
     this.isInitialized = true;
     log.info('MindAR 初期化完了');
+  }
+
+  /** カメラ映像がガイド背面で見えるよう video / canvas を整える */
+  _ensureCameraVisible() {
+    const host = this.container;
+    if (!host) return;
+
+    const videos = host.querySelectorAll('video');
+    videos.forEach((vid) => {
+      vid.setAttribute('playsinline', 'true');
+      vid.setAttribute('muted', 'true');
+      vid.setAttribute('autoplay', 'true');
+      Object.assign(vid.style, {
+        position: 'absolute',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        zIndex: '0',
+        display: 'block',
+        visibility: 'visible',
+        opacity: '1',
+        pointerEvents: 'none',
+        background: '#000'
+      });
+      if (vid.paused && typeof vid.play === 'function') {
+        vid.play().catch(() => {});
+      }
+    });
+
+    const renderer = this.mindarThree?.renderer;
+    if (renderer) {
+      try {
+        if (renderer.setClearColor) renderer.setClearColor(0x000000, 0);
+      } catch (_) { /* noop */ }
+      const canvas = renderer.domElement;
+      if (canvas) {
+        Object.assign(canvas.style, {
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          width: '100%',
+          height: '100%',
+          zIndex: '1',
+          pointerEvents: 'none',
+          background: 'transparent'
+        });
+      }
+    }
   }
 
   _startRenderLoop() {

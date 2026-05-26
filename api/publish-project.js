@@ -163,6 +163,12 @@ export default async function handler(req, res) {
     if (error && error.status === 413) {
       return res.status(413).json({ error: 'payload too large' });
     }
+    if (error && error.status === 400) {
+      return res.status(400).json({
+        error: error.code || 'bad request',
+        message: error.message
+      });
+    }
     console.error('❌ /api/publish-project 失敗:', error);
     return res.status(500).json({
       error: 'publish failed',

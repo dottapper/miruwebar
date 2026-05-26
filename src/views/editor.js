@@ -2634,14 +2634,14 @@ export function showEditor(container) {
           localStorage.setItem('markerImageUrl', markerImageData);
         }
 
-        let markerType = localStorage.getItem('markerType') || 'pattern';
         let markerDims = null;
+        let markerType = localStorage.getItem('markerType') || 'pattern';
         if (markerImageData) {
           try {
             markerDims = await getImageDimensions(markerImageData);
-            if (!localStorage.getItem('markerType')) {
-              markerType = inferMarkerTypeFromDimensions(markerDims.width, markerDims.height);
-            }
+            // 画像の縦横比を優先（長方形表紙は imageTarget。古い pattern 固定を上書き）
+            markerType = inferMarkerTypeFromDimensions(markerDims.width, markerDims.height);
+            localStorage.setItem('markerType', markerType);
           } catch (dimError) {
             console.warn('⚠️ マーカー画像サイズの取得に失敗:', dimError);
           }

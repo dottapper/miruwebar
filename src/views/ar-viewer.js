@@ -1281,6 +1281,21 @@ export default function showARViewer(container) {
       overflow: hidden;
       background: #000; /* カメラが表示されるまでのフォールバック */
     }
+
+    .integrated-ar-viewer.is-ar-active .ar-host {
+      z-index: 2;
+    }
+
+    /* AR 実行中はガイドを薄いオーバーレイに（中央の静止画でカメラを覆わない） */
+    .integrated-ar-viewer.is-ar-active .ar-guide-screen.is-scan-overlay {
+      z-index: 1100;
+      pointer-events: none;
+    }
+    .integrated-ar-viewer.is-ar-active .ar-guide-screen.is-scan-overlay .guide-center-area,
+    .integrated-ar-viewer.is-ar-active .ar-guide-screen.is-scan-overlay .marker-image-container,
+    .integrated-ar-viewer.is-ar-active .ar-guide-screen.is-scan-overlay #ar-guide-image {
+      display: none !important;
+    }
     
     /* カメラ映像のスタイルを確実に適用 */
     .ar-host video,
@@ -1309,11 +1324,18 @@ export default function showARViewer(container) {
       align-items: center;
       justify-content: center;
       z-index: 1200;
+      overflow: hidden;
+      box-sizing: border-box;
     }
-    /* Start content should not establish a new positioning context.
-       This allows absolutely positioned children (logo/title/button)
-       to be placed relative to the full-screen overlay container. */
-    .start-content { text-align: center; padding: 2rem; position: static; }
+    /* タイトル/ボタンの % 配置は start-screen を基準にする */
+    .start-content {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      padding: 0;
+      box-sizing: border-box;
+    }
     .start-content h1 { color: #fff; font-size: 1.6rem; margin: 0.5rem 0 0; }
 
     .ar-guide-screen {
@@ -2064,11 +2086,8 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
           if (instruction) instruction.style.display = 'none';
           // GUIDE 状態でもカメラ層 (#ar-host) は明示的に表示しておく
           // （AR.js がカメラ映像を arHost に挿入するため、ガイドの背面で見えている必要がある）
-          if (arHost) {
-            arHost.style.display = 'block';
-            arHost.style.visibility = 'visible';
-            arHost.style.zIndex = '1';
-          }
+          ensureArHostVisible();
+          if (guideScreen) guideScreen.classList.remove('is-scan-overlay');
           arViewerLogger.info('✅ ガイド画面を表示');
           arViewerLogger.info('🔍 表示後の確認:', {
             display: guideScreen.style.display,
@@ -2087,23 +2106,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         if (loadingScreen) loadingScreen.style.display = 'none';
         if (guideScreen) guideScreen.style.display = 'none';
         
-        // ARホストコンテナを確実に表示
-        if (arHost) {
-          arHost.style.display = 'block';
-          arHost.style.zIndex = '1';
-          arHost.style.visibility = 'visible';
-        }
-        
+        ensureArHostVisible();
+
         // マーカーガイドの表示
         if (hasCustomMarkerGuide) {
-          // プロジェクトのカスタムガイドを優先表示
-          if (guideScreen) guideScreen.style.display = 'flex';
-          if (markerGuide) markerGuide.style.display = 'none';
-          if (markerGuideTips) markerGuideTips.style.display = 'none';
-          // カスタムガイドが status footer で案内を担うので、controls 指示文は隠す
+          // 静止マーカー画像はカメラを覆うため、AR 中はテキストのみの薄いオーバーレイにする
+          if (guideScreen) {
+            guideScreen.style.display = 'flex';
+            guideScreen.classList.add('is-scan-overlay');
+          }
+          configureDefaultMarkerGuide(currentProject);
+          if (markerGuide) markerGuide.style.display = 'block';
+          if (markerGuideTips) markerGuideTips.style.display = 'block';
           if (instruction) instruction.style.display = 'none';
-          arViewerLogger.info('✅ カスタムガイドを表示（AR実行中の案内として使用）');
+          arViewerLogger.info('✅ スキャン用オーバーレイ（ライブカメラ＋枠ガイド）を表示');
         } else {
+          if (guideScreen) guideScreen.classList.remove('is-scan-overlay');
           // 既定ガイド。マーカー画像があれば縦横比に合わせる。
           configureDefaultMarkerGuide(currentProject);
           let arDisplayed = false;
@@ -2175,6 +2193,14 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   let loadedModels = [];
   let cameraVideoElement = null;
 
+  function ensureArHostVisible() {
+    if (!arHost) return;
+    arHost.style.display = 'block';
+    arHost.style.visibility = 'visible';
+    arHost.style.opacity = '1';
+    arHost.style.zIndex = viewerRoot?.classList.contains('is-ar-active') ? '2' : '1';
+  }
+
   function attachStreamToVideo(stream) {
     if (!stream) return;
     if (!cameraVideoElement) {
@@ -2183,12 +2209,17 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       cameraVideoElement.playsInline = true;
       cameraVideoElement.muted = true;
       cameraVideoElement.autoplay = true;
-      cameraVideoElement.style.position = 'fixed';
+      cameraVideoElement.style.position = 'absolute';
       cameraVideoElement.style.inset = '0';
-      cameraVideoElement.style.opacity = '0';
+      cameraVideoElement.style.width = '100%';
+      cameraVideoElement.style.height = '100%';
+      cameraVideoElement.style.objectFit = 'cover';
+      cameraVideoElement.style.opacity = '1';
+      cameraVideoElement.style.zIndex = '0';
       cameraVideoElement.style.pointerEvents = 'none';
+      const parent = arHost || container.querySelector('#ar-host') || document.body;
       if (!cameraVideoElement.parentNode) {
-        document.body.appendChild(cameraVideoElement);
+        parent.appendChild(cameraVideoElement);
       }
     }
     cameraVideoElement.srcObject = stream;
@@ -3446,9 +3477,13 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         });
         currentAREngine = arEngine;
         await arEngine.initialize();
+        ensureArHostVisible();
+        if (typeof arEngine._ensureCameraVisible === 'function') {
+          arEngine._ensureCameraVisible();
+        }
         return {
           nextState: ARState.LOADING_ASSETS,
-          data: { arEngine }
+          data: { arEngine, arPath: 'marker' }
         };
       }
 
@@ -3464,11 +3499,15 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
 
       currentAREngine = arEngine;
       await arEngine.initialize();
+      ensureArHostVisible();
+      if (typeof arEngine._ensureCameraVisible === 'function') {
+        arEngine._ensureCameraVisible();
+      }
 
       // 次の状態を返す
       return {
         nextState: ARState.LOADING_ASSETS,
-        data: { arEngine }
+        data: { arEngine, arPath: 'marker' }
       };
 
     } catch (error) {
@@ -3548,6 +3587,11 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       arStateMachine.clearStateTimeout(ARState.RUNNING);
     }
 
+    ensureArHostVisible();
+    if (currentAREngine && typeof currentAREngine._ensureCameraVisible === 'function') {
+      currentAREngine._ensureCameraVisible();
+    }
+
     if (data.arPath === 'marker') {
       updateInstruction('<strong>📌 マーカーをカメラにかざしてください</strong>');
     } else if (data.arPath === 'webxr') {
@@ -3602,6 +3646,12 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     }
 
     // アセット欠落系（marker / model の読み込み失敗）
+    if (/image target targetUrl missing|\.mind/i.test(message)) {
+      return {
+        headline: '表紙・ポスター用の認識データがありません',
+        hint: '縦長・横長の自然画像は MindAR 用の .mind ファイルが必要です。エディタから再公開（Cloud Release）してください。'
+      };
+    }
     if (/marker image not reachable|marker.*404|CORS/.test(message)) {
       return {
         headline: 'マーカー画像を読み込めませんでした',

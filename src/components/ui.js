@@ -25,6 +25,44 @@ import { security } from '../utils/security-manager.js';
 // UI専用ロガーを作成
 const uiLogger = createLogger('UI');
 
+function readLocalStorageValue(key) {
+  try {
+    return localStorage.getItem(key) || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function buildMarkerForPublish(projectData, markerImageForPublish) {
+  const projectMarker = projectData?.marker || projectData?.assets?.marker || null;
+  const marker = projectMarker && typeof projectMarker === 'object' ? { ...projectMarker } : {};
+  const localMarkerType = readLocalStorageValue('markerType');
+  const localTargetMind = readLocalStorageValue('markerTargetMind');
+
+  if (!projectMarker && localMarkerType) {
+    marker.type = localMarkerType;
+  }
+  if (!marker.type && (marker.engine === 'mindar' || marker.targetUrl || marker.targetMind || marker.targetMindBase64 || localTargetMind)) {
+    marker.type = 'imageTarget';
+  }
+  if (localTargetMind && marker.type === 'imageTarget' && !marker.targetUrl && !marker.targetMind && !marker.targetMindBase64) {
+    marker.targetMind = localTargetMind;
+  }
+  if (markerImageForPublish && !marker.sourceImage && !marker.sourceImageUrl && !marker.url) {
+    marker.sourceImage = markerImageForPublish;
+  }
+
+  return Object.keys(marker).length > 0 ? marker : null;
+}
+
+function isImageTargetMarker(marker) {
+  return marker?.type === 'imageTarget' || marker?.engine === 'mindar';
+}
+
+function hasMindTarget(marker) {
+  return !!(marker?.targetUrl || marker?.targetMind || marker?.targetMindBase64);
+}
+
 /**
  * 新規プロジェクト作成用のモーダルポップアップを表示する
  */
@@ -1249,7 +1287,13 @@ export async function showQRCodeModal(options = {}) {
             markerImageForPublish = localStorage.getItem('markerImageUrl') || null;
           } catch (_) {}
         }
-        if (markerImageForPublish && !markerPatternForPublish) {
+        const markerForPublish = buildMarkerForPublish(projectData, markerImageForPublish);
+        if (isImageTargetMarker(markerForPublish)) {
+          markerPatternForPublish = null;
+          if (!hasMindTarget(markerForPublish)) {
+            throw new Error('表紙・ポスターなどの imageTarget 公開には MindAR の .mind ファイルが必要です。MindAR Compiler で .mind を作成し、markerTargetMind に登録してから再公開してください。');
+          }
+        } else if (markerImageForPublish && !markerPatternForPublish) {
           try {
             const { generateMarkerPatternFromImage } = await import('../utils/marker-utils.js');
             markerPatternForPublish = await generateMarkerPatternFromImage(markerImageForPublish);
@@ -1267,6 +1311,7 @@ export async function showQRCodeModal(options = {}) {
         uiLogger.log('🚀 公開リリース作成開始:', projectId, {
           markerImage: markerImageForPublish ? `${String(markerImageForPublish).slice(0, 60)}...` : 'なし',
           markerPattern: markerPatternForPublish ? `あり (${markerPatternForPublish.length}文字)` : 'なし',
+          markerType: markerForPublish?.type || 'pattern',
           loadingScreenFromLSE: !!lseLatest?.loadingScreen,
           guideScreenFromLSE: !!lseLatest?.guideScreen
         });
@@ -1283,7 +1328,7 @@ export async function showQRCodeModal(options = {}) {
           theme: projectData.theme || null,
           markerImage: markerImageForPublish,
           markerPattern: markerPatternForPublish,
-          marker: projectData.marker || projectData.assets?.marker || null,
+          marker: markerForPublish,
           arSettings: projectData.arSettings || {},
           effects: Array.isArray(projectData.effects) ? projectData.effects : []
         });

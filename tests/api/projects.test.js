@@ -108,6 +108,31 @@ describe('Projects API', () => {
       expect(saveModelToIDB).toHaveBeenCalledTimes(2);
     });
 
+    it('should preserve imageTarget marker metadata for publishing', async () => {
+      const result = await saveProject({
+        id: 'image-target-project',
+        name: 'Image Target Project',
+        type: 'marker',
+        markerImage: 'data:image/jpeg;base64,bWFya2Vy',
+        marker: {
+          type: 'imageTarget',
+          engine: 'mindar',
+          sourceImage: 'data:image/jpeg;base64,bWFya2Vy',
+          targetMind: 'bWluZC1maWxl',
+          imageWidth: 555,
+          imageHeight: 800
+        }
+      });
+
+      expect(result.marker).toMatchObject({
+        type: 'imageTarget',
+        engine: 'mindar',
+        targetMind: 'bWluZC1maWxl',
+        imageWidth: 555,
+        imageHeight: 800
+      });
+    });
+
     it('should handle save errors gracefully', async () => {
       const projectData = { id: 'error-project', name: 'Error Project' };
       

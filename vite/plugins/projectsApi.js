@@ -197,6 +197,9 @@ export function projectsApiPlugin() {
               }
             );
           } catch (e) {
+            if (e?.code === 'IMAGE_TARGET_MIND_MISSING' || e?.status === 400) {
+              throw e;
+            }
             console.warn('⚠️ マーカーアセットの書き出し失敗（継続）:', e.message);
             markerBuilt = {
               asset: markerImage ? { type: 'pattern', url: markerImage, patternUrl: markerPattern || null } : null,
@@ -260,6 +263,11 @@ export function projectsApiPlugin() {
           if (e && e.status === 413) {
             res.writeHead(413, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'payload too large' }));
+            return;
+          }
+          if (e && e.status === 400) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.code || 'bad request', message: e.message }));
             return;
           }
           console.error('❌ /api/publish-project 失敗:', e);

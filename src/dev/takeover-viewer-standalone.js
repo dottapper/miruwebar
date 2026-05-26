@@ -151,44 +151,39 @@
     }
   }, true);
 
-  // 自前シーケンス：関数呼び出しは行わず DOM を直接制御
+  // 開始: 本番の AR 状態機械 (#ar-start-btn) を起動する（カメラ未起動のままガイドだけ出さない）
   DOC.addEventListener('click', async (ev)=>{
     const btn = $('#takeover-start-btn');
     if (!btn || ev.target !== btn) return;
     if (phase !== 'idle') return;
     phase = 'started';
 
-    // Start を閉じる
     $('#takeover-start-overlay')?.remove();
+    mounted.start = false;
 
-    // Loading を出す（既存があればそれを表示、無ければフォールバック）
+    const arStart = $('#ar-start-btn');
+    if (arStart) {
+      arStart.click();
+      console.info('[TAKEOVER] forwarded start to #ar-start-btn');
+      phase = 'guide';
+      return;
+    }
+
+    // フォールバック: 旧デモ用シーケンス（AR ボタンがまだ無いときのみ）
     let loading = findLoadingEl();
-    if (loading) {
-      show(loading);
-    } else {
-      loading = buildFallbackLoading();
-      show(loading);
-    }
+    if (loading) show(loading);
+    else loading = buildFallbackLoading();
+    show(loading);
     mounted.loading = true;
-    console.info('[TAKEOVER] show loading');
-
-    // 800ms 待つ
     await new Promise(r=>setTimeout(r, 800));
-
-    // Loading を隠す
     hide(loading);
-
-    // Guide を出す（既存があればそれを表示、無ければフォールバック）
     let guide = findGuideEl();
-    if (guide) {
-      show(guide);
-    } else {
-      guide = buildFallbackGuide();
-      show(guide);
-    }
+    if (guide) show(guide);
+    else guide = buildFallbackGuide();
+    show(guide);
     mounted.guide = true;
     phase = 'guide';
-    console.info('[TAKEOVER] show guide');
+    console.info('[TAKEOVER] show guide (fallback, no #ar-start-btn)');
   }, { capture:true });
 
   // SPAでDOMが差し替わっても復活

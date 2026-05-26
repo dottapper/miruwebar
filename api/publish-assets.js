@@ -3,6 +3,8 @@
  * data:image/... を Blob / ローカルファイル URL に置き換える。
  */
 
+import { inferMarkerTypeFromDimensions } from '../src/utils/marker-engine-resolve.js';
+
 /** data URL から { buffer, contentType } を取り出す。data URL でなければ null */
 export function decodeDataUrl(value) {
   if (typeof value !== 'string' || !value.startsWith('data:')) return null;
@@ -117,7 +119,13 @@ export async function buildMarkerAssetForPublish(
   { markerImage, markerPattern, marker },
   { uploadImage, uploadFile }
 ) {
-  const markerType = marker?.type || 'pattern';
+  let markerType = marker?.type || 'pattern';
+  const imgW = Number(marker?.imageWidth);
+  const imgH = Number(marker?.imageHeight);
+  if (imgW > 0 && imgH > 0) {
+    const inferred = inferMarkerTypeFromDimensions(imgW, imgH);
+    if (inferred === 'imageTarget') markerType = 'imageTarget';
+  }
 
   if (markerType === 'imageTarget') {
     let targetUrl = marker?.targetUrl || null;
@@ -130,7 +138,10 @@ export async function buildMarkerAssetForPublish(
         decodeDataUrl(mindRaw)
         || decodeBase64Payload(mindRaw, 'application/octet-stream');
       if (!decoded) {
-        throw new Error('imageTarget requires .mind target file (targetUrl or targetMind)');
+        throw Object.assign(
+          new Error('imageTarget requires .mind target file (targetUrl or targetMind)'),
+          { status: 400, code: 'IMAGE_TARGET_MIND_MISSING' }
+        );
       }
       targetUrl = await uploadFile(decoded.buffer, 'marker-target.mind', 'application/octet-stream');
     }
