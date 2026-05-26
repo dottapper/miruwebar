@@ -258,7 +258,7 @@ function applyStartScreen(start, screenElement) {
   // タイトル位置（%）
   // 統合ビューアが存在する場合は、レイアウトはビューア側の
   // layoutStartScreen() に委譲し、ここでは位置変更を行わない。
-  if ((DEV_APPLY_OVERRIDE || !hasIntegratedMarkup) && typeof start.titlePosition === 'number') {
+  if (!hasIntegratedMarkup && typeof start.titlePosition === 'number') {
     const pos = Math.max(5, Math.min(90, start.titlePosition));
     titleElement.style.setProperty('top', `${pos}%`, 'important');
     titleElement.style.setProperty('transform', 'translateY(-50%)', 'important');
@@ -266,7 +266,7 @@ function applyStartScreen(start, screenElement) {
   }
 
   // タイトルサイズ（倍率）
-  if ((DEV_APPLY_OVERRIDE || !hasIntegratedMarkup) && typeof start.titleSize === 'number') {
+  if (!hasIntegratedMarkup && typeof start.titleSize === 'number') {
     const size = Math.max(0.5, Math.min(3.0, start.titleSize));
     const baseSize = 32; // ベースフォントサイズ（px）
     const computedSize = baseSize * size;
@@ -322,7 +322,7 @@ function applyStartScreen(start, screenElement) {
   }
 
   // ボタン位置（%またはpx）
-  if (start.buttonPosition && (DEV_APPLY_OVERRIDE || !hasIntegratedMarkup)) {
+  if (start.buttonPosition && !hasIntegratedMarkup) {
     const { x, y } = start.buttonPosition;
     if (typeof x === 'number') {
       const leftVal = x <= 1 ? `${x * 100}%` : `${x}${x < 10 ? '%' : 'px'}`;

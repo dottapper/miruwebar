@@ -5,7 +5,7 @@ import { showViewerLoadingScreen, unifiedLoading } from '../utils/unified-loadin
 import '../dev/takeover-viewer-standalone.js';
 import { createLogger } from '../utils/logger.js';
 import { TEMPLATES_STORAGE_KEY, defaultTemplateSettings } from '../components/loading-screen/template-manager.js';
-import { generateMarkerPatternFromImage, createPatternBlob } from '../utils/marker-utils.js';
+import { createPatternBlob } from '../utils/marker-utils.js';
 import { AREngineAdapter } from '../utils/ar-engine-adapter.js';
 import { checkXRSupport, getRecommendedFallback } from '../utils/webxr-support.js';
 import { createARStateMachine, ARState } from '../utils/ar-state-machine.js';
@@ -19,6 +19,8 @@ import { extractDesign } from '../utils/design-extractor.js';
 const arViewerLogger = createLogger('ARViewer');
 
 let __booted = false;
+let __projectLoadPromise = null;
+let __projectLoadPromiseSrc = null;
 
 function navigateBackOrHome() {
   try {
@@ -348,69 +350,82 @@ async function loadProjectFromQR() {
     return window.__project;
   }
 
-  try {
-    arViewerLogger.info('[FLOW] Fetching project from:', projectSrc);
-    const response = await fetchOnce(projectSrc, { cache: 'no-store' });
-
-    if (!response.ok) {
-      arViewerLogger.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
-      if (typeof window !== 'undefined') {
-        window.__projectLoadError = {
-          status: response.status,
-          statusText: response.statusText,
-          url: projectSrc
-        };
-      }
-      if (DEV_STRICT_MODE) {
-        throw new Error(`STRICT MODE: Project fetch failed (${response.status}). No fallback allowed.`);
-      }
-      return null;
-    }
-
-    // Content-Typeを確認してHTMLレスポンスを検出
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('text/html')) {
-      const text = await response.text();
-      arViewerLogger.error('[FLOW] HTMLレスポンスが返されました:', {
-        url: projectSrc,
-        contentType,
-        preview: text.substring(0, 200)
-      });
-      if (DEV_STRICT_MODE) {
-        throw new Error(`STRICT MODE: HTML response received instead of JSON. URL may be incorrect: ${projectSrc}`);
-      }
-      return null;
-    }
-
-    const project = await response.json();
-
-    if (!project || typeof project !== 'object') {
-      arViewerLogger.error('[FLOW] Invalid project.json (not an object)');
-      if (DEV_STRICT_MODE) {
-        throw new Error('STRICT MODE: Invalid project.json. No fallback allowed.');
-      }
-      return null;
-    }
-
-    project.__sourceUrl = project.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
-
-    if (typeof window !== 'undefined') {
-      window.__project = project;
-      window.__projectSrc = projectSrc;
-    }
-
-    // 初期セットアップでガイドモードを矯正
-    forceGuideModeIfMarker(project);
-
-    arViewerLogger.info('[FLOW] Project loaded successfully');
-    return project;
-  } catch (error) {
-    arViewerLogger.error('[FLOW] project fetch error', error);
-    if (DEV_STRICT_MODE) {
-      throw error;
-    }
-    return null;
+  if (__projectLoadPromise && __projectLoadPromiseSrc === projectSrc) {
+    arViewerLogger.info('[FLOW] Reusing in-flight project fetch:', projectSrc);
+    return __projectLoadPromise;
   }
+
+  __projectLoadPromiseSrc = projectSrc;
+  __projectLoadPromise = (async () => {
+    try {
+      arViewerLogger.info('[FLOW] Fetching project from:', projectSrc);
+      const response = await fetchOnce(projectSrc, { cache: 'no-store' });
+
+      if (!response.ok) {
+        arViewerLogger.error('[FLOW] project fetch failed', { status: response.status, statusText: response.statusText });
+        if (typeof window !== 'undefined') {
+          window.__projectLoadError = {
+            status: response.status,
+            statusText: response.statusText,
+            url: projectSrc
+          };
+        }
+        if (DEV_STRICT_MODE) {
+          throw new Error(`STRICT MODE: Project fetch failed (${response.status}). No fallback allowed.`);
+        }
+        return null;
+      }
+
+      // Content-Typeを確認してHTMLレスポンスを検出
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        const text = await response.text();
+        arViewerLogger.error('[FLOW] HTMLレスポンスが返されました:', {
+          url: projectSrc,
+          contentType,
+          preview: text.substring(0, 200)
+        });
+        if (DEV_STRICT_MODE) {
+          throw new Error(`STRICT MODE: HTML response received instead of JSON. URL may be incorrect: ${projectSrc}`);
+        }
+        return null;
+      }
+
+      const project = await response.json();
+
+      if (!project || typeof project !== 'object') {
+        arViewerLogger.error('[FLOW] Invalid project.json (not an object)');
+        if (DEV_STRICT_MODE) {
+          throw new Error('STRICT MODE: Invalid project.json. No fallback allowed.');
+        }
+        return null;
+      }
+
+      project.__sourceUrl = project.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
+
+      if (typeof window !== 'undefined') {
+        window.__project = project;
+        window.__projectSrc = projectSrc;
+      }
+
+      // 初期セットアップでガイドモードを矯正
+      forceGuideModeIfMarker(project);
+
+      arViewerLogger.info('[FLOW] Project loaded successfully');
+      return project;
+    } catch (error) {
+      arViewerLogger.error('[FLOW] project fetch error', error);
+      if (DEV_STRICT_MODE) {
+        throw error;
+      }
+      return null;
+    } finally {
+      __projectLoadPromise = null;
+      __projectLoadPromiseSrc = null;
+    }
+  })();
+
+  return __projectLoadPromise;
 }
 
 async function bootFromQR() {
@@ -1713,6 +1728,7 @@ export default function showARViewer(container) {
   // bootFromQR が失敗しても黒画面で止めず、このビュー側で再取得して診断を出す。
   const initARViewerWhenReady = async (event) => {
     if (viewerInitStarted) return;
+    viewerInitStarted = true;
 
     if (event?.detail?.project && typeof window !== 'undefined') {
       window.__project = event.detail.project;
@@ -1731,6 +1747,7 @@ export default function showARViewer(container) {
       } catch (error) {
         arViewerLogger.error('[FLOW] viewer self boot failed', error);
         showBootError(error.message || 'project.json の取得に失敗しました', { stack: error.stack });
+        viewerInitStarted = false;
         return;
       }
     }
@@ -1744,11 +1761,11 @@ export default function showARViewer(container) {
         ? 'project.json が見つかりません（404）。PCでQRモーダルを開き直すか、保存後にもう一度お試しください。'
         : 'project.json を読み込めませんでした';
       showBootError(message, detail);
+      viewerInitStarted = false;
       return;
     }
 
     container.querySelector('#viewer-boot-error-details')?.remove();
-    viewerInitStarted = true;
     initIntegratedARViewer(container, projectSrc, { enableLSFlag, forceNormalMaterial, engineOverride });
   };
 
@@ -2335,6 +2352,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
     
     if (currentProject && typeof currentProject === 'object') {
       currentProject.__sourceUrl = currentProject.__sourceUrl || projectSrc || (typeof location !== 'undefined' ? location.href : '');
+      try {
+        currentProject = await normalizeProject(currentProject, currentProject.__sourceUrl || projectSrc || location.href);
+        forceGuideModeIfMarker(currentProject);
+        if (typeof window !== 'undefined') {
+          window.__project = currentProject;
+          window.__projectSrc = projectSrc || getProjectSrc();
+        }
+        arViewerLogger.info('[FLOW] project normalized before viewer setup', {
+          type: currentProject.type || currentProject.mode,
+          markerImageUrl: currentProject.markerImageUrl,
+          models: (currentProject.models || []).map(m => m.url)
+        });
+      } catch (normalizeError) {
+        arViewerLogger.error('[FLOW] project normalize failed before viewer setup', normalizeError);
+        throw normalizeError;
+      }
     }
     hasConfiguredLoadingScreen = hasCustomLoadingScreen(currentProject);
     hasConfiguredGuideScreen = hasCustomGuideScreen(currentProject);
@@ -3286,19 +3319,26 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
         '__sourceUrl': currentProject?.__sourceUrl
       });
 
-      // プロジェクトのカスタムマーカーを優先して .patt を用意
+      // プロジェクトのカスタムマーカーを優先する。
+      // 画像URLは MarkerAR 側へ渡し、AR.js 読み込み後に .patt 化する。
+      // AR.js 読み込み前の自前生成は、Pattern Data read error の原因になる。
       let markerUrlOption = null;
       try {
         // 1) 既に .patt 文字列が保存されている場合
         if (currentProject?.markerPattern && typeof currentProject.markerPattern === 'string') {
           arViewerLogger.info('✅ markerPattern が存在します（文字列長:', currentProject.markerPattern.length, '）');
-          const patt = createPatternBlob(currentProject.markerPattern);
-          markerUrlOption = patt.url;
-          markerPatternCleanup = patt.revoke;
-          arViewerLogger.info('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
-        } else {
-          arViewerLogger.info('ℹ️ markerPattern が存在しないため、マーカー画像から生成を試みます');
+          try {
+            const patt = createPatternBlob(currentProject.markerPattern);
+            markerUrlOption = patt.url;
+            markerPatternCleanup = patt.revoke;
+            arViewerLogger.info('📌 プロジェクト保存済みの .patt を使用:', markerUrlOption);
+          } catch (patternError) {
+            arViewerLogger.warn('⚠️ 保存済み markerPattern が不正なためマーカー画像から再生成します:', patternError?.message || patternError);
+          }
+        }
 
+        if (!markerUrlOption) {
+          arViewerLogger.info('ℹ️ マーカー画像URLを MarkerAR に渡します');
           // extractDesignで正規化されたマーカー画像URLを取得
           const { guideScreen } = extractDesign(currentProject);
           const normalizedMarkerUrl = guideScreen?.marker?.src || guideScreen?.markerImage;
@@ -3338,36 +3378,10 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
               absUrl = rawUrl;
             }
             arViewerLogger.info('🔗 絶対URL化されたマーカー画像:', absUrl);
-            arViewerLogger.info('🔄 マーカーパターン生成開始...');
-            const patternString = await generateMarkerPatternFromImage(absUrl).catch((err) => {
-              arViewerLogger.error('❌ マーカーパターン生成エラー:', err);
-              return null;
-            });
-            if (patternString) {
-              arViewerLogger.info('✅ マーカーパターン生成成功（文字列長:', patternString.length, '）');
-              const patt = createPatternBlob(patternString);
-              markerUrlOption = patt.url;
-              markerPatternCleanup = patt.revoke;
-              arViewerLogger.info('📌 マーカー画像から生成した .patt を使用:', markerUrlOption);
-            } else {
-              arViewerLogger.warn('⚠️ マーカーパターン生成に失敗しました');
-            }
+            markerUrlOption = absUrl;
+            arViewerLogger.info('📌 MarkerAR へマーカー画像URLを渡します:', markerUrlOption);
           } else {
-            arViewerLogger.warn('⚠️ マーカー画像URLが見つかりません - フォールバック画像を使用します');
-            // フォールバック: サンプル画像からパターンを生成
-            try {
-              const fallbackUrl = '/assets/sample.png';
-              arViewerLogger.info('🔄 フォールバック画像からマーカーパターン生成:', fallbackUrl);
-              const patternString = await generateMarkerPatternFromImage(fallbackUrl);
-              if (patternString) {
-                const patt = createPatternBlob(patternString);
-                markerUrlOption = patt.url;
-                markerPatternCleanup = patt.revoke;
-                arViewerLogger.info('✅ フォールバック画像からマーカーパターン生成成功');
-              }
-            } catch (fallbackErr) {
-              arViewerLogger.error('❌ フォールバック画像からのパターン生成も失敗:', fallbackErr);
-            }
+            arViewerLogger.warn('⚠️ マーカー画像URLが見つかりません');
           }
         }
       } catch (genErr) {

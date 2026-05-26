@@ -39,25 +39,53 @@ async function loadImage(dataUrl) {
   });
 }
 
-function generatePatternStringFromImageData(imageData) {
-  const { width, height, data } = imageData;
-  const channels = [];
+function getRotatedPixelOffset(x, y, width, height, orientation, channelOffset) {
+  let px = x;
+  let py = y;
 
-  for (let channel = 0; channel < 3; channel += 1) {
-    const rows = [];
-    for (let y = 0; y < height; y += 1) {
-      const cols = [];
-      for (let x = 0; x < width; x += 1) {
-        const idx = (y * width + x) * 4 + channel;
-        const value = Math.max(0, Math.min(255, Math.round(data[idx])));
-        cols.push(value.toString().padStart(3, ' '));
-      }
-      rows.push(cols.join(' '));
-    }
-    channels.push(rows.join('\n'));
+  switch (orientation) {
+    case 1:
+      px = width - y - 1;
+      py = x;
+      break;
+    case 2:
+      px = width - x - 1;
+      py = height - y - 1;
+      break;
+    case 3:
+      px = y;
+      py = height - x - 1;
+      break;
+    default:
+      break;
   }
 
-  return `${channels[0]}\n\n${channels[1]}\n\n${channels[2]}`;
+  return (py * width + px) * 4 + channelOffset;
+}
+
+function generatePatternStringFromImageData(imageData) {
+  const { width, height, data } = imageData;
+  const blocks = [];
+
+  // ARToolKit の .patt は 4方向 x 3チャンネルの12ブロックを要求する。
+  // 3チャンネル1方向だけだと AR.js 側で "Pattern Data read error" になる。
+  for (let orientation = 0; orientation < 4; orientation += 1) {
+    for (const channelOffset of [2, 1, 0]) {
+      const rows = [];
+      for (let y = 0; y < height; y += 1) {
+        const cols = [];
+        for (let x = 0; x < width; x += 1) {
+          const idx = getRotatedPixelOffset(x, y, width, height, orientation, channelOffset);
+          const value = Math.max(0, Math.min(255, Math.round(data[idx])));
+          cols.push(value.toString().padStart(3, ' '));
+        }
+        rows.push(cols.join(' '));
+      }
+      blocks.push(rows.join('\n'));
+    }
+  }
+
+  return blocks.join('\n\n');
 }
 
 async function generatePatternWithTHREEx(dataUrl) {
@@ -220,6 +248,10 @@ export async function analyzeMarkerImage(dataUrl, { size = 64 } = {}) {
 
 export function createPatternBlob(patternString) {
   if (!patternString) throw new Error('patternString が未定義です');
+  const blockCount = String(patternString).trim().split(/\n\s*\n/).filter(Boolean).length;
+  if (blockCount < 12) {
+    throw new Error(`.patt 形式が不正です（${blockCount} blocks）。4方向 x 3チャンネルが必要です。`);
+  }
   const blob = new Blob([patternString], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   return {
