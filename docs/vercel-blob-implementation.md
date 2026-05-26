@@ -209,3 +209,35 @@ if (useBlobStorage) {
 
 **結論: Vercel Blob Storageの実装を推奨します。**
 
+## 📦 アップロードサイズ上限（現行）
+
+`api/publish-project.js` で運用している上限。Vercel Serverless Functions のリクエストボディ上限と、Base64 化に伴う約 33% のオーバーヘッドから決定している。
+
+| 区分 | 上限 | 定数 |
+|---|---|---|
+| 本番/Preview のリクエストボディ全体 | 4 MB | `MAX_VERCEL_BODY_BYTES` |
+| 1 ファイル（GLB）あたり | 3 MB | `MAX_BLOB_MODEL_BYTES` |
+| 1 リクエスト合計 | 3 MB | `MAX_BLOB_TOTAL_BYTES` |
+| ローカル開発 (vercel dev) 1 ファイル | 50 MB | `MAX_LOCAL_MODEL_BYTES` |
+| ローカル開発 1 リクエスト合計 | 100 MB | `MAX_LOCAL_TOTAL_BYTES` |
+
+超過時は HTTP 413 を返す。クライアントには「現在の本番公開は小容量モデルのみ対応。大きい GLB は client upload 対応後に公開してください」というメッセージが表示される。
+
+## ⏩ Direct upload への移行（次の作業）
+
+クライアントワークで一般的な数 MB〜数十 MB の GLB を公開できるようにするには、`@vercel/blob/client` の direct upload に切り替える必要がある。サーバー経由の Base64 アップロードを完全に置き換えるのではなく、サイズに応じて経路を分けるのが現実解。
+
+### 移行アウトライン
+
+1. **クライアントワークの GLB 上限を決める**（例: 25 MB）。MindAR / マーカー検出での実用性とロード時間を元に確定する。
+2. **判定ロジック**: クライアント側で blob のサイズを見て、上限を超えていれば direct upload、下回っていれば従来の `/api/publish-project` 経由。
+3. **API 追加**: `api/blob-upload-token.js`（新設）が `handleUpload()` で署名済みトークンを発行する。
+4. **クライアント実装**: `upload()` をクライアントから直接呼び、返却 URL を `publishRelease` のペイロードに含めて project.json に焼き込む。
+5. **既存 `MAX_BLOB_MODEL_BYTES` の扱い**: direct upload 経由ではこの上限は使わない。サーバー API は project.json / 画像（数 MB 以下）専用に縮退させる。
+
+公式ドキュメント: https://vercel.com/docs/storage/vercel-blob/client-upload
+
+### 暫定運用
+
+direct upload 実装までは、3 MB を超える GLB を含むプロジェクトは「公開」ボタンでエラー（HTTP 413）になる。`docs/single-operator-cloud-release-tasks.md` の Phase 3 にこの移行タスクが記載されている。
+

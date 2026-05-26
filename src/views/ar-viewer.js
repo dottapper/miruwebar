@@ -675,8 +675,20 @@ async function normalizeProject(project, baseHref) {
 
   // models の解決: 複数のデータ形式に対応（フォールバック付き）
   if (!project.models || project.models.length === 0) {
+    // v2 公開形式 (docs/product-spec.md §7) からフォールバック
+    if (project.assets?.models?.length) {
+      arViewerLogger.info('[FLOW] project.models が空のため assets.models (v2) を使用');
+      project.models = project.assets.models.map((m) => ({
+        url: m.url,
+        fileName: m.fileName || (m.url ? m.url.split('/').pop() : null),
+        transform: m.transform,
+        position: m.transform?.position,
+        rotation: m.transform?.rotation,
+        scale: m.transform?.scale
+      }));
+    }
     // screens[0].models（Firebase公開形式）からフォールバック
-    if (project.screens?.[0]?.models?.length) {
+    else if (project.screens?.[0]?.models?.length) {
       arViewerLogger.info('[FLOW] project.models が空のため screens[0].models を使用');
       project.models = project.screens[0].models;
     }
@@ -691,6 +703,14 @@ async function normalizeProject(project, baseHref) {
           transform: m.transform
         }));
     }
+  }
+
+  // markerImage / markerPattern も v2 (project.assets.marker.*) からフォールバック
+  if (!project.markerImage && project.assets?.marker?.url) {
+    project.markerImage = project.assets.marker.url;
+  }
+  if (!project.markerPattern && project.assets?.marker?.patternUrl) {
+    project.markerPattern = project.assets.marker.patternUrl;
   }
 
   // models の絶対化と検証

@@ -129,12 +129,18 @@ function normalizeGuideScreen({ tpl = {}, direct = {}, projectType = null, proje
 export function extractDesign(project = {}) {
   const ts = project?.loadingScreen?.templateSettings || {};
   const projectType = project.type || project.mode || null;
-  const projectMarkerImage = project.markerImage || project.markerImageUrl || null;
+  // v2 (docs/product-spec.md §7) を最優先、レガシーへフォールバック
+  const projectMarkerImage =
+    project.assets?.marker?.url
+    || project.markerImage
+    || project.markerImageUrl
+    || null;
 
-  // プロジェクト直下の表現（旧/新）を吸収
-  const startDirect = project.start || project.startScreen || {};
-  const loadingDirect = project.loading || project.loadingScreen || {};
-  const guideDirect = project.guide || project.guideScreen || {};
+  // プロジェクト直下の表現を v2 → 旧 → 最旧 の順で吸収
+  const exp = project.experience || {};
+  const startDirect = exp.startScreen || project.startScreen || project.start || {};
+  const loadingDirect = exp.loadingScreen || project.loadingScreen || project.loading || {};
+  const guideDirect = exp.guideScreen || project.guideScreen || project.guide || {};
 
   const startScreen = normalizeStartScreen({ tpl: ts.startScreen || {}, direct: startDirect });
   const loadingScreen = normalizeLoadingScreen({ tpl: ts.loadingScreen || {}, direct: loadingDirect });
