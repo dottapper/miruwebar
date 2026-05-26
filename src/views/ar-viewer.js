@@ -3204,10 +3204,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   async function handlePermissionPrompt(data) {
     arViewerLogger.info('📱 権限プロンプト処理開始');
 
-    // 権限要求処理（カメラアクセス）
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }
-    });
+    // mediaDevices そのものが未対応の場合（古いブラウザ / 安全でないコンテキスト）
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      throw cameraError(
+        'camera_unsupported',
+        'このブラウザはカメラに対応していません。HTTPS で開いているか、最新のブラウザかをご確認ください。'
+      );
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
+    } catch (error) {
+      throw translateCameraError(error);
+    }
     arViewerLogger.info('✅ カメラ権限取得完了');
 
     // ストリームを停止（ARエンジン側で再取得）
@@ -3219,6 +3231,45 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       nextState,
       data: {} // 既存のdataを引き継ぐ
     };
+  }
+
+  function cameraError(code, message) {
+    const err = new Error(message);
+    err.code = code;
+    return err;
+  }
+
+  // getUserMedia の英語エラー名を、ユーザが読めるメッセージへ翻訳する。
+  // 詳細: https://developer.mozilla.org/docs/Web/API/MediaDevices/getUserMedia#exceptions
+  function translateCameraError(error) {
+    const name = error?.name || '';
+    switch (name) {
+      case 'NotAllowedError':
+      case 'SecurityError':
+        return cameraError(
+          'camera_permission_denied',
+          'カメラの使用が許可されていません。ブラウザのアドレスバー横のアイコンからカメラ権限を「許可」に変更し、ページを再読み込みしてください。'
+        );
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        return cameraError(
+          'camera_not_found',
+          '背面カメラが見つかりませんでした。端末にカメラが接続されているか、別のアプリで使用中でないかをご確認ください。'
+        );
+      case 'NotReadableError':
+      case 'AbortError':
+        return cameraError(
+          'camera_in_use',
+          'カメラを起動できませんでした。他のアプリ（ZoomやSafariの別タブ等）がカメラを使用中の可能性があります。'
+        );
+      case 'TypeError':
+        return cameraError(
+          'camera_insecure_context',
+          'HTTPS でない接続ではカメラを使えません。HTTPS のURLで開き直してください。'
+        );
+      default:
+        return cameraError('camera_unknown', `カメラ起動に失敗しました: ${error?.message || name || '不明なエラー'}`);
+    }
   }
 
   // カメラ起動処理
@@ -3437,8 +3488,55 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   function handleARError(error, previousState, data) {
     arViewerLogger.error('❌ AR状態機械エラー:', error, { previousState, data });
 
-    updateStatus(`❌ AR起動失敗: ${error.message}`, 'error');
-    showRetryButton(error.message);
+    const { headline, hint } = classifyARError(error, previousState);
+    updateStatus(`❌ ${headline}`, 'error');
+
+    const errorContainer = container.querySelector('.ar-loading-content') || container;
+    let detailsEl = container.querySelector('#ar-error-detail');
+    if (!detailsEl) {
+      detailsEl = document.createElement('p');
+      detailsEl.id = 'ar-error-detail';
+      detailsEl.style.cssText = 'margin:0.5rem 0;color:#fff;font-size:0.95rem;line-height:1.45;text-align:center;';
+      errorContainer.appendChild(detailsEl);
+    }
+    detailsEl.textContent = hint;
+
+    showRetryButton(headline);
+  }
+
+  // エラーオブジェクトと直前の状態から、ユーザに見せるエラー見出しと対処ヒントを決定する。
+  function classifyARError(error, previousState) {
+    const code = error?.code || '';
+    const message = error?.message || 'AR起動エラー';
+
+    // カメラ系（handlePermissionPrompt の translateCameraError で付与済み）
+    if (code.startsWith('camera_')) {
+      return { headline: 'カメラを使えませんでした', hint: message };
+    }
+
+    // アセット欠落系（marker / model の読み込み失敗）
+    if (/marker image not reachable|marker.*404|CORS/.test(message)) {
+      return {
+        headline: 'マーカー画像を読み込めませんでした',
+        hint: 'マーカー画像のURLが正しいか、公開ストレージに存在するかをご確認ください。詳細: ' + message
+      };
+    }
+    if (/glb|model|gltf/i.test(message) && previousState === ARState.LOADING_ASSETS) {
+      return {
+        headline: '3Dモデルを読み込めませんでした',
+        hint: 'モデル(.glb)のURLが正しいか、ファイルが破損していないかをご確認ください。詳細: ' + message
+      };
+    }
+
+    // JSON 系（boot 側で拾われるはずだが、後段で起きた場合のフォールバック）
+    if (/project\.json|JSON/i.test(message)) {
+      return {
+        headline: 'プロジェクト設定の読み込みに失敗しました',
+        hint: '公開URL (?src=...) が正しいか、project.json が有効なJSONかをご確認ください。詳細: ' + message
+      };
+    }
+
+    return { headline: 'AR起動に失敗しました', hint: message };
   }
 
   // ガイド画面更新
