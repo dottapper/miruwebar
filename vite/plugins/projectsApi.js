@@ -105,8 +105,10 @@ export function projectsApiPlugin() {
             markerImage = null,
             markerPattern = null,
             arSettings = null,
+            effects = [],
             models = []
           } = parsed;
+          const normalizedEffects = Array.isArray(effects) ? effects : [];
           const id = sanitizeId(rawId);
           if (!id) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -171,6 +173,7 @@ export function projectsApiPlugin() {
           }
 
           const projectJson = {
+            schemaVersion: 2,
             id,
             type,
             startScreen: startScreen || null,
@@ -179,6 +182,7 @@ export function projectsApiPlugin() {
             markerImage: markerImage || null,
             markerPattern: markerPattern || null,
             arSettings: arSettings || null,
+            effects: normalizedEffects,
             models: modelEntries
           };
           await fs.writeJson(path.join(dir, 'project.json'), projectJson, { spaces: 2 });

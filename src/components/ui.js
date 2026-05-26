@@ -1283,7 +1283,8 @@ export async function showQRCodeModal(options = {}) {
           theme: projectData.theme || null,
           markerImage: markerImageForPublish,
           markerPattern: markerPatternForPublish,
-          arSettings: projectData.arSettings || {}
+          arSettings: projectData.arSettings || {},
+          effects: Array.isArray(projectData.effects) ? projectData.effects : []
         });
 
         uiLogger.log('✅ 公開リリース作成完了:', result);

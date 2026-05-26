@@ -107,8 +107,10 @@ export default async function handler(req, res) {
       markerImage = null,
       markerPattern = null,
       arSettings = null,
+      effects = [],
       models = []
     } = parsed;
+    const normalizedEffects = Array.isArray(effects) ? effects : [];
     const id = sanitizeId(rawId);
     if (!id) {
       return res.status(400).json({ error: 'id is required' });
@@ -133,7 +135,7 @@ export default async function handler(req, res) {
       // ===== Vercel Blob にアップロード =====
       const result = await publishToBlob({
         id, releaseId, type, token,
-        loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, models
+        loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects: normalizedEffects, models
       });
       const viewerUrl = `${appOrigin}/#/viewer?src=${encodeURIComponent(result.projectUrl)}`;
       return res.status(200).json({
@@ -147,7 +149,7 @@ export default async function handler(req, res) {
 
     // ===== ローカル開発フォールバック（vercel dev）: public/projects/ に書き出し =====
     await publishToLocalFs({
-      id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, models
+      id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects: normalizedEffects, models
     });
     const projectUrl = `${appOrigin}/projects/${id}/project.json`;
     const viewerUrl = `${appOrigin}/#/viewer?src=${encodeURIComponent(projectUrl)}`;
@@ -176,7 +178,7 @@ export default async function handler(req, res) {
  * モデル/画像を先にアップロードし、返却された絶対URLで project.json を構築する。
  */
 async function publishToBlob(input) {
-  const { id, releaseId, type, token, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, models } = input;
+  const { id, releaseId, type, token, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects = [], models } = input;
   const base = `projects/${id}/releases/${releaseId}`;
   // addRandomSuffix: true → ファイル名にランダム文字列が付与され URL が推測不能になる。
   // project.json 内のURLや viewerUrl は put() が返す blob.url を使うため透過的に動作する。
@@ -265,7 +267,7 @@ async function publishToBlob(input) {
       loadingScreen: lsOut || null,
       guideScreen: guideScreen || null
     },
-    effects: [],
+    effects: Array.isArray(effects) ? effects : [],
 
     // Transitional legacy fields (旧形式互換)。
     // Viewer が v2 (assets.* / experience.*) を全面で読めるようになったら削除予定。
@@ -290,7 +292,7 @@ async function publishToBlob(input) {
  * ローカル開発（vercel dev）用フォールバック: public/projects/ にファイル書き出し。
  */
 async function publishToLocalFs(input) {
-  const { id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, models } = input;
+  const { id, type, loadingScreen, startScreen, guideScreen, markerImage, markerPattern, arSettings, effects = [], models } = input;
   const dir = path.join(process.cwd(), 'public', 'projects', id);
   const assetsDir = path.join(dir, 'assets');
   await fs.mkdir(assetsDir, { recursive: true });
@@ -364,7 +366,7 @@ async function publishToLocalFs(input) {
       loadingScreen: lsOut || null,
       guideScreen: guideScreen || null
     },
-    effects: [],
+    effects: Array.isArray(effects) ? effects : [],
 
     // Transitional legacy fields。Viewer の v2 全面対応後に削除予定。
     startScreen: startScreen || null,

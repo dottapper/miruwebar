@@ -2959,6 +2959,7 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   // AR状態機械の初期化
   let arStateMachine = null;
   let currentAREngine = null;
+  let effectsRuntime = null;
   let loadingStateManager = null;
 
   // AR状態機械の初期化
@@ -3431,7 +3432,22 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   async function handleLoadingAssets(data) {
     arViewerLogger.info('📦 アセット読み込み開始...');
 
-    // プロジェクト開始
+    // marker モード: start() より前に effects を接続（自動配置の遅延を効かせる）
+    if (data.arPath === 'marker' && currentProject?.effects?.length) {
+      try {
+        const { attachEffectsRuntime } = await import('../effects/effects-runtime.js');
+        effectsRuntime?.detach?.();
+        effectsRuntime = attachEffectsRuntime(currentAREngine, currentProject);
+        if (effectsRuntime) {
+          arViewerLogger.info('✨ EffectsRuntime 接続完了', {
+            count: currentProject.effects.length
+          });
+        }
+      } catch (effectsErr) {
+        arViewerLogger.warn('⚠️ EffectsRuntime 接続をスキップ:', effectsErr?.message || effectsErr);
+      }
+    }
+
     await currentAREngine.start(currentProject);
 
     // 次の状態を返す（配置モードまたは実行モード）
@@ -3476,6 +3492,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
   // 破棄処理
   async function handleDisposed(data) {
     arViewerLogger.info('🗑️ AR破棄処理');
+
+    effectsRuntime?.detach?.();
+    effectsRuntime = null;
 
     // ARエンジンアダプターの完全破棄
     await AREngineAdapter.destroyActiveEngine();
@@ -3569,6 +3588,9 @@ async function initIntegratedARViewer(container, projectSrc, options = {}) {
       if (arStateMachine) {
         await arStateMachine.reset();
       }
+
+      effectsRuntime?.detach?.();
+      effectsRuntime = null;
 
       // ARエンジンアダプターの完全リセット
       await AREngineAdapter.reset();

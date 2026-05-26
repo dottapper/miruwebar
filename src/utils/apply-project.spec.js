@@ -9,11 +9,16 @@ import { applyProjectDesign } from './apply-project-design.js';
 
 describe('applyProjectDesign', () => {
   beforeEach(() => {
-    // DOM環境をセットアップ
+    // 統合ビューアのマークアップを最小再現する（ar-viewer.js の生成DOMに準拠）。
+    // ガイド画像の唯一のソースは #ar-guide-image (img)。
     document.body.innerHTML = `
       <div id="ar-start-screen"></div>
       <div id="ar-loading-screen"></div>
-      <div id="ar-guide-screen"></div>
+      <div id="ar-guide-screen">
+        <div class="marker-image-container" id="ar-guide-marker-container">
+          <img id="ar-guide-image" alt="marker image" style="display:none;" />
+        </div>
+      </div>
     `;
   });
 
@@ -70,7 +75,7 @@ describe('applyProjectDesign', () => {
 
     applyProjectDesign(project);
 
-    const markerImg = document.querySelector('#ar-guide-marker');
+    const markerImg = document.querySelector('#ar-guide-image');
     expect(markerImg).toBeTruthy();
     expect(markerImg.src).toBe('https://example.com/marker.png');
   });
@@ -129,7 +134,7 @@ describe('applyProjectDesign', () => {
     expect(loadingMsg.textContent).toBe('読み込み中…');
 
     // ガイド画面
-    const guideMarker = document.querySelector('#ar-guide-marker');
+    const guideMarker = document.querySelector('#ar-guide-image');
     expect(guideMarker.src).toContain('assets/marker.png');
 
     const guideMsg = document.querySelector('#ar-guide-message');

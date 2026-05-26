@@ -1,56 +1,69 @@
 {
+  "schemaVersion": 2,
   "id": "sample-keep-me",
-  "version": "1",
-  "name": "Sample Project",
-  "start": {
-    "title": "AR体験を開始",
-    "titlePosition": 40,
-    "titleSize": 1,
-    "textColor": "#FFFFFF",
-    "backgroundColor": "#1a1a2e",
-    "backgroundImage": "assets/start-bg.jpg",
-    "buttonText": "スタート",
-    "buttonColor": "#6c5ce7",
-    "buttonTextColor": "#FFFFFF",
-    "buttonPosition": 75,
-    "buttonSize": 1
-  },
-  "loading": {
-    "message": "読み込み中…",
-    "backgroundColor": "#1a1a2e",
-    "textColor": "#FFFFFF",
-    "progressColor": "#6c5ce7",
-    "logo": "assets/logo.png"
-  },
-  "guide": {
-    "marker": { "src": "assets/marker.png" },
-    "markerImage": "assets/marker.png",
-    "message": "マーカーをカメラに写してください",
-    "title": "マーカーを読み取ってください",
-    "description": "下の画像をカメラに写してください",
-    "backgroundColor": "#1a1a2e",
-    "textColor": "#FFFFFF"
-  },
-  "theme": {
-    "primary": "#6c5ce7",
-    "accent": "#00cec9",
-    "text": "#FFFFFF"
-  },
-  "markerImage": "assets/marker.png",
-  "screens": [
-    {
-      "type": "marker",
-      "marker": { "src": "assets/marker.png" },
-      "models": [
-        {
-          "id": "test-model-1",
-          "name": "Test Cube",
-          "url": "assets/sample.glb",
-          "position": { "x": 0, "y": 0, "z": 0 },
-          "rotation": { "x": 0, "y": 0, "z": 0 },
-          "scale": { "x": 1, "y": 1, "z": 1 }
+  "releaseId": "rel-sample-local",
+  "type": "marker",
+  "publishedAt": "2026-05-26T00:00:00.000Z",
+  "assets": {
+    "marker": {
+      "type": "pattern",
+      "url": "assets/marker.png",
+      "patternUrl": null
+    },
+    "models": [
+      {
+        "id": "model-0",
+        "url": "assets/sample.glb",
+        "transform": {
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
         }
-      ]
+      }
+    ],
+    "audio": []
+  },
+  "experience": {
+    "startScreen": {
+      "title": "AR体験を開始",
+      "titlePosition": 40,
+      "titleSize": 1,
+      "textColor": "#FFFFFF",
+      "backgroundColor": "#1a1a2e",
+      "backgroundImage": "assets/start-bg.jpg",
+      "buttonText": "スタート",
+      "buttonColor": "#6c5ce7",
+      "buttonTextColor": "#FFFFFF",
+      "buttonPosition": 75,
+      "buttonSize": 1
+    },
+    "loadingScreen": {
+      "message": "読み込み中…",
+      "backgroundColor": "#1a1a2e",
+      "textColor": "#FFFFFF",
+      "progressColor": "#6c5ce7",
+      "logo": "assets/logo.png"
+    },
+    "guideScreen": {
+      "title": "マーカーを読み取ってください",
+      "description": "下の画像をカメラに写してください",
+      "message": "マーカーをカメラに写してください",
+      "backgroundColor": "#1a1a2e",
+      "textColor": "#FFFFFF",
+      "marker": {
+        "src": "assets/marker.png"
+      },
+      "markerImage": "assets/marker.png"
+    }
+  },
+  "effects": [
+    {
+      "id": "portal-0",
+      "type": "portal",
+      "trigger": "markerFound",
+      "style": "deep-space",
+      "openDurationMs": 1200,
+      "particle": true
     }
   ]
 }

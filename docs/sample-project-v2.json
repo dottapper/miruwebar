@@ -8,7 +8,7 @@
     "marker": {
       "type": "pattern",
       "url": "assets/marker.png",
-      "patternUrl": "assets/marker.patt"
+      "patternUrl": null
     },
     "models": [
       {
@@ -56,5 +56,14 @@
       "markerImage": "assets/marker.png"
     }
   },
-  "effects": []
+  "effects": [
+    {
+      "id": "portal-0",
+      "type": "portal",
+      "trigger": "markerFound",
+      "style": "deep-space",
+      "openDurationMs": 1200,
+      "particle": true
+    }
+  ]
 }

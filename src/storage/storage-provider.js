@@ -82,6 +82,7 @@ async function publishViaVercelBlob(projectData) {
     markerImage: projectData.markerImage || projectData.markerImageUrl || null,
     markerPattern: projectData.markerPattern || null,
     arSettings: projectData.arSettings || null,
+    effects: Array.isArray(projectData.effects) ? projectData.effects : [],
     models
   };
 

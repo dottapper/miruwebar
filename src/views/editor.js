@@ -319,6 +319,16 @@ export function showEditor(container) {
                   <option value="normal" selected>標準</option>
                   <option value="accurate">高精度（速度低）</option>
                 </select>
+              </div>
+              <div class="control-group">
+                <label for="ar-effect-preset">AR演出（Portal）:</label>
+                <select id="ar-effect-preset" class="form-select">
+                  <option value="none">なし（モデルのみ）</option>
+                  <option value="portal-deep-space">Portal Marker（深宇宙）</option>
+                </select>
+                <p class="control-hint" style="font-size:0.85rem;color:var(--color-text-secondary);margin:0.35rem 0 0;">
+                  マーカー検出後にポータルが開き、続けて3Dモデルが表示されます。公開JSONの <code>effects</code> に保存されます。
+                </p>
               </div>` : ''}
             </div>
             </div>

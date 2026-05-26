@@ -4,6 +4,11 @@ import { saveProject, getProject, loadProjectWithModels, exportProjectBundleById
 import { loadLoadingSettingsToUI, resetAllUI } from './ui-handlers.js';
 import { settingsAPI } from '../../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage } from '../../utils/marker-utils.js';
+import {
+  buildEffectsFromPreset,
+  inferPresetFromEffects,
+  EFFECT_PRESET_NONE
+} from '../../effects/effect-presets.js';
 
 // DEBUG ログ制御
 
@@ -65,6 +70,11 @@ export async function loadProject(projectId, arViewer, savedSelectedScreenId) {
       }
       
       // UIコントロールにも反映（次のupdateUIFromModel呼び出しで同期される）
+    }
+
+    const effectPresetSelect = document.getElementById('ar-effect-preset');
+    if (effectPresetSelect) {
+      effectPresetSelect.value = inferPresetFromEffects(project.effects);
     }
 
     // ローディング設定をUIに反映
@@ -217,6 +227,11 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
         logoPosition: 20
       }),
       guideScreen: editorSettingsSafe?.guideScreen || (templateSettings?.guideScreen || null),
+      effects: (() => {
+        const presetEl = document.getElementById('ar-effect-preset');
+        const presetId = presetEl?.value || EFFECT_PRESET_NONE;
+        return buildEffectsFromPreset(presetId);
+      })(),
       lastModified: new Date().toISOString()
     };
 

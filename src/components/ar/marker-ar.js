@@ -83,6 +83,8 @@ export class MarkerAR extends AREngineInterface {
     // イベント
     this.onMarkerFound = null;
     this.onMarkerLost = null;
+    /** Portal 等の演出がある場合は false にし、EffectsRuntime から placeModel() を呼ぶ */
+    this.autoPlaceOnMarkerFound = options.autoPlaceOnMarkerFound !== false;
   }
 
   /**
@@ -780,8 +782,12 @@ export class MarkerAR extends AREngineInterface {
         this.isMarkerVisible = true;
         markerARLogger.info('🎯 マーカーを発見しました！');
         
-        // 自動でモデルを配置
-        if ((this.loadedModel || this.loadedModels?.length > 0) && !this.placedModel) {
+        // 自動でモデルを配置（effects ランタイムが遅延する場合はスキップ）
+        if (
+          this.autoPlaceOnMarkerFound
+          && (this.loadedModel || this.loadedModels?.length > 0)
+          && !this.placedModel
+        ) {
           markerARLogger.info('📦 保存モデルを自動配置中...');
           this.placeModel();
         } else if (!this.loadedModel && (!this.loadedModels || this.loadedModels.length === 0) && !this.placedModel) {
@@ -1257,10 +1263,20 @@ export class MarkerAR extends AREngineInterface {
         markerARLogger.info('ℹ️ プロジェクトにモデルがありません');
       }
 
-      // 3) 既にマーカーが見えていれば配置を実行
-      if (this.isMarkerVisible && (this.loadedModels?.length || 0) > 0) {
+      // 3) 既にマーカーが見えていれば配置を実行（effects 遅延時は onMarkerFound 側へ委譲）
+      if (
+        this.autoPlaceOnMarkerFound
+        && this.isMarkerVisible
+        && (this.loadedModels?.length || 0) > 0
+      ) {
         markerARLogger.info('🎯 既にマーカー可視 → モデルを配置');
         this.placeModel();
+      } else if (
+        !this.autoPlaceOnMarkerFound
+        && this.isMarkerVisible
+        && typeof this.onMarkerFound === 'function'
+      ) {
+        this.onMarkerFound();
       }
     } catch (e) {
       markerARLogger.warn('⚠️ モデル事前読み込み処理で警告:', e?.message || e);
