@@ -233,10 +233,16 @@ async function createProjectDataWithIDB(data, viewerInstance) {
 }
 
 /**
- * プロジェクトを保存（IndexedDB + localStorage）
+ * プロジェクトを下書き保存する。モデル本体は IndexedDB、軽量設定は localStorage。
+ *
+ * 契約:
+ * - 成功時: 保存済みプロジェクトオブジェクト（id, name, modelCount 等を含む）を返す
+ * - 失敗時: throw する（戻り値での error フィールド通知は行わない）
+ *
  * @param {Object} data - 保存するプロジェクトのデータ
  * @param {Object} viewerInstance - ARビューアインスタンス
- * @returns {Object} - 保存されたプロジェクトデータ
+ * @returns {Promise<Object>} - 保存済みプロジェクト
+ * @throws {Error} - 保存に失敗した場合
  */
 export async function saveProject(data, viewerInstance) {
   try {

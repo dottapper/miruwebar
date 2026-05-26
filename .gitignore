@@ -55,6 +55,10 @@ coverage/
 
 # Test output / snapshots（誤コミット・リポジトリ肥大化防止）
 test-results/
+tests/*.png
+tests/*.jpg
+tests/*.webm
+tests/*.mp4
 
 # Temporary folders
 tmp/

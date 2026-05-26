@@ -242,18 +242,40 @@ async function publishToBlob(input) {
   }
 
   // 4. project.json を構築（すべて絶対URL）してアップロード
+  //    形式は docs/product-spec.md §7 の v2 を唯一の現行スキーマとする。
   const projectJson = {
+    schemaVersion: 2,
     id,
     releaseId,
     type,
+    publishedAt: new Date().toISOString(),
+    assets: {
+      marker: markerImageUrl
+        ? { type: 'pattern', url: markerImageUrl, patternUrl: null }
+        : null,
+      models: modelEntries.map((m, index) => ({
+        id: `model-${index}`,
+        url: m.url,
+        transform: { position: m.position, rotation: m.rotation, scale: m.scale }
+      })),
+      audio: []
+    },
+    experience: {
+      startScreen: startScreen || null,
+      loadingScreen: lsOut || null,
+      guideScreen: guideScreen || null
+    },
+    effects: [],
+
+    // Transitional legacy fields (旧形式互換)。
+    // Viewer が v2 (assets.* / experience.*) を全面で読めるようになったら削除予定。
     startScreen: startScreen || null,
     guideScreen: guideScreen || null,
     loadingScreen: lsOut,
     markerImage: markerImageUrl || null,
     markerPattern: markerPattern || null,
     arSettings: arSettings || null,
-    models: modelEntries,
-    publishedAt: new Date().toISOString()
+    models: modelEntries
   };
   const projectBlob = await put(`${base}/project.json`, JSON.stringify(projectJson, null, 2), {
     ...putOpts,
@@ -320,9 +342,31 @@ async function publishToLocalFs(input) {
     markerImageUrl = `/projects/${id}/assets/${markerName}`;
   }
 
+  // ローカルFS書き出しも v2 で揃える（docs/product-spec.md §7）。
   const projectJson = {
+    schemaVersion: 2,
     id,
     type,
+    publishedAt: new Date().toISOString(),
+    assets: {
+      marker: markerImageUrl
+        ? { type: 'pattern', url: markerImageUrl, patternUrl: null }
+        : null,
+      models: modelEntries.map((m, index) => ({
+        id: `model-${index}`,
+        url: m.url,
+        transform: { position: m.position, rotation: m.rotation, scale: m.scale }
+      })),
+      audio: []
+    },
+    experience: {
+      startScreen: startScreen || null,
+      loadingScreen: lsOut || null,
+      guideScreen: guideScreen || null
+    },
+    effects: [],
+
+    // Transitional legacy fields。Viewer の v2 全面対応後に削除予定。
     startScreen: startScreen || null,
     guideScreen: guideScreen || null,
     loadingScreen: lsOut,

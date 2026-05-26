@@ -224,28 +224,23 @@ export async function saveCurrentProject(projectId, arViewer, savedSelectedScree
     // ARViewerインスタンスを取得して渡す
     const arViewerInstance = window.arViewer;
     
-    const result = await saveProject(projectData, arViewerInstance);
-    
-    if (result && !result.error) {
-      
-      // 保存完了メッセージを表示
-      const saveButton = document.getElementById('save-button');
-      if (saveButton) {
-        const originalText = saveButton.textContent;
-        saveButton.textContent = '保存完了！';
-        saveButton.style.backgroundColor = '#4CAF50';
-        
-        setTimeout(() => {
-          saveButton.textContent = originalText;
-          saveButton.style.backgroundColor = '';
-        }, 2000);
-      }
-      
-      return true;
-    } else {
-      throw new Error(result.error || '保存に失敗しました');
+    // saveProject() は失敗時に throw、成功時は保存済みプロジェクトを返す（api/projects.js を参照）
+    await saveProject(projectData, arViewerInstance);
+
+    const saveButton = document.getElementById('save-button');
+    if (saveButton) {
+      const originalText = saveButton.textContent;
+      saveButton.textContent = '保存完了！';
+      saveButton.style.backgroundColor = '#4CAF50';
+
+      setTimeout(() => {
+        saveButton.textContent = originalText;
+        saveButton.style.backgroundColor = '';
+      }, 2000);
     }
-    
+
+    return true;
+
   } catch (error) {
     console.error('プロジェクト保存エラー:', error);
     alert('プロジェクトの保存に失敗しました: ' + error.message);

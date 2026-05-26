@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "id": "sample-keep-me",
+  "releaseId": "rel-sample-v2",
+  "type": "marker",
+  "publishedAt": "2026-05-26T00:00:00.000Z",
+  "assets": {
+    "marker": {
+      "type": "pattern",
+      "url": "assets/marker.png",
+      "patternUrl": "assets/marker.patt"
+    },
+    "models": [
+      {
+        "id": "model-0",
+        "url": "assets/sample.glb",
+        "transform": {
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "audio": []
+  },
+  "experience": {
+    "startScreen": {
+      "title": "AR体験を開始",
+      "titlePosition": 40,
+      "titleSize": 1,
+      "textColor": "#FFFFFF",
+      "backgroundColor": "#1a1a2e",
+      "backgroundImage": "assets/start-bg.jpg",
+      "buttonText": "スタート",
+      "buttonColor": "#6c5ce7",
+      "buttonTextColor": "#FFFFFF",
+      "buttonPosition": 75,
+      "buttonSize": 1
+    },
+    "loadingScreen": {
+      "message": "読み込み中…",
+      "backgroundColor": "#1a1a2e",
+      "textColor": "#FFFFFF",
+      "progressColor": "#6c5ce7",
+      "logo": "assets/logo.png"
+    },
+    "guideScreen": {
+      "title": "マーカーを読み取ってください",
+      "description": "下の画像をカメラに写してください",
+      "message": "マーカーをカメラに写してください",
+      "backgroundColor": "#1a1a2e",
+      "textColor": "#FFFFFF",
+      "marker": {
+        "src": "assets/marker.png"
+      },
+      "markerImage": "assets/marker.png"
+    }
+  },
+  "effects": []
+}
