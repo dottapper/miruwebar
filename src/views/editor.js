@@ -10,6 +10,11 @@ import { getLoadingScreenTemplate } from '../components/loading-screen-selector.
 import { settingsAPI } from '../components/loading-screen/settings.js';
 import { generateMarkerPatternFromImage, getImageDimensions } from '../utils/marker-utils.js';
 import { inferMarkerTypeFromDimensions } from '../utils/marker-engine-resolve.js';
+import {
+  formatMindTargetStatus,
+  getStoredMindTarget,
+  storeMindTargetFromFile
+} from '../utils/mind-target-storage.js';
 import { TEMPLATES_STORAGE_KEY } from '../components/loading-screen/template-manager.js';
 import { security } from '../utils/security-manager.js';
 
@@ -203,6 +208,16 @@ export function showEditor(container) {
               <div class="marker-thumbnail-container">
                 <img id="marker-thumbnail" alt="マーカー画像" src="/assets/sample.png"> <button id="change-marker" class="btn-secondary">画像を変更</button>
               </div>
+            </div>
+            <div id="mind-target-panel" class="panel-section mind-target-panel" style="display:none;">
+              <h3>MindAR ターゲット (.mind)</h3>
+              <p class="mind-target-panel__hint">表紙・ポスターなど縦長・横長画像は .mind ファイルが必要です。</p>
+              <div class="mind-upload-actions">
+                <input type="file" id="editor-mind-file" accept=".mind,application/octet-stream" style="display:none;">
+                <button type="button" id="editor-select-mind-btn" class="btn-secondary">.mind を登録</button>
+                <a id="editor-mind-compiler-link" href="https://hiukim.github.io/mind-ar-js-doc/tools/compile" target="_blank" rel="noopener" class="btn-secondary">Compiler を開く</a>
+              </div>
+              <p id="editor-mind-status" class="mind-status mind-status--missing">未登録</p>
             </div>` : ''}
           </div>
 
@@ -1040,6 +1055,35 @@ export function showEditor(container) {
     
     // マーカー画像設定 (マーカーモード時)
     if (isMarkerMode && markerThumbnail) {
+      const mindTargetPanel = document.getElementById('mind-target-panel');
+      const editorMindFileInput = document.getElementById('editor-mind-file');
+      const editorSelectMindBtn = document.getElementById('editor-select-mind-btn');
+      const editorMindStatus = document.getElementById('editor-mind-status');
+
+      const renderEditorMindStatus = () => {
+        if (!editorMindStatus) return;
+        const status = formatMindTargetStatus(getStoredMindTarget());
+        editorMindStatus.textContent = status.registered
+          ? `${status.label}（${status.detail}）`
+          : status.label;
+        editorMindStatus.className = `mind-status ${status.registered ? 'mind-status--ok' : 'mind-status--missing'}`;
+      };
+
+      const refreshMindTargetPanel = async () => {
+        if (!mindTargetPanel) return;
+        const markerType = localStorage.getItem('markerType');
+        let showPanel = markerType === 'imageTarget';
+        if (!showPanel && markerThumbnail?.src) {
+          try {
+            const dims = await getImageDimensions(markerThumbnail.src);
+            showPanel = inferMarkerTypeFromDimensions(dims.width, dims.height) === 'imageTarget';
+            if (showPanel) localStorage.setItem('markerType', 'imageTarget');
+          } catch (_) {}
+        }
+        mindTargetPanel.style.display = showPanel ? 'block' : 'none';
+        if (showPanel) renderEditorMindStatus();
+      };
+
       const markerImageUrl = localStorage.getItem('markerImageUrl');
       if (markerImageUrl) {
         markerThumbnail.src = markerImageUrl;
@@ -1048,6 +1092,32 @@ export function showEditor(container) {
            viewerInstance.controls.setMarkerTexture(markerImageUrl);
         }
       }
+      markerThumbnail.addEventListener('load', () => {
+        refreshMindTargetPanel();
+      });
+      refreshMindTargetPanel();
+
+      if (editorSelectMindBtn && editorMindFileInput) {
+        editorSelectMindBtn.addEventListener('click', () => {
+          editorMindFileInput.click();
+        });
+        editorMindFileInput.addEventListener('change', async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          try {
+            const { fileName, size } = await storeMindTargetFromFile(file);
+            renderEditorMindStatus();
+            markAsChanged();
+            alert(`.mind を登録しました: ${fileName}（${Math.round(size / 1024)} KB）`);
+          } catch (error) {
+            console.error('.mind 登録エラー:', error);
+            alert(error.message || '.mind ファイルの登録に失敗しました。');
+          } finally {
+            editorMindFileInput.value = '';
+          }
+        });
+      }
+
       // マーカー変更ボタンのリスナー設定
       if (changeMarkerButton) {
           changeMarkerButton.addEventListener('click', () => {

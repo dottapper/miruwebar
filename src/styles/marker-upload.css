@@ -172,3 +172,50 @@
 .marker-quality__ok {
   margin: 0;
 }
+
+/* MindAR .mind 登録セクション（表紙・ポスター向け imageTarget） */
+.mind-upload-section {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: var(--border-radius-medium);
+  border: 1px solid rgba(124, 77, 255, 0.35);
+  background: rgba(124, 77, 255, 0.06);
+}
+
+.mind-upload-section h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.mind-upload-section p {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.mind-upload-steps {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.mind-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mind-status {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.mind-status--ok {
+  color: #2e7d32;
+}
+
+.mind-status--missing {
+  color: #c62828;
+}

@@ -354,6 +354,13 @@
     border-radius: var(--border-radius-small);
     border: 1px solid var(--color-border);
   }
+
+  .mind-target-panel__hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.82rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
   
   /* ファイル一覧 */
   .file-list {

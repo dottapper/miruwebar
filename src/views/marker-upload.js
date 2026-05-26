@@ -1,6 +1,13 @@
 // src/views/marker-upload.js
 import { analyzeMarkerImage } from '../utils/marker-utils.js';
 import { inferMarkerTypeFromDimensions } from '../utils/marker-engine-resolve.js';
+import {
+  formatMindTargetStatus,
+  getStoredMindTarget,
+  storeMindTargetFromFile
+} from '../utils/mind-target-storage.js';
+
+const MINDAR_COMPILER_URL = 'https://hiukim.github.io/mind-ar-js-doc/tools/compile';
 
 export function showMarkerUpload() {
     // モーダルの背景（オーバーレイ）要素を作成
@@ -38,6 +45,20 @@ export function showMarkerUpload() {
 
         <!-- 長方形画像をアップした際の注意（中央正方形のみが認識対象） -->
         <div id="marker-rect-notice" class="marker-rect-notice" style="display:none;"></div>
+        <div id="mind-upload-section" class="mind-upload-section" style="display:none;">
+          <h3>表紙・ポスター用: .mind ファイルの登録</h3>
+          <p>縦長・横長の画像は <strong>MindAR（imageTarget）</strong> が必要です。下の手順で同じ画像から .mind を作り、ここで登録してください。</p>
+          <ol class="mind-upload-steps">
+            <li><a href="${MINDAR_COMPILER_URL}" target="_blank" rel="noopener">MindAR Compiler</a> を開く</li>
+            <li>上で選んだのと<strong>同じ画像</strong>をドロップ → <strong>Start</strong> → <strong>Download</strong></li>
+            <li>ダウンロードした <code>targets.mind</code>（または .mind）を下のボタンで登録</li>
+          </ol>
+          <div class="mind-upload-actions">
+            <input type="file" id="mind-file" accept=".mind,application/octet-stream" style="display:none;">
+            <button type="button" id="select-mind-btn" class="btn-secondary">.mind ファイルを選択</button>
+            <p id="mind-status" class="mind-status mind-status--missing">未登録</p>
+          </div>
+        </div>
         <!-- マーカー画像の品質チェック結果 -->
         <div id="marker-quality" class="marker-quality" style="display:none;"></div>
 
@@ -67,10 +88,52 @@ export function showMarkerUpload() {
     const cropOverlay = document.getElementById('marker-crop-overlay');
     const placeholder = document.querySelector('.upload-placeholder');
     const rectNotice = document.getElementById('marker-rect-notice');
+    const mindUploadSection = document.getElementById('mind-upload-section');
+    const mindFileInput = document.getElementById('mind-file');
+    const selectMindBtn = document.getElementById('select-mind-btn');
+    const mindStatus = document.getElementById('mind-status');
     const qualityBox = document.getElementById('marker-quality');
 
     // 直近の品質解析結果（アップロード時の確認に使用）
     let lastQuality = null;
+    let pendingMarkerType = localStorage.getItem('markerType') || 'pattern';
+
+    function renderMindStatus() {
+      const status = formatMindTargetStatus(getStoredMindTarget());
+      mindStatus.textContent = status.registered
+        ? `${status.label}（${status.detail}）`
+        : status.label;
+      mindStatus.className = `mind-status ${status.registered ? 'mind-status--ok' : 'mind-status--missing'}`;
+    }
+
+    function showMindUploadSection(show) {
+      mindUploadSection.style.display = show ? 'block' : 'none';
+      if (show) renderMindStatus();
+    }
+
+    renderMindStatus();
+    if (pendingMarkerType === 'imageTarget') {
+      showMindUploadSection(true);
+    }
+
+    selectMindBtn.addEventListener('click', () => {
+      mindFileInput.click();
+    });
+
+    mindFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const { fileName, size } = await storeMindTargetFromFile(file);
+        renderMindStatus();
+        alert(`.mind を登録しました: ${fileName}（${Math.round(size / 1024)} KB）`);
+      } catch (error) {
+        console.error('.mind 登録エラー:', error);
+        alert(error.message || '.mind ファイルの登録に失敗しました。');
+      } finally {
+        mindFileInput.value = '';
+      }
+    });
 
     // 実際に .patt 化される正方形クロップ範囲をプレビュー上に表示する
     function updateCropOverlay() {
@@ -114,11 +177,14 @@ export function showMarkerUpload() {
         lastQuality = result;
 
         // 長方形画像の場合は「中央の正方形だけが認識対象」と明示する
+        pendingMarkerType = inferMarkerTypeFromDimensions(result.naturalWidth, result.naturalHeight);
         if (!result.isSquare) {
           rectNotice.innerHTML = '⚠️ 縦長・横長の画像です。表紙・ポスター全体を追跡するには <strong>MindAR（imageTarget）</strong> が必要です。'
-            + '公開前に <a href="https://hiukim.github.io/mind-ar-js-doc/quick-start/compile/" target="_blank" rel="noopener">MindAR Compiler</a> で .mind を作成し、'
-            + 'エディタから Cloud Release してください（従来の正方形パターン方式では中央の一部だけしか認識されません）。';
+            + '下の手順で .mind を作成・登録してから Cloud Release してください（従来の正方形パターン方式では中央の一部だけしか認識されません）。';
           rectNotice.style.display = 'block';
+          showMindUploadSection(true);
+        } else {
+          showMindUploadSection(false);
         }
 
         renderQuality(result);
@@ -227,14 +293,14 @@ export function showMarkerUpload() {
             const h = lastQuality?.naturalHeight;
             const markerType = (w && h)
               ? inferMarkerTypeFromDimensions(w, h)
-              : 'pattern';
+              : pendingMarkerType || 'pattern';
             localStorage.setItem('markerType', markerType);
-            if (markerType === 'imageTarget' && !localStorage.getItem('markerTargetMind')) {
+            if (markerType === 'imageTarget' && !getStoredMindTarget()) {
               alert(
                 '縦長・横長の表紙画像は MindAR 用の .mind ファイルが必要です。\n'
-                + 'MindAR Compiler で .mind を作成し、登録してから Cloud Release してください。\n'
-                + '（手順: tasks.md の imageTarget セクション参照）'
+                + 'この画面の「.mind ファイルを選択」で登録してから、もう一度アップロードしてください。'
               );
+              return;
             }
 
             // アップロード完了後、エディタ画面へ遷移

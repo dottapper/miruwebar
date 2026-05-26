@@ -1291,7 +1291,7 @@ export async function showQRCodeModal(options = {}) {
         if (isImageTargetMarker(markerForPublish)) {
           markerPatternForPublish = null;
           if (!hasMindTarget(markerForPublish)) {
-            throw new Error('表紙・ポスターなどの imageTarget 公開には MindAR の .mind ファイルが必要です。MindAR Compiler で .mind を作成し、markerTargetMind に登録してから再公開してください。');
+            throw new Error('表紙・ポスターなどの imageTarget 公開には MindAR の .mind ファイルが必要です。マーカーアップロード画面またはエディタ左パネルから .mind を登録してから再公開してください。');
           }
         } else if (markerImageForPublish && !markerPatternForPublish) {
           try {
